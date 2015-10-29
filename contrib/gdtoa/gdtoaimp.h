@@ -209,6 +209,15 @@ THIS SOFTWARE.
 #define Char void
 #endif
 
+#ifdef __CHERI_SANDBOX__
+/*
+ * XXX: wag based on smallest allocation for 64-bit pointers being 48-bytes,
+ * replacing one 8-byte pointer with a 32-byte pointer and rounding up to
+ * 96 bytes for alignment.
+ */
+#define	PRIVATE_MEM	4608
+#endif
+
 #ifdef MALLOC
 extern Char *MALLOC ANSI((size_t));
 #else
