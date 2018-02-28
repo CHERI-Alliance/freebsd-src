@@ -76,6 +76,9 @@ static struct sx dpcpu_lock;
 uintptr_t dpcpu_off[MAXCPU];
 struct pcpu *cpuid_to_pcpu[MAXCPU];
 struct cpuhead cpuhead = STAILQ_HEAD_INITIALIZER(cpuhead);
+#ifdef __CHERI__
+uintptr_t dpcpu_start = DPCPU_START;
+#endif
 
 /*
  * Initialize the MI portions of a struct pcpu.
@@ -249,6 +252,7 @@ dpcpu_free(void *s, int size)
 void
 dpcpu_copy(void *s, int size)
 {
+	ptraddr_t offs = (ptraddr_t)s - (ptraddr_t)DPCPU_START;
 #ifdef SMP
 	uintptr_t dpcpu;
 	int i;
@@ -257,10 +261,10 @@ dpcpu_copy(void *s, int size)
 		dpcpu = dpcpu_off[i];
 		if (dpcpu == 0)
 			continue;
-		memcpy((void *)(dpcpu + (uintptr_t)s), s, size);
+		memcpy((void *)(dpcpu - DPCPU_BIAS + offs), s, size);
 	}
 #else
-	memcpy((void *)(dpcpu_off[0] + (uintptr_t)s), s, size);
+	memcpy((void *)(dpcpu_off[0] - DPCPU_BIAS + offs), s, size);
 #endif
 }
 
@@ -294,11 +298,12 @@ sysctl_dpcpu_quad(SYSCTL_HANDLER_ARGS)
 	int i;
 
 	count = 0;
+	arg1 = (char *)arg1 - (ptraddr_t)DPCPU_START - DPCPU_BIAS;
 	CPU_FOREACH(i) {
 		dpcpu = dpcpu_off[i];
 		if (dpcpu == 0)
 			continue;
-		count += *(int64_t *)(dpcpu + (uintptr_t)arg1);
+		count += *(int64_t *)(dpcpu + (ptraddr_t)arg1);
 	}
 	return (SYSCTL_OUT(req, &count, sizeof(count)));
 }
@@ -311,11 +316,12 @@ sysctl_dpcpu_long(SYSCTL_HANDLER_ARGS)
 	int i;
 
 	count = 0;
+	arg1 = (char *)arg1 - (ptraddr_t)DPCPU_START - DPCPU_BIAS;
 	CPU_FOREACH(i) {
 		dpcpu = dpcpu_off[i];
 		if (dpcpu == 0)
 			continue;
-		count += *(long *)(dpcpu + (uintptr_t)arg1);
+		count += *(long *)(dpcpu + (ptraddr_t)arg1);
 	}
 	return (SYSCTL_OUT(req, &count, sizeof(count)));
 }
@@ -328,11 +334,12 @@ sysctl_dpcpu_int(SYSCTL_HANDLER_ARGS)
 	int i;
 
 	count = 0;
+	arg1 = (char *)arg1 - (ptraddr_t)DPCPU_START - DPCPU_BIAS;
 	CPU_FOREACH(i) {
 		dpcpu = dpcpu_off[i];
 		if (dpcpu == 0)
 			continue;
-		count += *(int *)(dpcpu + (uintptr_t)arg1);
+		count += *(int *)(dpcpu + (ptraddr_t)arg1);
 	}
 	return (SYSCTL_OUT(req, &count, sizeof(count)));
 }
@@ -343,9 +350,9 @@ DB_SHOW_COMMAND_FLAGS(dpcpu_off, db_show_dpcpu_off, DB_CMD_MEMSAFE)
 	int id;
 
 	CPU_FOREACH(id) {
-		db_printf("dpcpu_off[%2d] = 0x%jx (+ DPCPU_START = %p)\n",
-		    id, (uintmax_t)dpcpu_off[id],
-		    (void *)(uintptr_t)(dpcpu_off[id] + DPCPU_START));
+		db_printf("dpcpu_off[%2d] = %p\n", id, (void *)dpcpu_off[id]);
+		db_printf("dpcpu_ptr[%2d] = %p\n", id, (void *)(dpcpu_off[id] -
+		    DPCPU_BIAS));
 	}
 }
 

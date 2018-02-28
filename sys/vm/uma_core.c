@@ -3458,7 +3458,8 @@ uma_zalloc_pcpu_arg(uma_zone_t zone, void *udata, int flags)
 	if (flags & M_ZERO) {
 #ifdef SMP
 		for (i = 0; i <= mp_maxid; i++)
-			bzero(zpcpu_get_cpu(pcpu_item, i), zone->uz_size);
+			bzero(zpcpu_get_cpu_obj(pcpu_item, i, zone->uz_size),
+			    zone->uz_size);
 #else
 		bzero(item, zone->uz_size);
 #endif
