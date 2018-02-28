@@ -47,6 +47,8 @@
 #include <sys/resource.h>
 #include <machine/pcpu.h>
 
+#include <cheri/cheric.h>
+
 #define	DPCPU_SETNAME		"set_pcpu"
 #define	DPCPU_SYMPREFIX		"pcpu_entry_"
 
@@ -60,6 +62,10 @@ __GLOBL(__start_set_pcpu);
 extern uintptr_t *__stop_set_pcpu;
 __GLOBL(__stop_set_pcpu);
 
+#ifdef __CHERI__
+extern uintptr_t dpcpu_start;
+#endif
+
 /*
  * Array of dynamic pcpu base offsets.  Indexed by id.
  */
@@ -68,12 +74,16 @@ extern uintptr_t dpcpu_off[];
 /*
  * Convenience defines.
  */
+#ifdef KLD_MODULE
+#define	DPCPU_START		dpcpu_start
+#else
 #define	DPCPU_START		((uintptr_t)&__start_set_pcpu)
 #define	DPCPU_STOP		((uintptr_t)&__stop_set_pcpu)
-#define	DPCPU_BYTES		(DPCPU_STOP - DPCPU_START)
+#define	DPCPU_BYTES		((ptraddr_t)DPCPU_STOP - (ptraddr_t)DPCPU_START)
 #define	DPCPU_MODMIN		2048
 #define	DPCPU_SIZE		roundup2(DPCPU_BYTES, PAGE_SIZE)
 #define	DPCPU_MODSIZE		(DPCPU_SIZE - (DPCPU_BYTES - DPCPU_MODMIN))
+#endif
 
 /*
  * Declaration and definition.
@@ -109,9 +119,24 @@ extern uintptr_t dpcpu_off[];
 
 /*
  * Accessors with a given base.
+ *
+ * The base points to a CPU's page of dynamic variables with a bias of
+ * DPCPU_BIAS.  In non-purecap kernels, the bias is -DPCPU_START
+ * removing a subtraction from the access.  In CHERI purecap kernels,
+ * the bias is 0 as the base pointer would be unrepresentable
+ * otherwise.
  */
+#ifdef __CHERI__
+#define	DPCPU_BIAS	0
+#define	_DPCPU_PTR(b, n)						\
+	cheri_bounds_set_exact((__typeof(DPCPU_NAME(n)) *)((b) +		\
+	    ((ptraddr_t)&DPCPU_NAME(n) - (ptraddr_t)DPCPU_START)),	\
+	    CHERI_REPRESENTABLE_LENGTH(sizeof(DPCPU_NAME(n))))
+#else /* __CHERI__ */
+#define	DPCPU_BIAS	((char *)NULL - (char *)DPCPU_START)
 #define	_DPCPU_PTR(b, n)						\
     (__typeof(DPCPU_NAME(n))*)((b) + (uintptr_t)&DPCPU_NAME(n))
+#endif /* __CHERI__ */
 #define	_DPCPU_GET(b, n)	(*_DPCPU_PTR(b, n))
 #define	_DPCPU_SET(b, n, v)	(*_DPCPU_PTR(b, n) = v)
 
@@ -246,15 +271,19 @@ extern struct pcpu *cpuid_to_pcpu[];
 #endif
 
 /* Accessor to elements allocated via UMA_ZONE_PCPU zone. */
-#define zpcpu_get(base) ({								\
-	__typeof(base) _ptr = (void *)((char *)(base) + zpcpu_offset());		\
-	_ptr;										\
+#define	_zpcpu_get_obj(base, offset, size) ({				\
+	__typeof(base) _ptr = (void *)((char *)(base) + offset);	\
+	cheri_kern_bounds_set(_ptr, size);				\
 })
 
-#define zpcpu_get_cpu(base, cpu) ({							\
-	__typeof(base) _ptr = (void *)((char *)(base) +	zpcpu_offset_cpu(cpu));		\
-	_ptr;										\
-})
+#define	zpcpu_get(base)							\
+	_zpcpu_get_obj(base, zpcpu_offset(), sizeof(*_ptr))
+
+#define	zpcpu_get_cpu(base, cpu)					\
+	_zpcpu_get_obj(base, zpcpu_offset_cpu(cpu), sizeof(*_ptr))
+
+#define	zpcpu_get_cpu_obj(base, cpu, size)				\
+	_zpcpu_get_obj(base, zpcpu_offset_cpu(cpu), size)
 
 /*
  * This operation is NOT atomic and does not post any barriers.
