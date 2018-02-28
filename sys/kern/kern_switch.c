@@ -114,7 +114,7 @@ static int
 sysctl_stats_reset(SYSCTL_HANDLER_ARGS)
 {
 	struct sysctl_oid *p;
-	uintptr_t counter;
+	ptraddr_t counter;
         int error;
 	int val;
 	int i;
@@ -132,9 +132,9 @@ sysctl_stats_reset(SYSCTL_HANDLER_ARGS)
 	RB_FOREACH(p, sysctl_oid_list, oidp->oid_parent) {
 		if (p == oidp || p->oid_arg1 == NULL)
 			continue;
-		counter = (uintptr_t)p->oid_arg1;
+		counter = ((ptraddr_t)p->oid_arg1 - (ptraddr_t)DPCPU_START);
 		CPU_FOREACH(i) {
-			*(long *)(dpcpu_off[i] + counter) = 0;
+			*(long *)(dpcpu_off[i] - DPCPU_BIAS + counter) = 0;
 		}
 	}
 	return (0);
