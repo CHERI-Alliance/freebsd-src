@@ -52,6 +52,7 @@
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/kernel.h>
+#include <sys/abi_compat.h>
 #include <sys/bio.h>
 #include <sys/conf.h>
 #include <sys/disk.h>
@@ -234,6 +235,17 @@ struct ioc_read_toc_entry32 {
 };
 #define	CDIOREADTOCENTRYS_32	\
     _IOC_NEWTYPE(CDIOREADTOCENTRYS, struct ioc_read_toc_entry32)
+#endif
+
+#ifdef COMPAT_FREEBSD64
+struct ioc_read_toc_entry64 {
+	u_char	address_format;
+	u_char	starting_track;
+	u_short	data_len;
+	uint64_t data;	/* (struct cd_toc_entry *) */
+};
+#define	CDIOREADTOCENTRYS_64	\
+    _IOC_NEWTYPE(CDIOREADTOCENTRYS, struct ioc_read_toc_entry64)
 #endif
 
 static	disk_open_t	cdopen;
@@ -1723,6 +1735,9 @@ te_data_get_ptr(void *irtep, u_long cmd)
 #ifdef COMPAT_FREEBSD32
 		struct ioc_read_toc_entry32 irte32;
 #endif
+#ifdef COMPAT_FREEBSD64
+		struct ioc_read_toc_entry64 irte64;
+#endif
 	} *irteup;
 
 	irteup = irtep;
@@ -1732,6 +1747,11 @@ te_data_get_ptr(void *irtep, u_long cmd)
 #ifdef COMPAT_FREEBSD32
 	case sizeof(irteup->irte32):
 		return ((struct cd_toc_entry *)(uintptr_t)irteup->irte32.data);
+#endif
+#ifdef COMPAT_FREEBSD64
+	case sizeof(irteup->irte64):
+		return (USER_PTR(irteup->irte64.data,
+		    irteup->irte64.data_len));
 #endif
 	default:
 		panic("Unhandled ioctl command %ld", cmd);
@@ -2039,6 +2059,9 @@ cdioctl(struct disk *dp, u_long cmd, void *addr, int flag, struct thread *td)
 	case CDIOREADTOCENTRYS:
 #ifdef COMPAT_FREEBSD32
 	case CDIOREADTOCENTRYS_32:
+#endif
+#ifdef COMPAT_FREEBSD64
+	case CDIOREADTOCENTRYS_64:
 #endif
 		{
 			struct cd_tocdata *data;
