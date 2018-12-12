@@ -34,6 +34,10 @@
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <machine/atomic.h>
+#ifdef __CHERI__
+#include <cheri/cherireg.h>
+#include <cheriintrin.h>
+#endif
 #include <dlfcn.h>
 #include <errno.h>
 #include <link.h>
@@ -181,14 +185,33 @@ dl_init_phdr_info(void)
 	for (auxp = __elf_aux_vector; auxp->a_type != AT_NULL; auxp++) {
 		switch (auxp->a_type) {
 		case AT_BASE:
+#ifdef __CHERI__
+			phdr_info.dlpi_addr =
+			    (uintptr_t)(Elf_Addr)auxp->a_un.a_ptr;
+#else
 			phdr_info.dlpi_addr = (Elf_Addr)auxp->a_un.a_ptr;
+#endif
 			break;
 		case AT_EXECPATH:
 			phdr_info.dlpi_name = (const char *)auxp->a_un.a_ptr;
 			break;
 		case AT_PHDR:
+#ifdef __CHERI__
+			phdr_info.dlpi_phdr =
+			    (const Elf_Phdr *)cheri_perms_and(auxp->a_un.a_ptr,
+			    CHERI_PERM_LOAD |
+#ifdef HAS_CHERI_PERM_LOAD_STORE_CAP
+			    CHERI_PERM_LOAD_CAP
+#elif defined(HAS_CHERI_PERM_CAP)
+			    CHERI_PERM_CAP
+#else
+#error "Missing LOAD_CAP permission"
+#endif
+			    );
+#else
 			phdr_info.dlpi_phdr =
 			    (const Elf_Phdr *)auxp->a_un.a_ptr;
+#endif
 			break;
 		case AT_PHNUM:
 			phdr_info.dlpi_phnum = (Elf_Half)auxp->a_un.a_val;
