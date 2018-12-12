@@ -4419,9 +4419,23 @@ dlinfo(void *handle, int request, void *p)
 static void
 rtld_fill_dl_phdr_info(const Obj_Entry *obj, struct dl_phdr_info *phdr_info)
 {
+#ifdef __CHERI__
+	const int load_perms =
+#if defined(HAS_CHERI_PERM_LOAD_STORE_CAP)
+	    CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP
+#elif defined(HAS_CHERI_PERM_CAP)
+	    CHERI_PERM_LOAD | CHERI_PERM_CAP
+#endif
+	    ;
+
+	phdr_info->dlpi_addr =
+	    (uintptr_t)cheri_perms_and(obj->relocbase, load_perms);
+	phdr_info->dlpi_phdr = cheri_perms_and(obj->phdr, load_perms);
+#else
 	phdr_info->dlpi_addr = (Elf_Addr)obj->relocbase;
-	phdr_info->dlpi_name = obj->path;
 	phdr_info->dlpi_phdr = obj->phdr;
+#endif
+	phdr_info->dlpi_name = obj->path;
 	phdr_info->dlpi_phnum = obj->phnum;
 	phdr_info->dlpi_tls_modid = obj->tlsindex;
 	phdr_info->dlpi_tls_data = (char *)tls_get_addr_slow(_tcb_get(),

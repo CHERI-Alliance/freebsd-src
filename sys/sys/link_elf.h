@@ -80,7 +80,11 @@ struct r_debug {
 
 struct dl_phdr_info
 {
+#ifdef __CHERI__
+	uintptr_t dlpi_addr;			/* module relocation base */
+#else
 	Elf_Addr dlpi_addr;			/* module relocation base */
+#endif
 	const char *dlpi_name;			/* module name */
 	const Elf_Phdr *dlpi_phdr;		/* pointer to module's phdr */
 	Elf_Half dlpi_phnum;			/* number of entries in phdr */
