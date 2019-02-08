@@ -81,6 +81,10 @@ fgetwln_l(FILE * __restrict fp, size_t *lenp, locale_t locale)
 	ret = (wchar_t *)fp->_lb._base;
 end:
 	FUNLOCKFILE_CANCELSAFE();
+#ifdef __CHERI__
+	if (ret != NULL)
+		ret = __builtin_cheri_bounds_set(ret, len);
+#endif
 	return (ret);
 
 error:
