@@ -150,6 +150,10 @@ fgetln(FILE *fp, size_t *lenp)
 	ret = (char *)fp->_lb._base;
 end:
 	FUNLOCKFILE_CANCELSAFE();
+#ifdef __CHERI__
+	if (ret != NULL)
+		ret = __builtin_cheri_bounds_set(ret, len);
+#endif
 	return (ret);
 
 error:
