@@ -80,6 +80,14 @@ struct fiodgname_arg32 {
 #define	FIODGNAME_32	_IOC_NEWTYPE(FIODGNAME, struct fiodgname_arg32)
 #endif
 
+#ifdef COMPAT_FREEBSD64
+struct fiodgname_arg64 {
+	int		len;
+	uint64_t	buf;	/* (void *) */
+};
+#define	FIODGNAME_64	_IOC_NEWTYPE(FIODGNAME, struct fiodgname_arg64)
+#endif
+
 void	*fiodgname_buf_get_ptr(void *fgnp, u_long com);
 #endif
 
