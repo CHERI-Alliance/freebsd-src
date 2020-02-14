@@ -39,6 +39,7 @@
 
 #include <sys/param.h>
 #include <sys/systm.h>
+#include <sys/abi_compat.h>
 #include <sys/conf.h>
 #include <sys/dirent.h>
 #include <sys/eventhandler.h>
@@ -905,6 +906,9 @@ fiodgname_buf_get_ptr(void *fgnp, u_long com)
 #ifdef COMPAT_FREEBSD32
 		struct fiodgname_arg32	fgn32;
 #endif
+#ifdef COMPAT_FREEBSD64
+		struct fiodgname_arg64	fgn64;
+#endif
 	} *fgnup;
 
 	fgnup = fgnp;
@@ -914,6 +918,11 @@ fiodgname_buf_get_ptr(void *fgnp, u_long com)
 #ifdef COMPAT_FREEBSD32
 	case FIODGNAME_32:
 		return ((void *)(uintptr_t)fgnup->fgn32.buf);
+#endif
+#ifdef COMPAT_FREEBSD64
+	case FIODGNAME_64:
+		return (USER_PTR((void *)(uintptr_t)fgnup->fgn64.buf,
+		    fgnup->fgn64.len));
 #endif
 	default:
 		panic("Unhandled ioctl command %ld", com);
@@ -951,6 +960,9 @@ devfs_ioctl(struct vop_ioctl_args *ap)
 	case FIODGNAME:
 #ifdef	COMPAT_FREEBSD32
 	case FIODGNAME_32:
+#endif
+#ifdef	COMPAT_FREEBSD64
+	case FIODGNAME_64:
 #endif
 		fgn = ap->a_data;
 		p = devtoname(dev);
