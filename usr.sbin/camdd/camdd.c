@@ -713,8 +713,8 @@ camdd_release_buf(struct camdd_buf *buf)
 			if (data->extra_buf != 0) {
 				void *extra_buf;
 
-				extra_buf = (void *)
-				    data->segs[data->sg_count - 1].ds_addr;
+				extra_buf =
+				    data->segs[data->sg_count - 1].ds_vaddr;
 				free(extra_buf);
 				data->extra_buf = 0;
 			}
@@ -851,8 +851,7 @@ camdd_buf_sg_create(struct camdd_buf *buf, int iovec, uint32_t sector_size,
 
 			tmp_data = &tmp_buf->buf_type_spec.data;
 			if (iovec == 0) {
-				data->segs[i].ds_addr =
-				    (bus_addr_t) tmp_data->buf;
+				data->segs[i].ds_vaddr = tmp_data->buf;
 				data->segs[i].ds_len = tmp_data->fill_len -
 				    tmp_data->resid;
 			} else {
@@ -868,8 +867,7 @@ camdd_buf_sg_create(struct camdd_buf *buf, int iovec, uint32_t sector_size,
 
 			tmp_ind = &tmp_buf->buf_type_spec.indirect;
 			if (iovec == 0) {
-				data->segs[i].ds_addr =
-				    (bus_addr_t)tmp_ind->start_ptr;
+				data->segs[i].ds_vaddr = tmp_ind->start_ptr;
 				data->segs[i].ds_len = tmp_ind->len;
 			} else {
 				data->iovec[i].iov_base = tmp_ind->start_ptr;
@@ -882,7 +880,7 @@ camdd_buf_sg_create(struct camdd_buf *buf, int iovec, uint32_t sector_size,
 
 	if (extra_buf != NULL) {
 		if (iovec == 0) {
-			data->segs[i].ds_addr = (bus_addr_t)extra_buf;
+			data->segs[i].ds_vaddr = extra_buf;
 			data->segs[i].ds_len = extra_buf_len;
 		} else {
 			data->iovec[i].iov_base = extra_buf;
