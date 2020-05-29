@@ -47,6 +47,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -94,10 +95,21 @@ static struct procabi freebsd32 = {
 };
 #endif
 
+#if __SIZEOF_POINTER__ > 8
+static struct procabi freebsd64 = {
+	.type = "FreeBSD64",
+	.abi = SYSDECODE_ABI_FREEBSD64,
+	.pointer_size = sizeof(uint64_t),
+	.compat_prefix = "freebsd64_",
+	.extra_syscalls = STAILQ_HEAD_INITIALIZER(freebsd64.extra_syscalls),
+	.syscalls = { NULL }
+};
+#endif
+
 static struct procabi linux = {
 	.type = "Linux",
 	.abi = SYSDECODE_ABI_LINUX,
-	.pointer_size = sizeof(void *),
+	.pointer_size = sizeof(ptraddr_t),
 	.extra_syscalls = STAILQ_HEAD_INITIALIZER(linux.extra_syscalls),
 	.syscalls = { NULL }
 };
@@ -117,6 +129,10 @@ static struct procabi_table abis[] = {
 	{ "FreeBSD ELF32", &freebsd },
 #elif __SIZEOF_POINTER__ == 8
 	{ "FreeBSD ELF64", &freebsd },
+	{ "FreeBSD ELF32", &freebsd32 },
+#elif __SIZEOF_POINTER__ == 16
+	{ "FreeBSD ELF64C", &freebsd },
+	{ "FreeBSD ELF64", &freebsd64 },
 	{ "FreeBSD ELF32", &freebsd32 },
 #else
 #error "Unsupported pointer size"
