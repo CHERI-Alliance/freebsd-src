@@ -105,7 +105,7 @@ int	freebsd64_copyout_strings(struct image_params *imgp,
 	    uintptr_t *);
 int	freebsd64_copyiniov(const struct iovec *cb_arg,
 	    u_int iovcnt, struct iovec **iov, int error);
-int	freebsd64_copyinuio(const struct iovec *cb_arg,
+int	freebsd64_copyinuio(const void *cb_arg,
 	    u_int iovcnt, struct uio **uiop);
 
 int	freebsd64_get_mcontext(struct thread *td, mcontext64_t *mcp, int flags);

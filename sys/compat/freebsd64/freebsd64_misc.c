@@ -403,8 +403,7 @@ freebsd11_freebsd64_kevent(struct thread *td,
 #endif
 
 int
-freebsd64_copyinuio(const struct iovec *cb_arg, u_int iovcnt,
-    struct uio **uiop)
+freebsd64_copyinuio(const void *cb_arg, u_int iovcnt, struct uio **uiop)
 {
 	struct iovec64 iov64;
 	struct iovec *iov;
@@ -503,15 +502,9 @@ freebsd64_copyin_hdtr(const struct sf_hdtr64 *uhdtr,
 int
 freebsd64_sendfile(struct thread *td, struct freebsd64_sendfile_args *uap)
 {
-	return (kern_sendfile(td, &(struct sendfile_args){
-		.fd = uap->fd,
-		.s = uap->s,
-		.offset = uap->offset,
-		.nbytes = uap->nbytes,
-		.hdtr = USER_PTR_OBJ(uap->hdtr),
-		.sbytes = USER_PTR_OBJ(uap->sbytes),
-		.flags = uap->flags,
-	    }, false, (copyin_hdtr_t *)freebsd64_copyin_hdtr,
+	return (kern_sendfile(td, uap->fd, uap->s, uap->offset, uap->nbytes,
+	    USER_PTR_OBJ(uap->hdtr), USER_PTR_OBJ(uap->sbytes), uap->flags,
+	    false, (copyin_hdtr_t *)freebsd64_copyin_hdtr,
 	    freebsd64_copyinuio));
 }
 
