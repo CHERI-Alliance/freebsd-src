@@ -121,18 +121,18 @@ static struct sysentvec elf64_freebsd_sysvec = {
 };
 INIT_SYSENTVEC(elf64_sysvec, &elf64_freebsd_sysvec);
 
-static const Elf64_Brandinfo freebsd_brand_info = {
+static const __ElfN(Brandinfo) freebsd_brand_info = {
 	.brand		= ELFOSABI_FREEBSD,
 	.machine	= EM_AARCH64,
 	.compat_3_brand	= "FreeBSD",
 	.interp_path	= "/libexec/ld-elf.so.1",
 	.sysvec		= &elf64_freebsd_sysvec,
 	.interp_newpath	= NULL,
-	.brand_note	= &elf64_freebsd_brandnote,
+	.brand_note	= &__elfN(freebsd_brandnote),
 	.flags		= BI_CAN_EXEC_DYN | BI_BRAND_NOTE
 };
 C_SYSINIT(elf64, SI_SUB_EXEC, SI_ORDER_FIRST,
-    (sysinit_cfunc_t)elf64_insert_brand_entry, &freebsd_brand_info);
+    (sysinit_cfunc_t)__elfN(insert_brand_entry), &freebsd_brand_info);
 
 static bool
 get_arm64_addr_mask(struct regset *rs, struct thread *td, void *buf,
@@ -163,7 +163,7 @@ static struct regset regset_arm64_addr_mask = {
 ELF_REGSET(regset_arm64_addr_mask);
 
 void
-elf64_dump_thread(struct thread *td __unused, void *dst __unused,
+__elfN(dump_thread)(struct thread *td __unused, void *dst __unused,
     size_t *off __unused)
 {
 }
