@@ -160,8 +160,16 @@ __GLOBL(__start_set_vnet);
 extern uintptr_t	*__stop_set_vnet;
 __GLOBL(__stop_set_vnet);
 
+#ifdef __CHERI__
+extern uintptr_t	vnet_start;
+#endif
+
+#ifdef KLD_MODULE
+#define	VNET_START	vnet_start
+#else
 #define	VNET_START	(uintptr_t)&__start_set_vnet
 #define	VNET_STOP	(uintptr_t)&__stop_set_vnet
+#endif
 
 /*
  * Functions to allocate and destroy virtual network stacks.
@@ -290,8 +298,18 @@ extern struct sx vnet_sxlock;
 #define	VNET_DEFINE_STATIC(t, n) \
     static t VNET_NAME(n) __section(VNET_SETNAME) __used
 #endif
+#ifdef __CHERI__
+#define	VNET_BIAS	0
+
+#define	_VNET_PTR(b, n)							\
+	cheri_bounds_set((__typeof(VNET_NAME(n)) *)((b) +		\
+	    ((ptraddr_t)&VNET_NAME(n) - (ptraddr_t)VNET_START)),	\
+	    sizeof(VNET_NAME(n)))
+#else
+#define	VNET_BIAS	((char *)NULL - (char *)VNET_START)
 #define	_VNET_PTR(b, n)		(__typeof(VNET_NAME(n))*)		\
 				    ((b) + (uintptr_t)&VNET_NAME(n))
+#endif
 
 #define	_VNET(b, n)		(*_VNET_PTR(b, n))
 
