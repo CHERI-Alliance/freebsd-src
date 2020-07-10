@@ -514,8 +514,8 @@ static void
 _bus_dmamap_count_pages(bus_dma_tag_t dmat, bus_dmamap_t map, pmap_t pmap,
     void *buf, bus_size_t buflen, int flags)
 {
-	vm_offset_t vaddr;
-	vm_offset_t vendaddr;
+	vm_pointer_t vaddr;
+	vm_pointer_t vendaddr;
 	bus_addr_t paddr;
 	bus_size_t sg_len;
 
@@ -530,8 +530,8 @@ _bus_dmamap_count_pages(bus_dma_tag_t dmat, bus_dmamap_t map, pmap_t pmap,
 		 * Count the number of bounce pages
 		 * needed in order to complete this transfer
 		 */
-		vaddr = (vm_offset_t)buf;
-		vendaddr = (vm_offset_t)buf + buflen;
+		vaddr = (vm_pointer_t)buf;
+		vendaddr = (vm_pointer_t)buf + buflen;
 
 		while (vaddr < vendaddr) {
 			sg_len = MIN(vendaddr - vaddr,
@@ -672,7 +672,6 @@ bounce_bus_dmamap_load_buffer(bus_dma_tag_t dmat, bus_dmamap_t map, void *buf,
 		    map->pagesneeded != 0 &&
 		    addr_needs_bounce(dmat, curaddr)) {
 			sgsize = roundup2(sgsize, dmat->common.alignment);
-			sgsize = MIN(sgsize, buflen);
 			curaddr = add_bounce_page(dmat, map, kvaddr, curaddr,
 			    sgsize);
 		} else if ((dmat->bounce_flags & BF_COHERENT) == 0) {
