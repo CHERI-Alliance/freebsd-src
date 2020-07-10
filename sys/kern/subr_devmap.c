@@ -37,6 +37,8 @@
 #include <vm/pmap.h>
 #include <machine/vmparam.h>
 
+#include <cheri/cheric.h>
+
 #ifdef __arm__
 #include <machine/pte.h>
 #endif
@@ -56,11 +58,15 @@ static boolean_t devmap_bootstrap_done = false;
 #define	AKVA_DEVMAP_MAX_ENTRIES	32
 static struct devmap_entry	akva_devmap_entries[AKVA_DEVMAP_MAX_ENTRIES];
 static u_int			akva_devmap_idx;
-#endif
+#endif /* __HAVE_STATIC_DEVMAP */
+
 static vm_offset_t		akva_devmap_vaddr = DEVMAP_MAX_VADDR;
 
 #if defined(__aarch64__) || defined(__riscv)
 extern int early_boot;
+#endif
+#ifdef __CHERI__
+static void *devmap_capability;
 #endif
 
 #ifdef __HAVE_STATIC_DEVMAP
@@ -152,6 +158,7 @@ devmap_add_entry(vm_paddr_t pa, vm_size_t sz)
 	} else {
 		akva_devmap_vaddr = trunc_page(akva_devmap_vaddr - sz);
 	}
+
 	m = &akva_devmap_entries[akva_devmap_idx++];
 	m->pd_va    = akva_devmap_vaddr;
 	m->pd_pa    = pa;
@@ -220,12 +227,12 @@ static vm_paddr_t
 devmap_vtop(void * vpva, vm_size_t size)
 {
 	const struct devmap_entry *pd;
-	vm_offset_t va;
+	vm_pointer_t va;
 
 	if (devmap_table == NULL)
 		return (DEVMAP_PADDR_NOTFOUND);
 
-	va = (vm_offset_t)vpva;
+	va = (vm_pointer_t)vpva;
 	for (pd = devmap_table; pd->pd_size != 0; ++pd) {
 		if (va >= pd->pd_va && va + size <= pd->pd_va + pd->pd_size)
 			return ((vm_paddr_t)(pd->pd_pa + (va - pd->pd_va)));
@@ -233,7 +240,7 @@ devmap_vtop(void * vpva, vm_size_t size)
 
 	return (DEVMAP_PADDR_NOTFOUND);
 }
-#endif
+#endif /* __HAVE_STATIC_DEVMAP */
 
 /*
  * Map a set of physical memory pages into the kernel virtual address space.
@@ -255,7 +262,8 @@ pmap_mapdev(vm_paddr_t pa, vm_size_t size)
 void *
 pmap_mapdev_attr(vm_paddr_t pa, vm_size_t size, vm_memattr_t ma)
 {
-	vm_offset_t va, offset;
+	vm_pointer_t va;
+	vm_offset_t offset;
 #ifdef __HAVE_STATIC_DEVMAP
 	void * rva;
 
@@ -277,8 +285,23 @@ pmap_mapdev_attr(vm_paddr_t pa, vm_size_t size, vm_memattr_t ma)
 
 #ifdef PMAP_MAPDEV_EARLY_SIZE
 	if (early_boot) {
+#ifdef __CHERI__
+#ifdef INVARIANTS
+		vm_pointer_t oldva = akva_devmap_vaddr;
+#endif
+
+		akva_devmap_vaddr -= CHERI_REPRESENTABLE_LENGTH(size);
+		akva_devmap_vaddr =
+		    CHERI_REPRESENTABLE_ALIGN_DOWN(akva_devmap_vaddr, size);
+		akva_devmap_vaddr = trunc_page(akva_devmap_vaddr);
+		va = (vm_pointer_t)cheri_bounds_set_exact(cheri_address_set(
+		    devmap_capability, akva_devmap_vaddr), size);
+		KASSERT(va + cheri_length_get((void *)va) <= oldva,
+		    ("%s: early devmap overlaps", __func__));
+#else
 		akva_devmap_vaddr = trunc_page(akva_devmap_vaddr - size);
 		va = akva_devmap_vaddr;
+#endif
 		KASSERT(va >= (VM_MAX_KERNEL_ADDRESS - PMAP_MAPDEV_EARLY_SIZE),
 		    ("%s: Too many early devmap mappings", __func__));
 	} else
@@ -305,7 +328,8 @@ pmap_mapdev_attr(vm_paddr_t pa, vm_size_t size, vm_memattr_t ma)
 void
 pmap_unmapdev(void *p, vm_size_t size)
 {
-	vm_offset_t offset, va;
+	vm_pointer_t va;
+	vm_offset_t offset;
 
 #ifdef __HAVE_STATIC_DEVMAP
 	/* Nothing to do if we find the mapping in the static table. */
@@ -313,7 +337,7 @@ pmap_unmapdev(void *p, vm_size_t size)
 		return;
 #endif
 
-	va = (vm_offset_t)p;
+	va = (vm_pointer_t)p;
 	offset = va & PAGE_MASK;
 	va = trunc_page(va);
 	size = round_page(size + offset);
@@ -321,6 +345,20 @@ pmap_unmapdev(void *p, vm_size_t size)
 	pmap_kremove_device(va, size);
 	kva_free(va, size);
 }
+
+#ifdef __CHERI_PURE_CAPABILITY__
+void __nosanitizecoverage
+devmap_init_capability(void *cap)
+{
+	devmap_capability = cap;
+
+	/* XXX: Too early to panic? */
+	KASSERT(cheri_top_get(cap) == DEVMAP_MAX_VADDR,
+	    ("devmap capability end doesn't match DEVMAP_MAX_VADDR"));
+	KASSERT(cheri_length_get(cap) == PMAP_MAPDEV_EARLY_SIZE,
+	    ("devmap capability length doesn't match PMAP_MAPDEV_EARLY_SIZE"));
+}
+#endif
 
 #ifdef DDB
 #ifdef __HAVE_STATIC_DEVMAP

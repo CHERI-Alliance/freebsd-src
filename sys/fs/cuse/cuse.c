@@ -890,8 +890,8 @@ cuse_server_ioctl_copy_locked(struct cuse_server *pcs,
 }
 
 static int
-cuse_proc2proc_copy(struct proc *proc_s, vm_offset_t data_s,
-    struct proc *proc_d, vm_offset_t data_d, size_t len)
+cuse_proc2proc_copy(struct proc *proc_s, uintptr_t data_s,
+    struct proc *proc_d, uintptr_t data_d, size_t len)
 {
 	struct thread *td;
 	struct proc *proc_cur;
@@ -989,7 +989,7 @@ cuse_server_data_copy_optimized_locked(struct cuse_server *pcs,
     struct cuse_client_command *pccmd,
     struct cuse_data_chunk *pchk, bool isread)
 {
-	uintptr_t offset;
+	size_t offset;
 	int error;
 
 	/*
@@ -1845,7 +1845,7 @@ cuse_client_ioctl(struct cdev *dev, unsigned long cmd,
 
 	cuse_server_lock(pcs);
 	cuse_client_send_command_locked(pccmd,
-	    (len == 0) ? *(long *)data : CUSE_BUF_MIN_PTR,
+	    (len == 0) ? *(uintptr_t *)data : CUSE_BUF_MIN_PTR,
 	    (unsigned long)cmd, pcc->fflags,
 	    (fflag & O_NONBLOCK) ? IO_NDELAY : 0);
 
