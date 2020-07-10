@@ -81,4 +81,12 @@ void devmap_bootstrap(void);
 void devmap_print_table(void);
 #endif
 
+#ifdef __CHERI__
+/*
+ * Provide a capability mapping the devmap region.
+ */
+void devmap_init_capability(void *_cap);
+#endif
+
+
 #endif /* !_SYS_DEVMAP_H_ */
