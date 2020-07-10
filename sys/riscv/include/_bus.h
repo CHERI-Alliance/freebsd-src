@@ -16,7 +16,7 @@
 /*
  * Addresses (in bus space).
  */
-typedef u_long bus_addr_t;
+typedef vm_paddr_t bus_addr_t;
 typedef u_long bus_size_t;
 
 /*
