@@ -208,7 +208,7 @@ SYSCTL_BOOL(_debug, OID_AUTO, link_elf_leak_locals,
     CTLFLAG_RWTUN, &link_elf_leak_locals, 0,
     "Allow local symbols to participate in global module symbol resolution");
 
-typedef int (*elf_reloc_fn)(linker_file_t lf, Elf_Addr relocbase,
+typedef int (*elf_reloc_fn)(linker_file_t lf, char *relocbase,
     const void *data, int type, elf_lookup_fn lookup);
 
 static int	parse_dynamic(elf_file_t);
@@ -1484,7 +1484,7 @@ relocate_file1(elf_file_t ef, elf_lookup_fn lookup, elf_reloc_fn reloc,
 		    STT_GNU_IFUNC ||					\
 		    elf_is_ifunc_reloc((iter)->r_info)) != ifuncs)	\
 			continue;					\
-		if (reloc(&ef->lf, (Elf_Addr)ef->address,		\
+		if (reloc(&ef->lf, ef->address,				\
 		    (iter), (type), lookup)) {				\
 			symname = symbol_name(ef, (iter)->r_info);	\
 			printf("link_elf: symbol %s undefined\n",	\
@@ -1983,7 +1983,7 @@ link_elf_reloc_local(linker_file_t lf)
 	if ((rel = ef->rel) != NULL) {
 		rellim = (const Elf_Rel *)((const char *)ef->rel + ef->relsize);
 		while (rel < rellim) {
-			elf_reloc_local(lf, (Elf_Addr)ef->address, rel,
+			elf_reloc_local(lf, ef->address, rel,
 			    ELF_RELOC_REL, elf_lookup);
 			rel++;
 		}
@@ -1994,7 +1994,7 @@ link_elf_reloc_local(linker_file_t lf)
 		relalim = (const Elf_Rela *)
 		    ((const char *)ef->rela + ef->relasize);
 		while (rela < relalim) {
-			elf_reloc_local(lf, (Elf_Addr)ef->address, rela,
+			elf_reloc_local(lf, ef->address, rela,
 			    ELF_RELOC_RELA, elf_lookup);
 			rela++;
 		}
