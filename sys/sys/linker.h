@@ -317,9 +317,9 @@ typedef int elf_lookup_fn(linker_file_t, Elf_Size, int, Elf_Addr *);
 
 /* Support functions */
 bool	elf_is_ifunc_reloc(Elf_Size r_info);
-int	elf_reloc(linker_file_t _lf, Elf_Addr base, const void *_rel,
+int	elf_reloc(linker_file_t _lf, char *base, const void *_rel,
 	    int _type, elf_lookup_fn _lu);
-int	elf_reloc_local(linker_file_t _lf, Elf_Addr base, const void *_rel,
+int	elf_reloc_local(linker_file_t _lf, char *base, const void *_rel,
 	    int _type, elf_lookup_fn _lu);
 Elf_Addr elf_relocaddr(linker_file_t _lf, Elf_Addr addr);
 const Elf_Sym *elf_get_sym(linker_file_t _lf, Elf_Size _symidx);
@@ -327,7 +327,7 @@ const char *elf_get_symname(linker_file_t _lf, Elf_Size _symidx);
 void	link_elf_ireloc(void);
 
 #if defined(__aarch64__) || defined(__amd64__)
-int	elf_reloc_late(linker_file_t _lf, Elf_Addr base, const void *_rel,
+int	elf_reloc_late(linker_file_t _lf, char *base, const void *_rel,
 	    int _type, elf_lookup_fn _lu);
 void	link_elf_late_ireloc(void);
 #endif
