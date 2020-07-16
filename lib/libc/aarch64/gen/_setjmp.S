@@ -35,23 +35,23 @@
 ENTRY(_setjmp)
 	/* Store the magic value and stack pointer */
 	ldr	x8, .Lmagic
-	mov	x9, sp
-	stp	x8, x9, [x0], #16
+	mov	PTR(9), PTRN(sp)
+	stp	PTR(8), PTR(9), [PTR(0)], #(PTR_WIDTH * 2)
 
 	/* Store the general purpose registers and lr */
-	stp	x19, x20, [x0], #16
-	stp	x21, x22, [x0], #16
-	stp	x23, x24, [x0], #16
-	stp	x25, x26, [x0], #16
-	stp	x27, x28, [x0], #16
-	stp	x29, lr, [x0], #16
+	stp	PTR(19), PTR(20), [PTR(0)], #(PTR_WIDTH * 2)
+	stp	PTR(21), PTR(22), [PTR(0)], #(PTR_WIDTH * 2)
+	stp	PTR(23), PTR(24), [PTR(0)], #(PTR_WIDTH * 2)
+	stp	PTR(25), PTR(26), [PTR(0)], #(PTR_WIDTH * 2)
+	stp	PTR(27), PTR(28), [PTR(0)], #(PTR_WIDTH * 2)
+	stp	PTR(29), PTRN(lr), [PTR(0)], #(PTR_WIDTH * 2)
 
 #ifndef _STANDALONE
 	/* Store the vfp registers */
-	stp	d8, d9, [x0], #16
-	stp	d10, d11, [x0], #16
-	stp	d12, d13, [x0], #16
-	stp	d14, d15, [x0]
+	stp	d8, d9, [PTR(0)], #16
+	stp	d10, d11, [PTR(0)], #16
+	stp	d12, d13, [PTR(0)], #16
+	stp	d14, d15, [PTR(0)], #16
 #endif
 
 	/* Return value */
@@ -64,29 +64,29 @@ END(_setjmp)
 
 ENTRY(_longjmp)
 	/* Check the magic value */
-	ldr	x8, [x0], #8
+	ldr	PTR(8), [PTR(0)], #(PTR_WIDTH)
 	ldr	x9, .Lmagic
 	cmp	x8, x9
 	b.ne	botch
 
 	/* Restore the stack pointer */
-	ldr	x8, [x0], #8
-	mov	sp, x8
+	ldr	PTR(8), [PTR(0)], #(PTR_WIDTH)
+	mov	PTRN(sp), PTR(8)
 
 	/* Restore the general purpose registers and lr */
-	ldp	x19, x20, [x0], #16
-	ldp	x21, x22, [x0], #16
-	ldp	x23, x24, [x0], #16
-	ldp	x25, x26, [x0], #16
-	ldp	x27, x28, [x0], #16
-	ldp	x29, lr, [x0], #16
+	ldp	PTR(19), PTR(20), [PTR(0)], #(PTR_WIDTH * 2)
+	ldp	PTR(21), PTR(22), [PTR(0)], #(PTR_WIDTH * 2)
+	ldp	PTR(23), PTR(24), [PTR(0)], #(PTR_WIDTH * 2)
+	ldp	PTR(25), PTR(26), [PTR(0)], #(PTR_WIDTH * 2)
+	ldp	PTR(27), PTR(28), [PTR(0)], #(PTR_WIDTH * 2)
+	ldp	PTR(29), PTRN(lr), [PTR(0)], #(PTR_WIDTH * 2)
 
 #ifndef _STANDALONE
 	/* Restore the vfp registers */
-	ldp	d8, d9, [x0], #16
-	ldp	d10, d11, [x0], #16
-	ldp	d12, d13, [x0], #16
-	ldp	d14, d15, [x0]
+	ldp	d8, d9, [PTR(0)], #16
+	ldp	d10, d11, [PTR(0)], #16
+	ldp	d12, d13, [PTR(0)], #16
+	ldp	d14, d15, [PTR(0)], #16
 #endif
 
 	/* Load the return value */
