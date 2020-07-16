@@ -70,14 +70,14 @@ __makecontext(ucontext_t *ucp, void (*func)(void), int argc, ...)
 	va_start(ap, argc);
 	/* Pass up to eight arguments in x0-7. */
 	for (i = 0; i < argc && i < 8; i++)
-		gp->gp_x[i] = va_arg(ap, uint64_t);
+		gp->gp_x[i] = va_arg(ap, uintptr_t);
 	va_end(ap);
 
 	/* Set the stack */
 	gp->gp_sp = STACKALIGN((uintptr_t)ucp->uc_stack.ss_sp +
 	    ucp->uc_stack.ss_size);
 	/* Arrange for return via the trampoline code. */
-	gp->gp_elr = (__register_t)_ctx_start;
-	gp->gp_x[19] = (__register_t)func;
-	gp->gp_x[20] = (__register_t)ucp;
+	gp->gp_elr = (uintptr_t)_ctx_start;
+	gp->gp_x[19] = (uintptr_t)func;
+	gp->gp_x[20] = (uintptr_t)ucp;
 }

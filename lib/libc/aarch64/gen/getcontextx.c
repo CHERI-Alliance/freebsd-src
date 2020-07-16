@@ -47,7 +47,7 @@ __fillcontextx2(char *ctx)
 	ucontext_t *ucp;
 
 	ucp = (ucontext_t *)ctx;
-	ucp->uc_mcontext.mc_ptr = (uint64_t)(ucp + 1);
+	ucp->uc_mcontext.mc_ptr = (uintptr_t)(ucp + 1);
 
 	reg_ctx = (struct arm64_reg_context *)ucp->uc_mcontext.mc_ptr;
 	reg_ctx->ctx_id = ARM64_CTX_END;

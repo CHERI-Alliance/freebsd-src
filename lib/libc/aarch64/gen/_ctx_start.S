@@ -30,8 +30,8 @@
 #include <sys/elf_common.h>
 
 ENTRY(_ctx_start)
-	blr	x19		/* Call func from makecontext */
-	mov	x0, x20		/* Load ucp saved in makecontext */
+	blr	PTR(19)		/* Call func from makecontext */
+	mov	PTR(0), PTR(20)	/* Load ucp saved in makecontext */
 	bl	_C_LABEL(ctx_done)
 	bl	_C_LABEL(abort)
 END(_ctx_start)
