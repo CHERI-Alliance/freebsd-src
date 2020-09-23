@@ -389,6 +389,10 @@ init_static_kenv(char *buf, size_t len)
 		md_envp = buf;
 		md_env_len = len;
 		md_env_pos = 0;
+#ifdef __CHERI__
+		KASSERT(len == 0 || cheri_length_get(md_envp) == len,
+		    ("unbounded static kenv"));
+#endif
 
 		if (getenv_is_true("static_env.disabled")) {
 			kern_envp[0] = '\0';
@@ -574,7 +578,7 @@ _getenv_static_from(char *chkenv, const char *name)
 		len = ep - cp;
 		ep++;
 		if (!strncmp(name, cp, len) && name[len] == 0)
-			return (ep);
+			return (cheri_kern_bounds_set(ep, strlen(ep) + 1));
 	}
 	return (NULL);
 }
