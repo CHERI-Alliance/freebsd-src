@@ -440,9 +440,12 @@ _vm_gpa_hold(struct vm *vm, vm_paddr_t gpa, size_t len, int reqprot,
 	for (i = 0; i < VM_MAX_MEMMAPS; i++) {
 		mm = &vm_mem(vm)->mem_maps[i];
 		if (gpa >= mm->gpa && gpa < mm->gpa + mm->len) {
+			void *gpap;
+
+			gpap = (void *)trunc_page(gpa);
 			count = vm_fault_quick_hold_pages(
-			    &vm_vmspace(vm)->vm_map, trunc_page(gpa),
-			    PAGE_SIZE, reqprot, &m, 1);
+			    &vm_vmspace(vm)->vm_map, gpap, PAGE_SIZE,
+			    reqprot, &m, 1);
 			break;
 		}
 	}

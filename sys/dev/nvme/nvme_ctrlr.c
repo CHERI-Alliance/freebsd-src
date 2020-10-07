@@ -36,6 +36,7 @@
 #include <sys/ioccom.h>
 #include <sys/proc.h>
 #include <sys/smp.h>
+#include <sys/stddef.h>
 #include <sys/uio.h>
 #include <sys/sbuf.h>
 #include <sys/endian.h>
@@ -1365,7 +1366,7 @@ nvme_page_count(vm_offset_t start, size_t len)
 }
 
 static int
-nvme_user_ioctl_req(vm_offset_t addr, size_t len, bool is_read,
+nvme_user_ioctl_req(void *addr, size_t len, bool is_read,
     vm_page_t **upages, int max_pages, int *npagesp, struct nvme_request **req,
     nvme_cb_fn_t cb_fn, void *cb_arg)
 {
@@ -1374,7 +1375,7 @@ nvme_user_ioctl_req(vm_offset_t addr, size_t len, bool is_read,
 	vm_page_t *upages_us;
 
 	upages_us = *upages;
-	npages = nvme_page_count(addr, len);
+	npages = nvme_page_count((vm_offset_t)addr, len);
 	if (npages > atop(maxphys))
 		return (EINVAL);
 	if (npages > max_pages)
@@ -1391,7 +1392,8 @@ nvme_user_ioctl_req(vm_offset_t addr, size_t len, bool is_read,
 		return (err);
 	}
 	*req = nvme_allocate_request_null(M_WAITOK, cb_fn, cb_arg);
-	(*req)->payload = memdesc_vmpages(upages_us, len, addr & PAGE_MASK);
+	(*req)->payload = memdesc_vmpages(upages_us, len,
+	    (ptraddr_t)addr & PAGE_MASK);
 	(*req)->payload_valid = true;
 	if (*upages != upages_us)
 		*upages = upages_us;
@@ -1446,7 +1448,7 @@ nvme_ctrlr_passthrough_cmd(struct nvme_controller *ctrlr,
 			return (EIO);
 		}
 		if (is_user) {
-			ret = nvme_user_ioctl_req((vm_offset_t)pt->buf, pt->len,
+			ret = nvme_user_ioctl_req(pt->buf, pt->len,
 			    pt->is_read, &upages, nitems(upages_small), &npages, &req,
 			    nvme_pt_done, pt);
 			if (ret != 0)
@@ -1530,9 +1532,10 @@ nvme_ctrlr_linux_passthru_cmd(struct nvme_controller *ctrlr,
 			return (EIO);
 		}
 		if (is_user) {
-			ret = nvme_user_ioctl_req(npc->addr, npc->data_len,
-			    npc->opcode & 0x1, &upages, nitems(upages_small),
-			    &npages, &req, nvme_npc_done, npc);
+			ret = nvme_user_ioctl_req((void *)npc->addr,
+			    npc->data_len, npc->opcode & 0x1, &upages,
+			    nitems(upages_small), &npages, &req,
+			    nvme_npc_done, npc);
 			if (ret != 0)
 				return (ret);
 		} else
