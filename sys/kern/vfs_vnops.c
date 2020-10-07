@@ -1486,7 +1486,7 @@ vn_io_fault1(struct vnode *vp, struct uio *uio, struct vn_io_fault_args *args,
 	struct iovec short_iovec[1];
 	vm_page_t *prev_td_ma;
 	vm_prot_t prot;
-	vm_offset_t addr, end;
+	char *addr, *end;
 	size_t len, resid;
 	ssize_t adv;
 	int error, cnt, saveheld, prev_td_ma_cnt;
@@ -1539,7 +1539,7 @@ vn_io_fault1(struct vnode *vp, struct uio *uio, struct vn_io_fault_args *args,
 		}
 		if (len > ptoa(io_hold_cnt))
 			len = ptoa(io_hold_cnt);
-		addr = (uintptr_t)uio_clone->uio_iov->iov_base;
+		addr = uio_clone->uio_iov->iov_base;
 		end = round_page(addr + len);
 		if (end < addr) {
 			error = EFAULT;
