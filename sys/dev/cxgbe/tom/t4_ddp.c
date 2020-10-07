@@ -2160,7 +2160,7 @@ t4_free_ppod_region(struct ppod_region *pr)
 }
 
 static int
-pscmp(struct pageset *ps, struct vmspace *vm, vm_offset_t start, int npages,
+pscmp(struct pageset *ps, struct vmspace *vm, void *start, int npages,
     int pgoff, int len)
 {
 
@@ -2176,7 +2176,8 @@ hold_aio(struct toepcb *toep, struct kaiocb *job, struct pageset **pps)
 {
 	struct vmspace *vm;
 	vm_map_t map;
-	vm_offset_t start, end, pgoff;
+	char *start, *end;
+	vm_offset_t pgoff;
 	struct pageset *ps;
 	int n;
 
@@ -2189,8 +2190,8 @@ hold_aio(struct toepcb *toep, struct kaiocb *job, struct pageset **pps)
 	 */
 	vm = job->userproc->p_vmspace;
 	map = &vm->vm_map;
-	start = (uintptr_t)job->uaiocb.aio_buf;
-	pgoff = start & PAGE_MASK;
+	start = __DEVOLATILE(char *, job->uaiocb.aio_buf);
+	pgoff = (vm_offset_t)start & PAGE_MASK;
 	end = round_page(start + job->uaiocb.aio_nbytes);
 	start = trunc_page(start);
 

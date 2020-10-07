@@ -151,7 +151,7 @@ physio(struct cdev *dev, struct uio *uio, int ioflag)
 			if (pages) {
 				if ((npages = vm_fault_quick_hold_pages(
 				    &curproc->p_vmspace->vm_map,
-				    (vm_offset_t)base, bp->bio_length,
+				    base, bp->bio_length,
 				    prot, pages, maxpages)) < 0) {
 					error = EFAULT;
 					goto doerror;
