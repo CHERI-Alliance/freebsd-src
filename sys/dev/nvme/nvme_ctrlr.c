@@ -36,6 +36,7 @@
 #include <sys/ioccom.h>
 #include <sys/proc.h>
 #include <sys/smp.h>
+#include <sys/stddef.h>
 #include <sys/uio.h>
 #include <sys/sbuf.h>
 #include <sys/endian.h>
@@ -1346,7 +1347,7 @@ nvme_ctrlr_shared_handler(void *arg)
 #define NVME_MAX_PAGES  (int)(1024 / sizeof(vm_page_t))
 
 static int
-nvme_user_ioctl_req(vm_offset_t addr, size_t len, bool is_read,
+nvme_user_ioctl_req(void *addr, size_t len, bool is_read,
     vm_page_t *upages, int max_pages, int *npagesp, struct nvme_request **req,
     nvme_cb_fn_t cb_fn, void *cb_arg)
 {
@@ -1360,7 +1361,8 @@ nvme_user_ioctl_req(vm_offset_t addr, size_t len, bool is_read,
 	if (err != 0)
 		return (err);
 	*req = nvme_allocate_request_null(M_WAITOK, cb_fn, cb_arg);
-	(*req)->payload = memdesc_vmpages(upages, len, addr & PAGE_MASK);
+	(*req)->payload = memdesc_vmpages(upages, len,
+	    (ptraddr_t)addr & PAGE_MASK);
 	(*req)->payload_valid = true;
 	return (0);
 }
@@ -1410,7 +1412,7 @@ nvme_ctrlr_passthrough_cmd(struct nvme_controller *ctrlr,
 			return (EIO);
 		}
 		if (is_user) {
-			ret = nvme_user_ioctl_req((vm_offset_t)pt->buf, pt->len,
+			ret = nvme_user_ioctl_req(pt->buf, pt->len,
 			    pt->is_read, upages, nitems(upages), &npages, &req,
 			    nvme_pt_done, pt);
 			if (ret != 0)
@@ -1493,9 +1495,9 @@ nvme_ctrlr_linux_passthru_cmd(struct nvme_controller *ctrlr,
 			return (EIO);
 		}
 		if (is_user) {
-			ret = nvme_user_ioctl_req(npc->addr, npc->data_len,
-			    npc->opcode & 0x1, upages, nitems(upages), &npages,
-			    &req, nvme_npc_done, npc);
+			ret = nvme_user_ioctl_req((void *)npc->addr,
+			    npc->data_len, npc->opcode & 0x1, upages,
+			    nitems(upages), &npages, &req, nvme_npc_done, npc);
 			if (ret != 0)
 				return (ret);
 		} else

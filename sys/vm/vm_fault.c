@@ -2145,10 +2145,10 @@ vm_fault_prefault(const struct faultstate *fs, vm_offset_t addra,
  *            (more detailed result from vm_fault() is lost)
  */
 int
-vm_fault_hold_pages(vm_map_t map, vm_offset_t addr, vm_size_t len,
+vm_fault_hold_pages(vm_map_t map, void *addr, vm_size_t len,
     vm_prot_t prot, vm_page_t *ma, int max_count, int *ppages_count)
 {
-	vm_offset_t end, va;
+	vm_offset_t start, end, va;
 	vm_page_t *mp;
 	int count, error;
 	boolean_t pmap_failed;
@@ -2157,22 +2157,22 @@ vm_fault_hold_pages(vm_map_t map, vm_offset_t addr, vm_size_t len,
 		*ppages_count = 0;
 		return (0);
 	}
-	end = round_page(addr + len);
-	addr = trunc_page(addr);
+	end = round_page((vm_offset_t)addr + len);
+	start = trunc_page((vm_offset_t)addr);
 
-	if (!vm_map_range_valid(map, addr, end))
+	if (!vm_map_range_valid(map, start, end))
 		return (ENOMEM);
 
-	if (atop(end - addr) > max_count)
+	if (atop(end - start) > max_count)
 		return (EINVAL);
-	count = atop(end - addr);
+	count = atop(end - start);
 
 	/*
 	 * Most likely, the physical pages are resident in the pmap, so it is
 	 * faster to try pmap_extract_and_hold() first.
 	 */
 	pmap_failed = FALSE;
-	for (mp = ma, va = addr; va < end; mp++, va += PAGE_SIZE) {
+	for (mp = ma, va = start; va < end; mp++, va += PAGE_SIZE) {
 		*mp = pmap_extract_and_hold(map->pmap, va, prot);
 		if (*mp == NULL)
 			pmap_failed = TRUE;
@@ -2210,7 +2210,7 @@ vm_fault_hold_pages(vm_map_t map, vm_offset_t addr, vm_size_t len,
 			error = EAGAIN;
 			goto fail;
 		}
-		for (mp = ma, va = addr; va < end; mp++, va += PAGE_SIZE) {
+		for (mp = ma, va = start; va < end; mp++, va += PAGE_SIZE) {
 			if (*mp == NULL && vm_fault(map, va, prot,
 			    VM_FAULT_NORMAL, mp) != KERN_SUCCESS) {
 				error = EFAULT;
@@ -2236,7 +2236,7 @@ fail:
  * of the pages cannot be held, -1 is returned.
  */
 int
-vm_fault_quick_hold_pages(vm_map_t map, vm_offset_t addr, vm_size_t len,
+vm_fault_quick_hold_pages(vm_map_t map, void *addr, vm_size_t len,
     vm_prot_t prot, vm_page_t *ma, int max_count)
 {
 	int error, pages_count;

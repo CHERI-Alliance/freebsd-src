@@ -1328,7 +1328,7 @@ aio_qbio(struct proc *p, struct kaiocb *job)
 		if (opcode == LIO_READ || opcode == LIO_READV)
 			prot |= VM_PROT_WRITE;	/* Less backwards than it looks */
 		npages = vm_fault_quick_hold_pages(&curproc->p_vmspace->vm_map,
-		    (vm_offset_t)buf, bp->bio_length, prot, pages,
+		    buf, bp->bio_length, prot, pages,
 		    atop(maxphys) + 1);
 		if (npages < 0) {
 			if (pbuf != NULL)

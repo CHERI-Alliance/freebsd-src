@@ -5106,7 +5106,7 @@ vmapbuf(struct buf *bp, void *uaddr, size_t len, int mapbuf)
 	if (bp->b_iocmd == BIO_READ)
 		prot |= VM_PROT_WRITE;	/* Less backwards than it looks */
 	pidx = vm_fault_quick_hold_pages(&curproc->p_vmspace->vm_map,
-	    (vm_offset_t)uaddr, len, prot, bp->b_pages, PBUF_PAGES);
+	    uaddr, len, prot, bp->b_pages, PBUF_PAGES);
 	if (pidx < 0)
 		return (-1);
 	bp->b_bufsize = len;

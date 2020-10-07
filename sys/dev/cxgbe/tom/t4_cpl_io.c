@@ -2481,7 +2481,7 @@ alloc_aiotx_mbuf(struct kaiocb *job, int len)
 		    ("%s: next start (%#jx + %#x) is not page aligned",
 		    __func__, (uintmax_t)start, mlen));
 
-		npages = vm_fault_quick_hold_pages(map, start, mlen,
+		npages = vm_fault_quick_hold_pages(map, (void *)start, mlen,
 		    VM_PROT_WRITE, pgs, nitems(pgs));
 		if (npages < 0)
 			break;
