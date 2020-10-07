@@ -974,7 +974,7 @@ pipe_build_write_buffer(struct pipe *wpipe, struct uio *uio)
 	wpipe->pipe_state |= PIPE_DIRECTW;
 	PIPE_UNLOCK(wpipe);
 	i = vm_fault_quick_hold_pages(&curproc->p_vmspace->vm_map,
-	    (vm_offset_t)uio->uio_iov->iov_base, size, VM_PROT_READ,
+	    uio->uio_iov->iov_base, size, VM_PROT_READ,
 	    wpipe->pipe_pages.ms, PIPENPAGES);
 	PIPE_LOCK(wpipe);
 	if (i < 0) {
