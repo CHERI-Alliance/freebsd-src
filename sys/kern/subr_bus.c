@@ -32,6 +32,9 @@
 #include "opt_iommu.h"
 
 #include <sys/param.h>
+#if defined(COMPAT_FREEBSD32) || defined(COMPAT_FREEBSD64)
+#include <sys/abi_compat.h>
+#endif
 #include <sys/conf.h>
 #include <sys/domainset.h>
 #include <sys/eventhandler.h>
@@ -43,6 +46,7 @@
 #include <sys/module.h>
 #include <sys/mutex.h>
 #include <sys/priv.h>
+#include <sys/proc.h>
 #include <machine/bus.h>
 #include <sys/random.h>
 #include <sys/refcount.h>
@@ -174,6 +178,40 @@ EVENTHANDLER_LIST_DEFINE(device_attach);
 EVENTHANDLER_LIST_DEFINE(device_detach);
 EVENTHANDLER_LIST_DEFINE(device_nomatch);
 EVENTHANDLER_LIST_DEFINE(dev_lookup);
+
+#ifdef COMPAT_FREEBSD32
+struct devreq_buffer32 {
+	uint32_t	buffer; /* void * */
+	uint32_t	length;
+};
+
+struct devreq32 {
+	char		dr_name[128];
+	int		dr_flags;
+	union {
+		struct devreq_buffer32 dru_buffer;
+		uint32_t	dru_data;	/* void * */
+	} dr_dru;
+};
+#define DEV_GET_PATH32	_IOC_NEWTYPE(DEV_GET_PATH, struct devreq32)
+#endif
+
+#ifdef COMPAT_FREEBSD64
+struct devreq_buffer64 {
+	uint64_t	buffer;	/* void * */
+	size_t		length;
+};
+
+struct devreq64 {
+	char		dr_name[128];
+	int		dr_flags;
+	union {
+		struct devreq_buffer64 dru_buffer;
+		uint64_t	dru_data;	/* void * */
+	} dr_dru;
+};
+#define DEV_GET_PATH64	_IOC_NEWTYPE(DEV_GET_PATH, struct devreq64)
+#endif
 
 static void devctl2_init(void);
 static bool device_frozen;
@@ -5752,13 +5790,60 @@ static int
 devctl2_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
     struct thread *td)
 {
+#if defined(COMPAT_FREEBSD32) || defined(COMPAT_FREEBSD64)
+	struct devreq dr;
+#endif
+#ifdef COMPAT_FREEBSD32
+	struct devreq32 *req32;
+#endif
+#ifdef COMPAT_FREEBSD64
+	struct devreq64 *req64;
+#endif
 	struct devreq *req;
 	device_t dev;
 	int error, old;
 
+	/*
+	 * NOTE: the compat code relies on most handled commands being
+	 * _IOW() defines with the size of struct devreq.  If other
+	 * structs are added or _IOR is used, this code needs to
+	 * be adjusted accordingly.
+	 */
+#ifdef COMPAT_FREEBSD32
+	if (IOCPARM_LEN(cmd) == sizeof(struct devreq32)) {
+		req32 = (struct devreq32 *)data;
+		memset(&dr, 0, sizeof(dr));
+		memcpy(dr.dr_name, req32->dr_name, sizeof(dr.dr_name));
+		CP(*req32, dr, dr_flags);
+		if (cmd == DEV_GET_PATH32) {
+			PTRIN_CP(req32->dr_buffer, dr.dr_buffer, buffer);
+			CP(req32->dr_buffer, dr.dr_buffer, length);
+		} else
+			PTRIN_CP(*req32, dr, dr_data);
+		req = &dr;
+		cmd = _IOC_NEWTYPE(cmd, struct devreq);
+	} else
+#endif
+#ifdef COMPAT_FREEBSD64
+	if (IOCPARM_LEN(cmd) == sizeof(struct devreq64)) {
+		req64 = (struct devreq64 *)data;
+		memset(&dr, 0, sizeof(dr));
+		memcpy(dr.dr_name, req64->dr_name, sizeof(dr.dr_name));
+		CP(*req64, dr, dr_flags);
+		if (cmd == DEV_GET_PATH64) {
+			dr.dr_buffer.buffer =
+			    USER_PTR_STR(req64->dr_buffer.buffer);
+			CP(req64->dr_buffer, dr.dr_buffer, length);
+		} else
+			dr.dr_data = USER_PTR_STR(req64->dr_data);
+		req = &dr;
+		cmd = _IOC_NEWTYPE(cmd, struct devreq);
+	} else
+#endif
+               req = (struct devreq *)data;
+
 	/* Locate the device to control. */
 	bus_topo_lock();
-	req = (struct devreq *)data;
 	switch (cmd) {
 	case DEV_ATTACH:
 	case DEV_DETACH:
@@ -6053,6 +6138,14 @@ devctl2_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 	}
 	}
 	bus_topo_unlock();
+#ifdef COMPAT_FREEBSD32
+	if (cmd == DEV_GET_PATH32)
+		CP(dr.dr_buffer, req32->dr_buffer, length);
+#endif
+#ifdef COMPAT_FREEBSD64
+	if (cmd == DEV_GET_PATH64)
+		CP(dr.dr_buffer, req64->dr_buffer, length);
+#endif
 	return (error);
 }
 
