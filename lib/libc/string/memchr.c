@@ -22,12 +22,17 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+#include <sys/param.h>
+
+#ifdef __CHERI__
+#include <cheri/cheric.h>
+#endif
+
 #include <limits.h>
 #include <stdint.h>
 #include <string.h>
 
 #define SS (sizeof(size_t))
-#define ALIGN (sizeof(size_t) - 1)
 #define ONES ((size_t)-1 / UCHAR_MAX)
 #define HIGHS (ONES * (UCHAR_MAX / 2 + 1))
 #define HASZERO(x) (((x)-ONES) & ~(x)&HIGHS)
@@ -38,7 +43,16 @@ memchr(const void *src, int c, size_t n)
 	const unsigned char *s = src;
 	c = (unsigned char)c;
 #ifdef __GNUC__
-	for (; ((uintptr_t)s & ALIGN) && n && *s != c; s++, n--)
+#ifdef __CHERI__
+	/*
+	 * Make sure the word-wise reads don't walk off the end
+	 * of caps with weakly-aligned ends.
+	 */
+	size_t space = cheri_bytes_remaining(src);
+	size_t excess = n - MIN(n, space);
+	n = MIN(n, space);
+#endif
+	for (; !__is_aligned(s, SS) && n && *s != c; s++, n--)
 		;
 	if (n && *s != c) {
 		typedef size_t __attribute__((__may_alias__)) word;
@@ -49,6 +63,10 @@ memchr(const void *src, int c, size_t n)
 			;
 		s = (const void *)w;
 	}
+#ifdef __CHERI__
+	/* Restore excess length so the byte-wise reads trap if appropriate. */
+	n += excess;
+#endif
 #endif
 	for (; n && *s != c; s++, n--)
 		;
