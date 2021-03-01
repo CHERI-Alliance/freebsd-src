@@ -464,7 +464,8 @@ malloc_type_freed(struct malloc_type *mtp, unsigned long size)
 #define	IS_CONTIG_MALLOC(_slab)						\
     (GET_SLAB_COOKIE(_slab) == SLAB_COOKIE_CONTIG_MALLOC)
 #define	CONTIG_MALLOC_SLAB(_size)					\
-    ((void *)(((_size) << SLAB_COOKIE_SHIFT) | SLAB_COOKIE_CONTIG_MALLOC))
+    ((void *)(uintptr_t)(((_size) << SLAB_COOKIE_SHIFT) |		\
+     SLAB_COOKIE_CONTIG_MALLOC))
 static inline size_t
 contigmalloc_size(uma_slab_t slab)
 {
@@ -598,11 +599,12 @@ malloc_dbg(caddr_t *vap, size_t *sizep, struct malloc_type *mtp,
 #define	IS_MALLOC_LARGE(_slab)						\
     (GET_SLAB_COOKIE(_slab) == SLAB_COOKIE_MALLOC_LARGE)
 #define	MALLOC_LARGE_SLAB(_size)					\
-    ((void *)(((_size) << SLAB_COOKIE_SHIFT) | SLAB_COOKIE_MALLOC_LARGE))
+    ((void *)(uintptr_t)(((_size) << SLAB_COOKIE_SHIFT) |		\
+     SLAB_COOKIE_MALLOC_LARGE))
 static inline size_t
 malloc_large_size(uma_slab_t slab)
 {
-	uintptr_t va;
+	vm_offset_t va;
 
 	va = (uintptr_t)slab;
 	KASSERT(IS_MALLOC_LARGE(slab),
@@ -877,7 +879,11 @@ mallocarray_domainset(size_t nmemb, size_t size, struct malloc_type *type,
 static void
 free_save_type(void *addr, struct malloc_type *mtp, u_long size)
 {
+#ifdef __CHERI__
+	ptraddr_t *mtpp = addr;
+#else
 	struct malloc_type **mtpp = addr;
+#endif
 
 	/*
 	 * Cache a pointer to the malloc_type that most recently freed
@@ -887,10 +893,21 @@ free_save_type(void *addr, struct malloc_type *mtp, u_long size)
 	 * This code assumes that size is a multiple of 8 bytes for
 	 * 64 bit machines
 	 */
-	mtpp = (struct malloc_type **) ((unsigned long)mtpp & ~UMA_ALIGN_PTR);
+#ifdef __CHERI__
+	/*
+	 * This is for debugging only, so we just store the va of the
+	 * malloc_type, not a capability to it.
+	 */
+	mtpp = (ptraddr_t *)roundup2(mtpp, sizeof(ptraddr_t));
+	if (cheri_length_get(mtpp) - cheri_offset_get(mtpp) >= sizeof(ptraddr_t))
+		*mtpp = (ptraddr_t)mtp;
+#else
+	mtpp = (struct malloc_type **)rounddown2(mtpp, sizeof(struct malloc_type *));
+
 	mtpp += (size - sizeof(struct malloc_type *)) /
 	    sizeof(struct malloc_type *);
 	*mtpp = mtp;
+#endif
 }
 #endif
 
@@ -1136,7 +1153,7 @@ malloc_usable_size(const void *addr)
 	vtozoneslab((vm_offset_t)addr & (~UMA_SLAB_MASK), &zone, &slab);
 	if (slab == NULL)
 		panic("malloc_usable_size: address %p(%p) is not allocated",
-		    addr, (void *)((u_long)addr & (~UMA_SLAB_MASK)));
+		    addr, rounddown2(addr, UMA_SLAB_SIZE));
 
 	switch (GET_SLAB_COOKIE(slab)) {
 	case __predict_true(SLAB_COOKIE_SLAB_PTR):
