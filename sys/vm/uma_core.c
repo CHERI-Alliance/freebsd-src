@@ -81,6 +81,8 @@
 #include <sys/taskqueue.h>
 #include <sys/vmmeter.h>
 
+#include <cheri/cheric.h>
+
 #include <vm/vm.h>
 #include <vm/vm_param.h>
 #include <vm/vm_domainset.h>
@@ -178,7 +180,19 @@ static struct sx uma_reclaim_lock;
  * First available virual address for boot time allocations.
  */
 static vm_offset_t bootstart;
-static vm_offset_t bootmem;
+static vm_pointer_t bootmem;
+#ifdef __CHERI__
+/*
+ * Boundaries of the UMA boot memory pool.
+ */
+vm_offset_t uma_bootmem_start;
+vm_offset_t uma_bootmem_end;
+/*
+ * Map slab to pages in the boot memory pool.
+ * These do not have any vm_page to store the slab pointer in.
+ */
+uma_slab_t *uma_boot_vtoslab;
+#endif
 
 /*
  * kmem soft limit, initialized by uma_set_limit().  Ensure that early
@@ -277,7 +291,7 @@ enum zfreeskip {
 
 /* Prototypes.. */
 
-void	uma_startup1(vm_offset_t);
+void	uma_startup1(vm_pointer_t);
 void	uma_startup2(void);
 
 static void *noobj_alloc(uma_zone_t, vm_size_t, int, uint8_t *, int);
@@ -1802,6 +1816,12 @@ keg_alloc_slab(uma_keg_t keg, uma_zone_t zone, int domain, int flags,
 			    slab_tohashslab(slab), NULL, SKIP_NONE);
 		goto fail;
 	}
+#ifdef __CHERI__
+	KASSERT(cheri_length_get(mem) <= CHERI_REPRESENTABLE_LENGTH(size),
+	    ("Invalid bounds expected %zx found %zx",
+	    CHERI_REPRESENTABLE_LENGTH(size),
+	    cheri_length_get(mem)));
+#endif
 	uma_total_inc(size);
 
 	/* For HASH zones all pages go to the same uma_domain. */
@@ -1878,6 +1898,7 @@ startup_alloc(uma_zone_t zone, vm_size_t bytes, int domain, uint8_t *pflag,
 {
 	vm_paddr_t pa;
 	vm_page_t m;
+	void *mem;
 	int i, pages;
 
 	pages = howmany(bytes, PAGE_SIZE);
@@ -1899,8 +1920,9 @@ startup_alloc(uma_zone_t zone, vm_size_t bytes, int domain, uint8_t *pflag,
 	}
 
 	/* Allocate KVA and indirectly advance bootmem. */
-	return ((void *)pmap_map(&bootmem, m->phys_addr,
-	    m->phys_addr + (pages * PAGE_SIZE), VM_PROT_READ | VM_PROT_WRITE));
+	mem = (void *)pmap_map(&bootmem, m->phys_addr,
+	    m->phys_addr + (pages * PAGE_SIZE), VM_PROT_READ | VM_PROT_WRITE);
+	return (cheri_kern_bounds_set_exact(mem, bytes));
 }
 
 static void
@@ -1955,7 +1977,7 @@ pcpu_page_alloc(uma_zone_t zone, vm_size_t bytes, int domain, uint8_t *pflag,
     int wait)
 {
 	struct pglist alloctail;
-	vm_offset_t addr, zkva;
+	vm_pointer_t addr, zkva;
 	int cpu, flags;
 	vm_page_t p, p_next;
 #ifdef NUMA
@@ -1990,6 +2012,12 @@ pcpu_page_alloc(uma_zone_t zone, vm_size_t bytes, int domain, uint8_t *pflag,
 	}
 	if ((addr = kva_alloc(bytes)) == 0)
 		goto fail;
+#ifdef __CHERI__
+       KASSERT(cheri_length_get(addr) <= CHERI_REPRESENTABLE_LENGTH(bytes),
+           ("Invalid bounds expected %zx found %zx",
+               (size_t)CHERI_REPRESENTABLE_LENGTH(bytes),
+               cheri_length_get(addr)));
+#endif
 	zkva = addr;
 	TAILQ_FOREACH(p, &alloctail, plinks.q) {
 		pmap_qenter(zkva, &p, 1);
@@ -2021,7 +2049,7 @@ noobj_alloc(uma_zone_t zone, vm_size_t bytes, int domain, uint8_t *flags,
 {
 	TAILQ_HEAD(, vm_page) alloctail;
 	u_long npages;
-	vm_offset_t retkva, zkva;
+	vm_pointer_t retkva, zkva;
 	vm_page_t p, p_next;
 	uma_keg_t keg;
 	int req;
@@ -2059,7 +2087,10 @@ noobj_alloc(uma_zone_t zone, vm_size_t bytes, int domain, uint8_t *flags,
 		zkva += PAGE_SIZE;
 	}
 
-	return ((void *)retkva);
+#ifdef __CHERI__
+	KASSERT(cheri_tag_get(retkva), ("Expected valid capability"));
+#endif
+	return (cheri_kern_bounds_set_exact((void *)retkva, bytes));
 }
 
 /*
@@ -2092,7 +2123,9 @@ uma_small_alloc(uma_zone_t zone, vm_size_t bytes, int domain, uint8_t *flags,
 	pa = m->phys_addr;
 	if ((wait & M_NODUMP) == 0)
 		dump_add_page(pa);
-	va = (void *)PHYS_TO_DMAP(pa);
+	KASSERT(bytes == PAGE_SIZE, ("%s: invalid allocation size %zu",
+	    __func__, bytes));
+	va = (void *)PHYS_TO_DMAP_PAGE(pa);
 	return (va);
 }
 #endif
@@ -2137,7 +2170,7 @@ page_free(void *mem, vm_size_t size, uint8_t flags)
 static void
 pcpu_page_free(void *mem, vm_size_t size, uint8_t flags)
 {
-	vm_offset_t sva, curva;
+	vm_pointer_t sva, curva;
 	vm_paddr_t paddr;
 	vm_page_t m;
 
@@ -2148,7 +2181,7 @@ pcpu_page_free(void *mem, vm_size_t size, uint8_t flags)
 		return;
 	}
 
-	sva = (vm_offset_t)mem;
+	sva = (vm_pointer_t)mem;
 	for (curva = sva; curva < sva + size; curva += PAGE_SIZE) {
 		paddr = pmap_kextract(curva);
 		m = PHYS_TO_VM_PAGE(paddr);
@@ -2166,6 +2199,13 @@ uma_small_free(void *mem, vm_size_t size, uint8_t flags)
 	vm_page_t m;
 	vm_paddr_t pa;
 
+#ifdef __CHERI__
+	KASSERT(!cheri_is_sealed(mem),
+	    ("uma_small_free: Unexpected sealed capability %#p", mem));
+	KASSERT(cheri_tag_get(mem),
+	    ("uma_small_free: Attempt to free invalid capability %#p", mem));
+#endif
+
 	pa = DMAP_TO_PHYS((vm_offset_t)mem);
 	dump_drop_page(pa);
 	m = PHYS_TO_VM_PAGE(pa);
@@ -2182,6 +2222,9 @@ uma_small_free(void *mem, vm_size_t size, uint8_t flags)
 static int
 zero_init(void *mem, int size, int flags)
 {
+#ifdef __CHERI__
+	KASSERT(cheri_tag_get(mem), ("Expected valid capability"));
+#endif
 	bzero(mem, size);
 	return (0);
 }
@@ -2496,6 +2539,10 @@ keg_ctor(void *mem, int size, void *udata, int flags)
 
 	if (arg->flags & UMA_ZONE_MALLOC)
 		keg->uk_flags |= UMA_ZFLAG_VTOSLAB;
+#ifdef __CHERI__
+	if ((keg->uk_flags & UMA_ZFLAG_HASH) == 0)
+		keg->uk_flags |= UMA_ZFLAG_VTOSLAB;
+#endif
 
 #ifndef SMP
 	keg->uk_flags &= ~UMA_ZONE_PCPU;
@@ -2888,6 +2935,10 @@ zone_ctor(void *mem, int size, void *udata, int flags)
 	 * This is a pure cache zone, no kegs.
 	 */
 	if (arg->import) {
+#ifdef __CHERI__
+		KASSERT(cheri_tag_get(arg->import),
+		    ("Expected valid capability"));
+#endif
 		KASSERT((arg->flags & UMA_ZFLAG_CACHE) != 0,
 		    ("zone_ctor: Import specified for non-cache zone."));
 		zone->uz_flags = arg->flags;
@@ -3113,7 +3164,7 @@ zone_foreach(void (*zfunc)(uma_zone_t, void *arg), void *arg)
  * allocated but before general KVA is available.
  */
 void
-uma_startup1(vm_offset_t virtual_avail)
+uma_startup1(vm_pointer_t virtual_avail)
 {
 	struct uma_zctor_args args;
 	size_t ksize, zsize, size;
@@ -4088,6 +4139,10 @@ slab_alloc_item(uma_keg_t keg, uma_slab_t slab)
 		LIST_REMOVE(slab, us_link);
 		LIST_INSERT_HEAD(&dom->ud_full_slab, slab, us_link);
 	}
+#ifdef __CHERI__
+	if ((keg->uk_flags & UMA_ZONE_PCPU) == 0)
+		item = cheri_bounds_set_exact(item, keg->uk_size);
+#endif
 
 	return (item);
 }
@@ -4511,6 +4566,9 @@ uma_zfree_arg(uma_zone_t zone, void *item, void *udata)
 	uma_cache_t cache;
 	uma_cache_bucket_t bucket;
 	int itemdomain, uz_flags;
+#ifdef __CHERI__
+	size_t expected_size;
+#endif
 
 	/* Enable entropy collection for RANDOM_ENABLE_UMA kernel option */
 	random_harvest_fast_uma(&zone, sizeof(zone), RANDOM_UMA);
@@ -4528,6 +4586,25 @@ uma_zfree_arg(uma_zone_t zone, void *item, void *udata)
         if (item == NULL)
                 return;
 
+#ifdef __CHERI_PURE_CAPABILITY__
+	KASSERT(cheri_tag_get(item), ("Expect valid capability"));
+	KASSERT(cheri_is_sealed(item), ("Expect unsealed capability"));
+	/*
+	 * XXX-AM: Only check non-cache zones as the caches for
+	 * vm_page_t objects have very large bounds from the
+	 * vm_page_array.
+	 */
+	if ((zone->uz_flags & UMA_ZFLAG_CACHE) == 0) {
+		if ((zone->uz_flags & UMA_ZONE_PCPU) == 0)
+			expected_size = zone->uz_size;
+		else
+			expected_size = zone->uz_keg->uk_ppera * PAGE_SIZE;
+		if (__predict_false(cheri_length_get(item) != expected_size))
+			panic("UMA zone %s invalid bounds: expected %zx "
+			    "found %zx", zone->uz_name, expected_size,
+			    cheri_length_get(item));
+	}
+#endif
 	/*
 	 * We are accessing the per-cpu cache without a critical section to
 	 * fetch size and flags.  This is acceptable, if we are preempted we
@@ -4870,7 +4947,7 @@ zone_release(void *arg, void **bucket, int cnt)
 		if (__predict_true((zone->uz_flags & UMA_ZFLAG_VTOSLAB) != 0)) {
 			slab = vtoslab((vm_offset_t)item);
 		} else {
-			mem = (uint8_t *)((uintptr_t)item & (~UMA_SLAB_MASK));
+			mem = (uint8_t *)rounddown2(item, UMA_SLAB_SIZE);
 			if ((zone->uz_flags & UMA_ZFLAG_HASH) != 0)
 				slab = hash_sfind(&keg->uk_hash, mem);
 			else
@@ -4899,6 +4976,10 @@ zone_release(void *arg, void **bucket, int cnt)
 static __noinline void
 zone_free_item(uma_zone_t zone, void *item, void *udata, enum zfreeskip skip)
 {
+#ifdef __CHERI__
+	KASSERT(cheri_tag_get(item), ("Expect valid capability"));
+	KASSERT(cheri_is_sealed(item), ("Expect unsealed capability"));
+#endif
 
 	/*
 	 * If a free is sent directly to an SMR zone we have to
@@ -5186,7 +5267,7 @@ int
 uma_zone_reserve_kva(uma_zone_t zone, int count)
 {
 	uma_keg_t keg;
-	vm_offset_t kva;
+	vm_pointer_t kva;
 	u_int pages;
 
 	KEG_GET(zone, keg);
@@ -5748,7 +5829,7 @@ uma_dbg_getslab(uma_zone_t zone, void *item)
 	 * zone is unlocked because the item's allocation state
 	 * essentially holds a reference.
 	 */
-	mem = (uint8_t *)((uintptr_t)item & (~UMA_SLAB_MASK));
+	mem = (uint8_t *)rounddown2(item, UMA_SLAB_SIZE);
 	if ((zone->uz_flags & UMA_ZFLAG_CACHE) != 0)
 		return (NULL);
 	if (zone->uz_flags & UMA_ZFLAG_VTOSLAB)
@@ -5816,6 +5897,14 @@ uma_dbg_alloc(uma_zone_t zone, uma_slab_t slab, void *item)
 			    item, zone->uz_name);
 	}
 	keg = zone->uz_keg;
+#if defined(__CHERI__) && defined(INVARIANTS)
+	/* Check first that item is a subset of slab capability */
+	if ((keg->uk_flags & UMA_ZFLAG_OFFPAGE) == 0 &&
+	    !cheri_is_subset(slab, item)) {
+		panic("Item capability %#p is not a subset of the"
+		    " slab capability %#p.", item, slab);
+	}
+#endif
 	freei = slab_item_index(slab, keg, item);
 
 	if (BIT_TEST_SET_ATOMIC(keg->uk_ipers, freei,

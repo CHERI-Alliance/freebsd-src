@@ -29,6 +29,7 @@
  */
 
 #include <sys/counter.h>
+#include <sys/stddef.h>
 #include <sys/_bitset.h>
 #include <sys/_domainset.h>
 #include <sys/_task.h>
@@ -347,7 +348,7 @@ struct uma_keg {
 	uma_free	uk_freef;	/* Free routine */
 
 	u_long		uk_offset;	/* Next free offset from base KVA */
-	vm_offset_t	uk_kva;		/* Zone base KVA */
+	vm_pointer_t	uk_kva;		/* Zone base KVA */
 
 	uint32_t	uk_pgoff;	/* Offset to uma_slab struct */
 	uint16_t	uk_ppera;	/* pages per allocation from backend */
@@ -379,7 +380,7 @@ struct uma_slab {
 	uint16_t	us_freecount;		/* How many are free? */
 	uint8_t		us_flags;		/* Page flags see uma.h */
 	uint8_t		us_domain;		/* Backing NUMA domain. */
-	struct noslabbits us_free;		/* Free bitmask, flexible. */
+	struct noslabbits us_free __aligned(sizeof(void *)); /* Free bitmask, flexible. */
 };
 _Static_assert(sizeof(struct uma_slab) == __offsetof(struct uma_slab, us_free),
     "us_free field must be last");
@@ -432,7 +433,7 @@ slab_item_index(uma_slab_t slab, uma_keg_t keg, void *item)
 	uintptr_t data;
 
 	data = (uintptr_t)slab_data(slab, keg);
-	return (((uintptr_t)item - data) / keg->uk_rsize);
+	return (((ptraddr_t)item - (ptraddr_t)data) / keg->uk_rsize);
 }
 
 STAILQ_HEAD(uma_bucketlist, uma_bucket);
@@ -589,6 +590,11 @@ static __inline uma_slab_t hash_sfind(struct uma_hash *hash, uint8_t *data);
 #define	ZONE_CROSS_UNLOCK(z)	mtx_unlock(&(z)->uz_cross_lock)
 #define	ZONE_CROSS_LOCK_FINI(z)	mtx_destroy(&(z)->uz_cross_lock)
 
+#ifdef __CHERI__
+extern vm_offset_t uma_bootmem_start;
+extern vm_offset_t uma_bootmem_end;
+extern uma_slab_t *uma_boot_vtoslab;
+#endif
 /*
  * Find a slab within a hash table.  This is used for OFFPAGE zones to lookup
  * the slab structure.
@@ -620,6 +626,19 @@ vtoslab(vm_offset_t va)
 {
 	vm_page_t p;
 
+#ifdef __CHERI__
+	int page_index;
+
+	if (va >= uma_bootmem_start && va < uma_bootmem_end) {
+		/*
+		 * Boot memory does not have vm_pages associated so
+		 * we use a custom vtoslab map for boot pages.
+		 */
+		page_index = (trunc_page(va) - uma_bootmem_start) / PAGE_SIZE;
+		return (uma_boot_vtoslab[page_index]);
+	}
+#endif
+
 	p = PHYS_TO_VM_PAGE(pmap_kextract(va));
 	return (p->plinks.uma.slab);
 }
@@ -628,6 +647,20 @@ static __inline void
 vtozoneslab(vm_offset_t va, uma_zone_t *zone, uma_slab_t *slab)
 {
 	vm_page_t p;
+
+#ifdef __CHERI_PURE_CAPABILITY__
+	int page_index;
+
+	if (va >= uma_bootmem_start && va < uma_bootmem_end) {
+		/*
+		 * Boot memory does not have vm_pages associated so
+		 * we use a custom vtoslab map for boot pages.
+		 */
+		page_index = (trunc_page(va) - uma_bootmem_start) / PAGE_SIZE;
+		uma_boot_vtoslab[page_index] = *slab;
+		return;
+	}
+#endif
 
 	p = PHYS_TO_VM_PAGE(pmap_kextract(va));
 	*slab = p->plinks.uma.slab;
@@ -638,6 +671,21 @@ static __inline void
 vsetzoneslab(vm_offset_t va, uma_zone_t zone, uma_slab_t slab)
 {
 	vm_page_t p;
+
+#ifdef __CHERI_PURE_CAPABILITY__
+	int page_index;
+
+	if (va >= uma_bootmem_start && va < uma_bootmem_end) {
+		/*
+		 * Boot memory does not have vm_pages associated so
+		 * we use a custom vtoslab map for boot pages.
+		 */
+		page_index = (trunc_page(va) - uma_bootmem_start) / PAGE_SIZE;
+		uma_boot_vtoslab[page_index] = slab;
+		return;
+	}
+#endif
+
 
 	p = PHYS_TO_VM_PAGE(pmap_kextract(va));
 	p->plinks.uma.slab = slab;
