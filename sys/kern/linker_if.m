@@ -59,7 +59,7 @@ METHOD int debug_symbol_values {
 
 METHOD int search_symbol {
     linker_file_t	file;
-    caddr_t		value;
+    ptraddr_t		value;
     c_linker_sym_t*	symp;
     long*		diffp;
 };
