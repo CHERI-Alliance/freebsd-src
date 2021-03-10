@@ -138,7 +138,7 @@ static int	link_elf_symbol_values(linker_file_t, c_linker_sym_t,
 		    linker_symval_t *);
 static int	link_elf_debug_symbol_values(linker_file_t, c_linker_sym_t,
 		    linker_symval_t *);
-static int	link_elf_search_symbol(linker_file_t, caddr_t value,
+static int	link_elf_search_symbol(linker_file_t, ptraddr_t value,
 		    c_linker_sym_t *sym, long *diffp);
 
 static void	link_elf_unload_file(linker_file_t);
@@ -1596,11 +1596,11 @@ link_elf_debug_symbol_values(linker_file_t lf, c_linker_sym_t sym,
 }
 
 static int
-link_elf_search_symbol(linker_file_t lf, caddr_t value,
+link_elf_search_symbol(linker_file_t lf, ptraddr_t value,
     c_linker_sym_t *sym, long *diffp)
 {
 	elf_file_t ef = (elf_file_t)lf;
-	u_long off = (uintptr_t)(void *)value;
+	u_long off = value;
 	u_long diff = off;
 	u_long st_value;
 	const Elf_Sym *es;

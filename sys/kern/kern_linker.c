@@ -1008,14 +1008,14 @@ linker_debug_lookup(const char *symstr, c_linker_sym_t *sym)
 #endif
 
 static int
-linker_debug_search_symbol(caddr_t value, c_linker_sym_t *sym, long *diffp)
+linker_debug_search_symbol(ptraddr_t value, c_linker_sym_t *sym, long *diffp)
 {
 	linker_file_t lf;
 	c_linker_sym_t best, es;
 	u_long diff, bestdiff, off;
 
 	best = 0;
-	off = (uintptr_t)value;
+	off = value;
 	bestdiff = off;
 	TAILQ_FOREACH(lf, &linker_files, link) {
 		if (LINKER_SEARCH_SYMBOL(lf, value, &es, &diff) != 0)
@@ -1051,7 +1051,7 @@ linker_debug_symbol_values(c_linker_sym_t sym, linker_symval_t *symval)
 }
 
 static int
-linker_debug_search_symbol_name(caddr_t value, char *buf, u_int buflen,
+linker_debug_search_symbol_name(ptraddr_t value, char *buf, u_int buflen,
     long *offset)
 {
 	linker_symval_t symval;
@@ -1087,7 +1087,7 @@ linker_ddb_lookup(const char *symstr, c_linker_sym_t *sym)
 #endif
 
 int
-linker_ddb_search_symbol(caddr_t value, c_linker_sym_t *sym, long *diffp)
+linker_ddb_search_symbol(ptraddr_t value, c_linker_sym_t *sym, long *diffp)
 {
 
 	return (linker_debug_search_symbol(value, sym, diffp));
@@ -1101,7 +1101,7 @@ linker_ddb_symbol_values(c_linker_sym_t sym, linker_symval_t *symval)
 }
 
 int
-linker_ddb_search_symbol_name(caddr_t value, char *buf, u_int buflen,
+linker_ddb_search_symbol_name(ptraddr_t value, char *buf, u_int buflen,
     long *offset)
 {
 
@@ -1113,7 +1113,7 @@ linker_ddb_search_symbol_name(caddr_t value, char *buf, u_int buflen,
  * obey locking protocols, and offer a significantly less complex interface.
  */
 int
-linker_search_symbol_name_flags(caddr_t value, char *buf, u_int buflen,
+linker_search_symbol_name_flags(ptraddr_t value, char *buf, u_int buflen,
     long *offset, int flags)
 {
 	int error;
@@ -1134,7 +1134,7 @@ linker_search_symbol_name_flags(caddr_t value, char *buf, u_int buflen,
 }
 
 int
-linker_search_symbol_name(caddr_t value, char *buf, u_int buflen,
+linker_search_symbol_name(ptraddr_t value, char *buf, u_int buflen,
     long *offset)
 {
 

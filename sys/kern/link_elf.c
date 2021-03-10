@@ -151,7 +151,7 @@ static int	link_elf_symbol_values(linker_file_t, c_linker_sym_t,
 		    linker_symval_t *);
 static int	link_elf_debug_symbol_values(linker_file_t, c_linker_sym_t,
 		    linker_symval_t*);
-static int	link_elf_search_symbol(linker_file_t, caddr_t,
+static int	link_elf_search_symbol(linker_file_t, ptraddr_t,
 		    c_linker_sym_t *, long *);
 
 static void	link_elf_unload_file(linker_file_t);
@@ -1668,7 +1668,8 @@ link_elf_ifunc_symbol_value(linker_file_t lf, caddr_t *valp, size_t *sizep)
 
 	/* Provide the value and size of the target symbol, if available. */
 	val = ((caddr_t (*)(void))val)();
-	if (link_elf_search_symbol(lf, val, &sym, &off) == 0 && off == 0) {
+	if (link_elf_search_symbol(lf, (ptraddr_t)val, &sym, &off) == 0 &&
+	    off == 0) {
 		es = (const Elf_Sym *)sym;
 		*valp = (caddr_t)ef->address + es->st_value;
 		*sizep = es->st_size;
@@ -1743,11 +1744,11 @@ link_elf_debug_symbol_values(linker_file_t lf, c_linker_sym_t sym,
 }
 
 static int
-link_elf_search_symbol(linker_file_t lf, caddr_t value,
+link_elf_search_symbol(linker_file_t lf, ptraddr_t value,
     c_linker_sym_t *sym, long *diffp)
 {
 	elf_file_t ef = (elf_file_t)lf;
-	u_long off = (uintptr_t)(void *)value;
+	u_long off = value;
 	u_long diff = off;
 	u_long st_value;
 	const Elf_Sym *es;
@@ -1757,7 +1758,7 @@ link_elf_search_symbol(linker_file_t lf, caddr_t value,
 	for (i = 0, es = ef->ddbsymtab; i < ef->ddbsymcnt; i++, es++) {
 		if (es->st_name == 0)
 			continue;
-		st_value = es->st_value + (uintptr_t) (void *) ef->address;
+		st_value = es->st_value + (ptraddr_t) ef->address;
 		if (off >= st_value) {
 			if (off - st_value < diff) {
 				diff = off - st_value;
