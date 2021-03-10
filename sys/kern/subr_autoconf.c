@@ -99,7 +99,7 @@ run_interrupt_driven_config_hooks_warning(int warned)
 		    "seconds for", warned * WARNING_INTERVAL_SECS);
 		STAILQ_FOREACH(hook_entry, &intr_config_hook_list, ich_links) {
 			if (linker_search_symbol_name(
-			    (caddr_t)hook_entry->ich_func, namebuf,
+			    (ptraddr_t)hook_entry->ich_func, namebuf,
 			    sizeof(namebuf), &offset) == 0)
 				printf(" %s", namebuf);
 			else
@@ -302,8 +302,8 @@ DB_SHOW_COMMAND_FLAGS(conifhk, db_show_conifhk, DB_CMD_MEMSAFE)
 
 	STAILQ_FOREACH(hook_entry, &intr_config_hook_list, ich_links) {
 		if (linker_ddb_search_symbol_name(
-		    (caddr_t)hook_entry->ich_func, namebuf, sizeof(namebuf),
-		    &offset) == 0) {
+		    (ptraddr_t)hook_entry->ich_func, namebuf,
+		    sizeof(namebuf), &offset) == 0) {
 			db_printf("hook: %p at %s+%#lx arg: %p\n",
 			    hook_entry->ich_func, namebuf, offset,
 			    hook_entry->ich_arg);
