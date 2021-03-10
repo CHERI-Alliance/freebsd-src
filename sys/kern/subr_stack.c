@@ -254,7 +254,7 @@ stack_symbol(vm_offset_t pc, char *namebuf, u_int buflen, long *offset,
 {
 	int error;
 
-	error = linker_search_symbol_name_flags((caddr_t)pc, namebuf, buflen,
+	error = linker_search_symbol_name_flags(pc, namebuf, buflen,
 	    offset, flags);
 	if (error == 0 || error == EWOULDBLOCK)
 		return (error);
@@ -270,7 +270,7 @@ stack_symbol_ddb(vm_offset_t pc, const char **name, long *offset)
 	linker_symval_t symval;
 	c_linker_sym_t sym;
 
-	if (linker_ddb_search_symbol((caddr_t)pc, &sym, offset) != 0)
+	if (linker_ddb_search_symbol(pc, &sym, offset) != 0)
 		goto out;
 	if (linker_ddb_symbol_values(sym, &symval) != 0)
 		goto out;
