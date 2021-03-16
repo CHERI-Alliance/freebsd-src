@@ -43,7 +43,6 @@ sf_buf_kva(struct sf_buf *sf)
 static inline vm_page_t
 sf_buf_page(struct sf_buf *sf)
 {
-
 	return ((vm_page_t)sf);
 }
 #endif /* !_MACHINE_SF_BUF_H_ */
