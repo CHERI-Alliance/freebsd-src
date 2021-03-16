@@ -91,7 +91,7 @@ struct sf_buf {
 	LIST_ENTRY(sf_buf)	list_entry;	/* list of buffers */
 	TAILQ_ENTRY(sf_buf)	free_entry;	/* list of buffers */
 	vm_page_t		m;		/* currently mapped page */
-	vm_offset_t		kva;		/* va of mapping */
+	vm_pointer_t		kva;		/* va of mapping */
 	int			ref_count;	/* usage of this mapping */
 #if defined(SMP) && defined(SFBUF_CPUSET)
 	cpuset_t		cpumask;	/* where mapping is valid */
