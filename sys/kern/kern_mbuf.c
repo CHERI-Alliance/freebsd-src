@@ -732,7 +732,7 @@ mb_ctor_clust(void *mem, int size, void *arg, int how)
 
 	m = (struct mbuf *)arg;
 	if (m != NULL) {
-		m->m_ext.ext_buf = (char *)mem;
+		m->m_ext.ext_buf = cheri_kern_bounds_set(mem, size);
 		m->m_data = m->m_ext.ext_buf;
 		m->m_flags |= M_EXT;
 		m->m_ext.ext_free = NULL;
@@ -1580,7 +1580,7 @@ m_extadd(struct mbuf *mb, char *buf, u_int size, m_ext_free_t freef,
 	KASSERT(type != EXT_CLUSTER, ("%s: EXT_CLUSTER not allowed", __func__));
 
 	mb->m_flags |= (M_EXT | flags);
-	mb->m_ext.ext_buf = buf;
+	mb->m_ext.ext_buf = cheri_kern_bounds_set(buf, size);
 	mb->m_data = mb->m_ext.ext_buf;
 	mb->m_ext.ext_size = size;
 	mb->m_ext.ext_free = freef;
@@ -1770,7 +1770,7 @@ mb_mapped_to_unmapped(struct mbuf *mp, int len, int mlen, int how,
 	m = mout = mb_alloc_ext_plus_pages(mbufsiz, how);
 	if (m == NULL)
 		return (m);
-	pgpos = PHYS_TO_DMAP(m->m_epg_pa[0]);
+	pgpos = PHYS_TO_DMAP_PAGE(m->m_epg_pa[0]);
 	pglen = PAGE_SIZE;
 	mblen = 0;
 	i = 0;
@@ -1788,7 +1788,7 @@ mb_mapped_to_unmapped(struct mbuf *mp, int len, int mlen, int how,
 				}
 				i = 0;
 			}
-			pgpos = PHYS_TO_DMAP(m->m_epg_pa[i]);
+			pgpos = PHYS_TO_DMAP_PAGE(m->m_epg_pa[i]);
 			pglen = PAGE_SIZE;
 		}
 		while (mblen == 0) {
