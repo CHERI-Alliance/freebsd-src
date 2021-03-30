@@ -94,8 +94,10 @@ static void destroy_nhop(struct nhop_object *nh);
 
 _Static_assert(__offsetof(struct nhop_object, nh_ifp) == 32,
     "nhop_object: wrong nh_ifp offset");
+#ifndef __CHERI__
 _Static_assert(sizeof(struct nhop_object) <= 128,
     "nhop_object: size exceeds 128 bytes");
+#endif
 
 static uma_zone_t nhops_zone;	/* Global zone for each and every nexthop */
 
