@@ -134,7 +134,7 @@ struct nhop_object {
 	struct ifaddr		*nh_ifa;	/* interface address to use. Always != NULL */
 	struct ifnet		*nh_aifp;	/* ifnet of the source address. Always != NULL */
 	counter_u64_t		nh_pksent;	/* packets sent using this nhop */
-	/* 32 bytes + 4xPTR == 64(amd64) / 48(i386)  */
+	/* 32 bytes + 4xPTR == 64(amd64) / 48(i386) / 80(CHERI) */
 	uint8_t			nh_prepend_len;	/* length of prepend data */
 	uint8_t			spare[3];
 	uint32_t		spare1;		/* alignment */
