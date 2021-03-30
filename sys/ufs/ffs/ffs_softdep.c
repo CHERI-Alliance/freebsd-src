@@ -6579,6 +6579,7 @@ complete_trunc_indir(struct freework *freework)
 	struct ufsmount *ump;
 	struct buf *bp;
 	uintptr_t start;
+	size_t offset;
 	int count;
 
 	ump = VFSTOUFS(freework->fw_list.wk_mp);
@@ -6602,14 +6603,13 @@ complete_trunc_indir(struct freework *freework)
 	/*
 	 * Zero the pointers in the saved copy.
 	 */
+	start = (uintptr_t)indirdep->ir_savebp->b_data;
 	if (indirdep->ir_state & UFS1FMT)
-		start = sizeof(ufs1_daddr_t);
+		offset = sizeof(ufs1_daddr_t) * freework->fw_start;
 	else
-		start = sizeof(ufs2_daddr_t);
-	start *= freework->fw_start;
-	count = indirdep->ir_savebp->b_bcount - start;
-	start += (uintptr_t)indirdep->ir_savebp->b_data;
-	bzero((char *)start, count);
+		offset = sizeof(ufs2_daddr_t) * freework->fw_start;
+	count = indirdep->ir_savebp->b_bcount - offset;
+	bzero((char *)(start + offset), count);
 	/*
 	 * We need to start the next truncation in the list if it has not
 	 * been started yet.
