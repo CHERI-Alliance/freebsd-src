@@ -104,7 +104,7 @@
 #include <ufs/ffs/ffs_extern.h>
 
 #define	ALIGNED_TO(ptr, s)	\
-	(((uintptr_t)(ptr) & (_Alignof(s) - 1)) == 0)
+	__is_aligned(ptr, _Alignof(s))
 
 #ifdef DIRECTIO
 extern int	ffs_rawread(struct vnode *vp, struct uio *uio, int *workdone);
