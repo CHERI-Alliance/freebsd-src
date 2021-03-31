@@ -34,6 +34,7 @@
 #define	_SYS_PMCLOG_H_
 
 #include <sys/pmc.h>
+#include <sys/stddef.h>
 
 enum pmclog_type {
 	/* V1 ABI */
@@ -117,7 +118,7 @@ struct pmclog_callchain {
 	uint32_t		pl_pmcid;
 	uint32_t		pl_cpuflags;
 	/* 8 byte aligned */
-	uintptr_t		pl_pc[PMC_CALLCHAIN_DEPTH_MAX];
+	ptraddr_t		pl_pc[PMC_CALLCHAIN_DEPTH_MAX];
 } __packed;
 
 #define	PMC_CALLCHAIN_CPUFLAGS_TO_CPU(CF)	(((CF) >> 16) & 0xFFFF)
@@ -146,7 +147,7 @@ struct pmclog_map_in {
 	PMCLOG_ENTRY_HEADER
 	uint32_t		pl_pid;
 	uint32_t		pl_pad;
-	uintfptr_t		pl_start;	/* 8 byte aligned */
+	ptraddr_t		pl_start;	/* 8 byte aligned */
 	char			pl_pathname[PATH_MAX];
 } __packed;
 
@@ -154,8 +155,8 @@ struct pmclog_map_out {
 	PMCLOG_ENTRY_HEADER
 	uint32_t		pl_pid;
 	uint32_t		pl_pad;
-	uintfptr_t		pl_start;	/* 8 byte aligned */
-	uintfptr_t		pl_end;
+	ptraddr_t		pl_start;	/* 8 byte aligned */
+	ptraddr_t		pl_end;
 } __packed;
 
 struct pmclog_pmcallocate {
@@ -201,9 +202,9 @@ struct pmclog_procexec {
 	uint32_t		pl_pid;
 	uint32_t		pl_pmcid;
 	/* keep 8 byte aligned */
-	uintptr_t		pl_base;	/* AT_BASE */
+	ptraddr_t		pl_base;	/* AT_BASE */
 	/* keep 8 byte aligned */
-	uintptr_t		pl_dyn;		/* PIE load base */
+	ptraddr_t		pl_dyn;		/* PIE load base */
 	char			pl_pathname[PATH_MAX];
 } __packed;
 
@@ -306,16 +307,16 @@ void	pmclog_process_callchain(struct pmc *_pm, struct pmc_sample *_ps);
 void	pmclog_process_closelog(struct pmc_owner *po);
 void	pmclog_process_dropnotify(struct pmc_owner *po);
 void	pmclog_process_map_in(struct pmc_owner *po, pid_t pid,
-    uintfptr_t start, const char *path);
+    ptraddr_t start, const char *path);
 void	pmclog_process_map_out(struct pmc_owner *po, pid_t pid,
-    uintfptr_t start, uintfptr_t end);
+    ptraddr_t start, ptraddr_t end);
 void	pmclog_process_pmcallocate(struct pmc *_pm);
 void	pmclog_process_pmcattach(struct pmc *_pm, pid_t _pid, char *_path);
 void	pmclog_process_pmcdetach(struct pmc *_pm, pid_t _pid);
 void	pmclog_process_proccsw(struct pmc *_pm, struct pmc_process *_pp,
     pmc_value_t _v, struct thread *);
 void	pmclog_process_procexec(struct pmc_owner *_po, pmc_id_t _pmid, pid_t _pid,
-    uintfptr_t _baseaddr, uintptr_t _dynaddr, char *_path);
+    ptraddr_t _baseaddr, ptraddr_t _dynaddr, char *_path);
 void	pmclog_process_procexit(struct pmc *_pm, struct pmc_process *_pp);
 void	pmclog_process_procfork(struct pmc_owner *_po, pid_t _oldpid, pid_t _newpid);
 void	pmclog_process_sysexit(struct pmc_owner *_po, pid_t _pid);

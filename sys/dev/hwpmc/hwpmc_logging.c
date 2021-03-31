@@ -186,23 +186,23 @@ static struct mtx pmc_kthread_mtx;	/* sleep lock */
  * Assertions about the log file format.
  */
 CTASSERT(sizeof(struct pmclog_callchain) == 7*4 + TSDELTA +
-    PMC_CALLCHAIN_DEPTH_MAX*sizeof(uintfptr_t));
+    PMC_CALLCHAIN_DEPTH_MAX*sizeof(ptraddr_t));
 CTASSERT(sizeof(struct pmclog_closelog) == 3*4 + TSDELTA);
 CTASSERT(sizeof(struct pmclog_dropnotify) == 3*4 + TSDELTA);
 CTASSERT(sizeof(struct pmclog_map_in) == PATH_MAX + TSDELTA +
-    5*4 + sizeof(uintfptr_t));
+    5*4 + sizeof(ptraddr_t));
 CTASSERT(offsetof(struct pmclog_map_in,pl_pathname) ==
-    5*4 + TSDELTA + sizeof(uintfptr_t));
-CTASSERT(sizeof(struct pmclog_map_out) == 5*4 + 2*sizeof(uintfptr_t) + TSDELTA);
+    5*4 + TSDELTA + sizeof(ptraddr_t));
+CTASSERT(sizeof(struct pmclog_map_out) == 5*4 + 2*sizeof(ptraddr_t) + TSDELTA);
 CTASSERT(sizeof(struct pmclog_pmcallocate) == 9*4 + TSDELTA);
 CTASSERT(sizeof(struct pmclog_pmcattach) == 5*4 + PATH_MAX + TSDELTA);
 CTASSERT(offsetof(struct pmclog_pmcattach,pl_pathname) == 5*4 + TSDELTA);
 CTASSERT(sizeof(struct pmclog_pmcdetach) == 5*4 + TSDELTA);
 CTASSERT(sizeof(struct pmclog_proccsw) == 7*4 + 8 + TSDELTA);
 CTASSERT(sizeof(struct pmclog_procexec) == 5*4 + PATH_MAX +
-    2*sizeof(uintptr_t) + TSDELTA);
+    2*sizeof(ptraddr_t) + TSDELTA);
 CTASSERT(offsetof(struct pmclog_procexec,pl_pathname) == 5*4 + TSDELTA +
-    2*sizeof(uintptr_t));
+    2*sizeof(ptraddr_t));
 CTASSERT(sizeof(struct pmclog_procexit) == 5*4 + 8 + TSDELTA);
 CTASSERT(sizeof(struct pmclog_procfork) == 5*4 + TSDELTA);
 CTASSERT(sizeof(struct pmclog_sysexit) == 6*4);
@@ -943,7 +943,7 @@ pmclog_process_dropnotify(struct pmc_owner *po)
 }
 
 void
-pmclog_process_map_in(struct pmc_owner *po, pid_t pid, uintfptr_t start,
+pmclog_process_map_in(struct pmc_owner *po, pid_t pid, ptraddr_t start,
     const char *path)
 {
 	int pathlen, recordlen;
@@ -963,8 +963,8 @@ pmclog_process_map_in(struct pmc_owner *po, pid_t pid, uintfptr_t start,
 }
 
 void
-pmclog_process_map_out(struct pmc_owner *po, pid_t pid, uintfptr_t start,
-    uintfptr_t end)
+pmclog_process_map_out(struct pmc_owner *po, pid_t pid, ptraddr_t start,
+    ptraddr_t end)
 {
 	KASSERT(start <= end, ("[pmclog,%d] start > end", __LINE__));
 
@@ -1098,7 +1098,7 @@ pmclog_process_proccsw(struct pmc *pm, struct pmc_process *pp, pmc_value_t v, st
 
 void
 pmclog_process_procexec(struct pmc_owner *po, pmc_id_t pmid, pid_t pid,
-    uintptr_t baseaddr, uintptr_t dynaddr, char *path)
+    ptraddr_t baseaddr, ptraddr_t dynaddr, char *path)
 {
 	int pathlen, recordlen;
 
