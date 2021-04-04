@@ -153,6 +153,8 @@
 #include <machine/md_var.h>
 #include <machine/pcb.h>
 
+#include <cheri/cheric.h>
+
 #ifdef NUMA
 #define	PMAP_MEMDOM	MAXMEMDOM
 #else
@@ -350,7 +352,11 @@ struct pv_chunks_list __exclusive_cache_line pv_chunks[PMAP_MEMDOM];
 
 vm_paddr_t dmap_phys_base;	/* The start of the dmap region */
 vm_paddr_t dmap_phys_max;	/* The limit of the dmap region */
+#ifdef __CHERI__
+void *dmap_capability;		/* Root capability for the dmap region */
+#else
 vm_offset_t dmap_max_addr;	/* The virtual address limit of the dmap */
+#endif
 
 extern pt_entry_t pagetable_l0_ttbr1[];
 
@@ -1249,7 +1255,9 @@ pmap_bootstrap_dmap(vm_size_t kernlen)
 
 	dmap_phys_base = physmap[0] & ~L1_OFFSET;
 	dmap_phys_max = 0;
+#ifndef __CHERI__
 	dmap_max_addr = 0;
+#endif
 
 	for (i = 0; i < physmap_idx; i += 2) {
 		bs_state.pa = physmap[i] & ~L3_OFFSET;
@@ -1298,9 +1306,19 @@ pmap_bootstrap_dmap(vm_size_t kernlen)
 
 		if (bs_state.pa > dmap_phys_max) {
 			dmap_phys_max = bs_state.pa;
+#ifndef __CHERI__
 			dmap_max_addr = bs_state.va;
+#endif
 		}
 	}
+
+#ifdef __CHERI__
+	dmap_capability = cheri_address_set(kernel_root_cap, DMAP_MIN_ADDRESS);
+	dmap_capability = cheri_bounds_set(dmap_capability,
+	    dmap_phys_max - dmap_phys_base);
+	dmap_capability = cheri_perms_and(dmap_capability,
+	    CHERI_PERMS_KERNEL_DATA);
+#endif
 
 	pmap_s1_invalidate_all_kernel();
 
