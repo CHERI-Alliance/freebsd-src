@@ -158,6 +158,8 @@
 #include <machine/sbi.h>
 #include <machine/thead.h>
 
+#include <cheri/cheric.h>
+
 /*
  * Boundary values for the page table page index space:
  *
@@ -239,7 +241,11 @@ vm_offset_t kernel_vm_end = 0;
 
 vm_paddr_t dmap_phys_base;	/* The start of the dmap region */
 vm_paddr_t dmap_phys_max;	/* The limit of the dmap region */
+#ifdef __CHERI__
+void *dmap_capability;		/* Root capability for dmap region */
+#else
 vm_offset_t dmap_max_addr;	/* The virtual address limit of the dmap */
+#endif
 
 static int pmap_growkernel_panic = 0;
 SYSCTL_INT(_vm_pmap, OID_AUTO, growkernel_panic, CTLFLAG_RDTUN,
@@ -609,6 +615,16 @@ pmap_bootstrap_dmap(pd_entry_t *l1, vm_paddr_t freemempos)
 	dmap_phys_base = rounddown(min_pa, L1_SIZE);
 	dmap_phys_max = max_pa;
 
+#ifdef __CHERI__
+	/* Initialize this now so that PHYS_TO_DMAP works below. */
+	dmap_capability = cheri_address_set(kernel_root_cap,
+	    DMAP_MIN_ADDRESS);
+	dmap_capability = cheri_bounds_set(dmap_capability,
+	    dmap_phys_max - dmap_phys_base);
+	dmap_capability = cheri_perms_and(dmap_capability,
+	    CHERI_PERMS_KERNEL_DATA);
+#endif
+
 	memattr = pmap_memattr_bits(VM_MEMATTR_DEFAULT);
 
 	/*
@@ -747,8 +763,10 @@ l3end:
 		}
 	}
 
+#ifndef __CHERI__
 	/* And finally, the limit on DMAP VA. */
 	dmap_max_addr = va;
+#endif
 
 	return (freemempos);
 }

@@ -171,8 +171,19 @@
 #define	PHYS_IN_DMAP(pa)	((pa) >= DMAP_MIN_PHYSADDR && \
     (pa) < DMAP_MAX_PHYSADDR)
 /* True if va is in the dmap range */
+#ifdef __CHERI__
+#define	VIRT_IN_DMAP(va)						\
+    cheri_is_address_inbounds(dmap_capability, (va))
+#else
 #define	VIRT_IN_DMAP(va)	((va) >= DMAP_MIN_ADDRESS && \
     (va) < (dmap_max_addr))
+#endif
+
+#ifdef __CHERI__
+#define	_DMAP_BASE	dmap_capability
+#else
+#define	_DMAP_BASE	(void *)DMAP_MIN_ADDRESS
+#endif
 
 #define	PMAP_HAS_DMAP	1
 #define	PHYS_TO_DMAP(pa)						\
@@ -180,7 +191,7 @@
 	KASSERT(PHYS_IN_DMAP(pa),					\
 	    ("%s: PA out of range, PA: 0x%lx", __func__,		\
 	    (vm_paddr_t)(pa)));						\
-	((pa) - dmap_phys_base) + DMAP_MIN_ADDRESS;			\
+	(uintptr_t)_DMAP_BASE + ((pa) - dmap_phys_base);		\
 })
 
 #define	DMAP_TO_PHYS(va)						\
@@ -188,7 +199,7 @@
 	KASSERT(VIRT_IN_DMAP(va),					\
 	    ("%s: VA out of range, VA: 0x%lx", __func__,		\
 	    (vm_offset_t)(va)));					\
-	((va) - DMAP_MIN_ADDRESS) + dmap_phys_base;			\
+	dmap_phys_base + ((vm_offset_t)(va) - (ptraddr_t)_DMAP_BASE);	\
 })
 
 #define	VM_MIN_USER_ADDRESS		(0x0000000000000000UL)
@@ -237,7 +248,11 @@
 #ifndef LOCORE
 extern vm_paddr_t dmap_phys_base;
 extern vm_paddr_t dmap_phys_max;
+#ifdef __CHERI__
+extern void *dmap_capability;
+#else
 extern vm_offset_t dmap_max_addr;
+#endif
 #endif
 
 #define	ZERO_REGION_SIZE	(64 * 1024)	/* 64KB */
