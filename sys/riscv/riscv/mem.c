@@ -39,6 +39,9 @@
 #include <vm/pmap.h>
 #include <vm/vm_extern.h>
 #include <vm/vm_page.h>
+#include <vm/vm_param.h>
+
+#include <cheri/cheric.h>
 
 struct mem_range_softc mem_range_softc;
 
@@ -76,7 +79,9 @@ memrw(struct cdev *dev, struct uio *uio, int flags)
 		case CDEV_MINOR_KMEM:
 			/* If the address is in the DMAP just copy it */
 			if (VIRT_IN_DMAP(v)) {
-				error = uiomove((void *)v, cnt, uio);
+				error = uiomove(cheri_kern_bounds_set_exact(
+				    cheri_kern_address_set(dmap_capability, v),
+				    cnt), cnt, uio);
 				break;
 			}
 
@@ -89,7 +94,7 @@ memrw(struct cdev *dev, struct uio *uio, int flags)
 				break;
 			}
 
-			if (!kernacc((void *)v, cnt, prot)) {
+			if (!kernacc((void *)(uintptr_t)v, cnt, prot)) {
 				error = EFAULT;
 				break;
 			}
