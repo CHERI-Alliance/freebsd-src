@@ -256,12 +256,23 @@
 #define	PHYS_IN_DMAP(pa)	(PHYS_IN_DMAP_RANGE(pa) && \
     pmap_klookup(PHYS_TO_DMAP_ADDR(pa), NULL))
 /* True if va is in the dmap range */
+#ifdef __CHERI__
+#define	VIRT_IN_DMAP(va)						\
+    cheri_is_address_inbounds(dmap_capability, (uintptr_t)(va))
+#else
 #define	VIRT_IN_DMAP(va)						\
 ({									\
 	uintptr_t __va = (uintptr_t)(va);				\
 									\
 	__va >= DMAP_MIN_ADDRESS && __va < (dmap_max_addr);		\
 })
+#endif
+
+#ifdef __CHERI__
+#define	_DMAP_BASE	dmap_capability
+#else
+#define	_DMAP_BASE	(void *)DMAP_MIN_ADDRESS
+#endif
 
 #define	PMAP_HAS_DMAP	1
 #define	PHYS_TO_DMAP_ADDR(pa)						\
@@ -269,7 +280,7 @@
 	KASSERT(PHYS_IN_DMAP_RANGE(pa),					\
 	    ("%s: PA out of range, PA: 0x%lx", __func__,		\
 	    (vm_paddr_t)(pa)));						\
-	((pa) - dmap_phys_base) + DMAP_MIN_ADDRESS;			\
+	(uintptr_t)_DMAP_BASE + ((pa) - dmap_phys_base);		\
 })
 #define	PHYS_TO_DMAP(x)		((void *)PHYS_TO_DMAP_ADDR(x))
 
@@ -324,6 +335,7 @@
 extern vm_paddr_t dmap_phys_base;
 extern vm_paddr_t dmap_phys_max;
 extern vm_offset_t dmap_max_addr;
+extern void *dmap_capability;
 
 #endif
 
