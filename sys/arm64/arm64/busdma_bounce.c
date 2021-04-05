@@ -86,7 +86,7 @@ static SYSCTL_NODE(_hw, OID_AUTO, busdma, CTLFLAG_RD | CTLFLAG_MPSAFE, 0,
     "Busdma parameters");
 
 struct sync_list {
-	vm_offset_t	vaddr;		/* kva of client data */
+	vm_pointer_t	vaddr;		/* kva of client data */
 	bus_addr_t	paddr;		/* physical address */
 	vm_page_t	pages;		/* starting page of client data */
 	bus_size_t	datacount;	/* client data count */
@@ -809,7 +809,7 @@ bounce_bus_dmamap_load_buffer(bus_dma_tag_t dmat, bus_dmamap_t map, void *buf,
 	struct sync_list *sl;
 	bus_size_t sgsize;
 	bus_addr_t curaddr, sl_pend;
-	vm_offset_t kvaddr, vaddr, sl_vend;
+	vm_pointer_t kvaddr, vaddr, sl_vend;
 	int error;
 
 	KASSERT((map->flags & DMAMAP_FROM_DMAMEM) != 0 ||
@@ -838,7 +838,7 @@ bounce_bus_dmamap_load_buffer(bus_dma_tag_t dmat, bus_dmamap_t map, void *buf,
 	 * load loop.
 	 */
 	sl = map->slist + map->sync_count - 1;
-	vaddr = (vm_offset_t)buf;
+	vaddr = (vm_pointer_t)buf;
 	sl_pend = 0;
 	sl_vend = 0;
 
@@ -967,7 +967,7 @@ dma_dcache_sync(struct sync_list *sl, bus_dmasync_op_t op)
 	uint32_t len, offset;
 	vm_page_t m;
 	vm_paddr_t pa;
-	vm_offset_t va, tempva;
+	vm_pointer_t va, tempva;
 	bus_size_t size;
 
 	offset = sl->paddr & PAGE_MASK;
@@ -1027,7 +1027,7 @@ bounce_bus_dmamap_sync(bus_dma_tag_t dmat, bus_dmamap_t map,
 {
 	struct bounce_page *bpage;
 	struct sync_list *sl, *end;
-	vm_offset_t datavaddr, tempvaddr;
+	vm_pointer_t datavaddr, tempvaddr;
 
 	if (op == BUS_DMASYNC_POSTWRITE)
 		return;
