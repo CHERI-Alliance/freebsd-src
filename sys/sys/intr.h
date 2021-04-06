@@ -39,6 +39,8 @@
 
 #ifndef LOCORE
 
+typedef unsigned long intr_irq_t;
+
 enum intr_map_data_type {
 	INTR_MAP_DATA_ACPI = 0,
 	INTR_MAP_DATA_FDT,
@@ -69,7 +71,7 @@ typedef int intr_irq_filter_t(void *arg, struct trapframe *tf);
 #else
 typedef int intr_irq_filter_t(void *arg);
 #endif
-typedef int intr_child_irq_filter_t(void *arg, uintptr_t irq);
+typedef int intr_child_irq_filter_t(void *arg, intr_irq_t irq);
 
 #define INTR_ISRC_NAMELEN	(MAXCOMLEN + 1)
 
@@ -115,7 +117,7 @@ int intr_pic_deregister(device_t, intptr_t);
 int intr_pic_claim_root(device_t, intptr_t, intr_irq_filter_t *, void *,
     uint32_t);
 int intr_pic_add_handler(device_t, struct intr_pic *,
-    intr_child_irq_filter_t *, void *, uintptr_t, uintptr_t);
+    intr_child_irq_filter_t *, void *, intr_irq_t, size_t);
 bool intr_is_per_cpu(struct resource *);
 
 device_t intr_irq_root_device(uint32_t);
@@ -130,7 +132,7 @@ int intr_setup_irq(device_t, struct resource *, driver_filter_t, driver_intr_t,
 int intr_teardown_irq(device_t, struct resource *, void *);
 
 int intr_describe_irq(device_t, struct resource *, void *, const char *);
-int intr_child_irq_handler(struct intr_pic *, uintptr_t);
+int intr_child_irq_handler(struct intr_pic *, intr_irq_t);
 
 /* Intr resources  mapping. */
 struct intr_map_data *intr_alloc_map_data(enum intr_map_data_type, size_t, int);
