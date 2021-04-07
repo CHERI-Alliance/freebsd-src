@@ -33,6 +33,8 @@
 #ifndef _ARM64_INTEL_STRATIX10_SVC_H_
 #define	_ARM64_INTEL_STRATIX10_SVC_H_
 
+#include <sys/vmem.h>
+
 struct s10_svc_msg {
 	int command;
 #define	COMMAND_RECONFIG		(1 << 0)
@@ -45,8 +47,8 @@ struct s10_svc_msg {
 };
 
 struct s10_svc_mem {
-	vm_offset_t paddr;
-	vm_offset_t vaddr;
+	vmem_addr_t paddr;
+	vmem_addr_t vaddr;
 	int size;
 	int fill;
 };
