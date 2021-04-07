@@ -147,7 +147,7 @@ static int
 fpga_write(struct cdev *dev, struct uio *uio, int ioflag)
 {
 	struct fpgamgr_s10_softc *sc;
-	vm_offset_t addr;
+	vm_pointer_t addr;
 	int error;
 	int amnt;
 	int ret;
