@@ -33,14 +33,82 @@
 #include <sys/elf_common.h>
 
 #include <machine/asm.h>
+#include <machine/armreg.h>
+
+/*
+ * XXX-AM: Wrap HVC and SMC calls to save caller-save capability registers.
+ * This is needed until we have purecap support in TF-A, BHYVE (or other
+ * hypervisors) and QEMU.
+ */
+#ifdef __CHERI__
+.macro save_registers
+	sub	csp, csp, #(15 * PTR_WIDTH)
+	stp	c16, c17, [csp]
+	stp	c18, c19, [csp, #(2 * PTR_WIDTH)]
+	stp	c20, c21, [csp, #(4 * PTR_WIDTH)]
+	stp	c22, c23, [csp, #(6 * PTR_WIDTH)]
+	stp	c24, c25, [csp, #(8 * PTR_WIDTH)]
+	stp	c26, c27, [csp, #(10 * PTR_WIDTH)]
+	stp	c28, c29, [csp, #(12 * PTR_WIDTH)]
+	str	c30, [csp, #(14 * PTR_WIDTH)]
+.endmacro
+
+.macro restore_registers
+	ldp	c16, c17, [csp]
+	ldp	c18, c19, [csp, #(2 * PTR_WIDTH)]
+	ldp	c20, c21, [csp, #(4 * PTR_WIDTH)]
+	ldp	c22, c23, [csp, #(6 * PTR_WIDTH)]
+	ldp	c24, c25, [csp, #(8 * PTR_WIDTH)]
+	ldp	c26, c27, [csp, #(10 * PTR_WIDTH)]
+	ldp	c28, c29, [csp, #(12 * PTR_WIDTH)]
+	ldr	c30, [csp, #(14 * PTR_WIDTH)]
+	add	csp, csp, #(15 * PTR_WIDTH)
+.endmacro
+
+/*
+ * XXX: TF-A in Morello firmware versions up to at least 1.4 do not
+ * initialize DDC_EL0 and depend on the caller setting it to almighty
+ * capability.
+ */
+.macro	reset_ddc_el0
+	sub	PTRN(sp), PTRN(sp), #16 * 2
+	mrs	c9, ddc_el0
+	mrs	x10, daif
+	stp	c9, c10, [PTRN(sp)]
+	LDR_LABEL(c9, PTR(9), smccc_ddc_el0)
+
+	/* Mask interrupts while DDC_EL0 is set. */
+	msr	daifset, #(DAIF_INTR)
+	msr	ddc_el0, c9
+.endmacro
+
+.macro restore_ddc_el0
+	ldp	c9, c10, [PTRN(sp)]
+	msr	ddc_el0, c9
+	msr	daif, x10
+	add	PTRN(sp), PTRN(sp), #16 * 2
+.endmacro
+#endif
 
 .macro arm_smccc_1_0	insn
 ENTRY(arm_smccc_\insn)
+#ifdef __CHERI__
+	save_registers
+	str	PTR(9), [PTRN(sp), #-PTR_WIDTH]!
+	reset_ddc_el0
+#endif
 	\insn	#0
-	ldr	x4, [sp]
+#ifdef __CHERI__
+	restore_ddc_el0
+	ldr	PTR(9), [PTRN(sp)], #PTR_WIDTH
+	restore_registers
+	ldr	PTR(4), [PTR(9)]
+#else
+	ldr	PTR(4), [PTRN(sp)]
+#endif
 	cbz	x4, 1f
-	stp	x0, x1, [x4, #16 * 0]
-	stp	x2, x3, [x4, #16 * 1]
+	stp	PTR(0), PTR(1), [PTR(4), #(2 * PTR_WIDTH) * 0]
+	stp	PTR(2), PTR(3), [PTR(4), #(2 * PTR_WIDTH) * 1]
 1:	ret
 END(arm_smccc_\insn)
 .endm
@@ -55,30 +123,36 @@ arm_smccc_1_0	smc
 
 .macro arm_smccc_1_2	insn
 ENTRY(arm_smccc_1_2_\insn)
-	stp	x1, x19, [sp, #-16]!
-	mov	x19, x0
-	ldp	x0, x1, [x19, #16 * 0]
-	ldp	x2, x3, [x19, #16 * 1]
-	ldp	x4, x5, [x19, #16 * 2]
-	ldp	x6, x7, [x19, #16 * 3]
-	ldp	x8, x9, [x19, #16 * 4]
-	ldp	x10, x11, [x19, #16 * 5]
-	ldp	x12, x13, [x19, #16 * 6]
-	ldp	x14, x15, [x19, #16 * 7]
-	ldp	x16, x17, [x19, #16 * 8]
+#ifdef __CHERI__
+	save_registers
+#endif
+	stp	PTR(1), PTR(19), [PTRN(sp), #-(2 * PTR_WIDTH)]!
+	mov	PTR(19), PTR(0)
+	ldp	x0, x1, [PTR(19), #16 * 0]
+	ldp	x2, x3, [PTR(19), #16 * 1]
+	ldp	x4, x5, [PTR(19), #16 * 2]
+	ldp	x6, x7, [PTR(19), #16 * 3]
+	ldp	x8, x9, [PTR(19), #16 * 4]
+	ldp	x10, x11, [PTR(19), #16 * 5]
+	ldp	x12, x13, [PTR(19), #16 * 6]
+	ldp	x14, x15, [PTR(19), #16 * 7]
+	ldp	x16, x17, [PTR(19), #16 * 8]
 	\insn	#0
-	ldr	x19, [sp]
+	ldr	PTR(19), [PTRN(sp)]
 	cbz	x19, 1f
-	stp	x0, x1, [x19, #16 * 0]
-	stp	x2, x3, [x19, #16 * 1]
-	stp	x4, x5, [x19, #16 * 2]
-	stp	x6, x7, [x19, #16 * 3]
-	stp	x8, x9, [x19, #16 * 4]
-	stp	x10, x11, [x19, #16 * 5]
-	stp	x12, x13, [x19, #16 * 6]
-	stp	x14, x15, [x19, #16 * 7]
-	stp	x16, x17, [x19, #16 * 8]
-1:	ldp	xzr, x19, [sp], #16
+	stp	x0, x1, [PTR(19), #16 * 0]
+	stp	x2, x3, [PTR(19), #16 * 1]
+	stp	x4, x5, [PTR(19), #16 * 2]
+	stp	x6, x7, [PTR(19), #16 * 3]
+	stp	x8, x9, [PTR(19), #16 * 4]
+	stp	x10, x11, [PTR(19), #16 * 5]
+	stp	x12, x13, [PTR(19), #16 * 6]
+	stp	x14, x15, [PTR(19), #16 * 7]
+	stp	x16, x17, [PTR(19), #16 * 8]
+1:	ldp	PTR(zr), PTR(19), [PTRN(sp)], #(2 * PTR_WIDTH)
+#ifdef __CHERI__
+	restore_registers
+#endif
 	ret
 END(arm_smccc_1_2_\insn)
 .endm
