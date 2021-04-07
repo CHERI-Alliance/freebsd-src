@@ -32,8 +32,8 @@
 
 #ifdef _KERNEL
 typedef int (*psci_initfn_t)(device_t dev, int default_version);
-typedef int (*psci_callfn_t)(register_t, register_t, register_t, register_t,
-	register_t, register_t, register_t, register_t,
+typedef int (*psci_callfn_t)(uintptr_t, uintptr_t, uintptr_t, uintptr_t,
+	uintptr_t, uintptr_t, uintptr_t, uintptr_t,
 	struct arm_smccc_res *res);
 
 extern bool psci_present;
@@ -47,7 +47,7 @@ int	psci_get_version(void);
 /* Handler to let us call into the PSCI/SMCCC firmware */
 extern psci_callfn_t psci_callfn;
 static inline int
-psci_call(register_t a, register_t b, register_t c, register_t d)
+psci_call(uintptr_t a, uintptr_t b, uintptr_t c, uintptr_t d)
 {
 
 	return (psci_callfn(a, b, c, d, 0, 0, 0, 0, NULL));
