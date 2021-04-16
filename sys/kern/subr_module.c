@@ -39,6 +39,11 @@
 #include <vm/vm.h>
 #include <vm/vm_extern.h>
 
+#ifdef __CHERI__
+#include <cheri/cheric.h
+#endif
+#include <cheri/cheric.h>
+
 /*
  * Preloaded module support
  */
@@ -204,7 +209,8 @@ preload_search_info(caddr_t mod, int inf)
 	 * data.
 	 */
 	if (hdr[0] == inf)
-	    return(curp + (sizeof(uint32_t) * 2));
+	    return(cheri_kern_bounds_set(curp + (sizeof(uint32_t) * 2),
+		hdr[1]));
 
 	/* skip to next field */
 	next = sizeof(uint32_t) * 2 + hdr[1];
@@ -220,7 +226,8 @@ preload_search_info(caddr_t mod, int inf)
 void
 preload_delete_name(const char *name)
 {
-    caddr_t	addr, curp;
+    vm_offset_t	addr;
+    caddr_t	curp;
     uint32_t	*hdr, sz;
     int		next;
     int		clearing;
@@ -236,7 +243,7 @@ preload_delete_name(const char *name)
 	    if (hdr[0] == MODINFO_NAME || (hdr[0] == 0 && hdr[1] == 0)) {
 		/* Free memory used to store the file. */
 		if (addr != 0 && sz != 0)
-		    kmem_bootstrap_free((vm_offset_t)addr, sz);
+		    kmem_bootstrap_free(addr, sz);
 		addr = 0;
 		sz = 0;
 
@@ -250,7 +257,7 @@ preload_delete_name(const char *name)
 	    }
 	    if (clearing) {
 		if (hdr[0] == MODINFO_ADDR)
-		    addr = *(caddr_t *)(curp + sizeof(uint32_t) * 2);
+		    addr = *(vm_offset_t *)(curp + sizeof(uint32_t) * 2);
 		else if (hdr[0] == MODINFO_SIZE)
 		    sz = *(uint32_t *)(curp + sizeof(uint32_t) * 2);
 		hdr[0] = MODINFO_EMPTY;
@@ -267,12 +274,21 @@ preload_delete_name(const char *name)
 void *
 preload_fetch_addr(caddr_t mod)
 {
-	caddr_t *mdp;
+	vm_offset_t *mdp;
+#ifdef __CHERI__
+	size_t mod_size;
+#endif
 
-	mdp = (caddr_t *)preload_search_info(mod, MODINFO_ADDR);
+	mdp = (vm_offset_t *)preload_search_info(mod, MODINFO_ADDR);
 	if (mdp == NULL)
 		return (NULL);
-	return (*mdp + preload_addr_relocate);
+#ifdef __CHERI__
+	mod_size = preload_fetch_size(mod);
+	return (cheri_bounds_set(cheri_address_set(kernel_root_cap,
+	    *mdp + preload_addr_relocate), mod_size));
+#else
+	return ((void *)(*mdp + preload_addr_relocate));
+#endif
 }
 
 size_t
