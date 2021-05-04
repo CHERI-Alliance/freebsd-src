@@ -108,7 +108,7 @@ TASKQUEUE_DEFINE_THREAD(kqueue_ctx);
 static int	kevent_copyout(void *arg, struct kevent *kevp, int count);
 static int	kevent_copyin(void *arg, struct kevent *kevp, int count);
 static int	kqueue_register(struct kqueue *kq, struct kevent *kev,
-		    struct thread *td, int mflag);
+		    struct thread *td, int mflag, void *kn_ptr_data);
 static int	kqueue_acquire(struct file *fp, struct kqueue **kqp);
 static void	kqueue_release(struct kqueue *kq, int locked);
 static void	kqueue_destroy(struct kqueue *kq);
@@ -608,7 +608,7 @@ knote_fork(struct knlist *list, int pid)
 		kev.fflags = kn->kn_sfflags;
 		kev.data = kn->kn_id;		/* parent */
 		kev.udata = kn->kn_kevent.udata;/* preserve udata */
-		error = kqueue_register(kq, &kev, NULL, M_NOWAIT);
+		error = kqueue_register(kq, &kev, NULL, M_NOWAIT, NULL);
 		if (error)
 			kn->kn_fflags |= NOTE_TRACKERR;
 
@@ -622,7 +622,7 @@ knote_fork(struct knlist *list, int pid)
 		kev.fflags = kn->kn_sfflags;
 		kev.data = kn->kn_id;		/* parent */
 		kev.udata = kn->kn_kevent.udata;/* preserve udata */
-		error = kqueue_register(kq, &kev, NULL, M_NOWAIT);
+		error = kqueue_register(kq, &kev, NULL, M_NOWAIT, NULL);
 
 		/*
 		 * Serialize updates to the kn_kevent fields with threads
@@ -1494,7 +1494,7 @@ kqueue_kevent(struct kqueue *kq, struct thread *td, int nchanges, int nevents,
 			if (!kevp->filter)
 				continue;
 			kevp->flags &= ~EV_SYSFLAGS;
-			error = kqueue_register(kq, kevp, td, M_WAITOK);
+			error = kqueue_register(kq, kevp, td, M_WAITOK, NULL);
 			if (error || (kevp->flags & EV_RECEIPT)) {
 				if (nevents == 0)
 					return (error);
@@ -1639,7 +1639,7 @@ kqueue_fo_release(int filt)
  */
 static int
 kqueue_register(struct kqueue *kq, struct kevent *kev, struct thread *td,
-    int mflag)
+    int mflag, void *kn_ptr_data)
 {
 	const struct filterops *fops;
 	struct file *fp;
@@ -1807,7 +1807,10 @@ findkn:
 				error = EBADF;
 				goto done;
 			}
-			kn->kn_fp = fp;
+			if (fops->f_isfd)
+				kn->kn_fp = fp;
+			else if (kn_ptr_data != NULL)
+				kn->kn_ptr.p_v = kn_ptr_data;
 			kn->kn_kq = kq;
 			kn->kn_fop = fops;
 
@@ -3010,8 +3013,9 @@ knote_free(struct knote *kn)
 /*
  * Register the kev w/ the kq specified by fd.
  */
-int
-kqfd_register(int fd, struct kevent *kev, struct thread *td, int mflag)
+int 
+kqfd_register(int fd, struct kevent *kev, struct thread *td, int mflag,
+    void *kn_ptr_data)
 {
 	struct kqueue *kq;
 	struct file *fp;
@@ -3025,7 +3029,7 @@ kqfd_register(int fd, struct kevent *kev, struct thread *td, int mflag)
 	if ((error = kqueue_acquire(fp, &kq)) != 0)
 		goto noacquire;
 
-	error = kqueue_register(kq, kev, td, mflag);
+	error = kqueue_register(kq, kev, td, mflag, kn_ptr_data);
 	kqueue_release(kq, 0);
 
 noacquire:
