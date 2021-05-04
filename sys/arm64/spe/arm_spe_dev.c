@@ -297,7 +297,7 @@ arm_spe_send_buffer(void *arg, int pending __unused)
 
 	/* Notify userspace */
 	ret = kqfd_register(info->sc->kqueue_fd, &kev, info->sc->hwt_td,
-	    M_WAITOK);
+	    M_WAITOK, NULL);
 	if (ret) {
 		dprintf("%s kqfd_register ret:%d\n", __func__, ret);
 		arm_spe_error(info->sc->ctx, 0);
@@ -316,7 +316,7 @@ arm_spe_error(void *arg, int pending __unused)
 		    arm_spe_disable, smp_no_rendezvous_barrier, NULL);
 
 	EV_SET(&kev, ARM_SPE_KQ_SHUTDOWN, EVFILT_USER, 0, NOTE_TRIGGER, 0, NULL);
-	ret = kqfd_register(ctx->kqueue_fd, &kev, ctx->hwt_td, M_WAITOK);
+	ret = kqfd_register(ctx->kqueue_fd, &kev, ctx->hwt_td, M_WAITOK, NULL);
 	if (ret)
 		dprintf("%s kqfd_register ret:%d\n", __func__, ret);
 }
