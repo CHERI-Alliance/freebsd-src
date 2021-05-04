@@ -527,7 +527,7 @@ spe_backend_disable_smp(struct hwt_context *ctx)
 	 * offsets for all bufs - let userspace know it can shutdown
 	 */
 	EV_SET(&kev, ARM_SPE_KQ_SHUTDOWN, EVFILT_USER, 0, NOTE_TRIGGER, 0, NULL);
-	ret = kqfd_register(ctx->kqueue_fd, &kev, ctx->hwt_td, M_WAITOK);
+	ret = kqfd_register(ctx->kqueue_fd, &kev, ctx->hwt_td, M_WAITOK, NULL);
 	if (ret)
 		dprintf("%s kqfd_register ret:%d\n", __func__, ret);
 
