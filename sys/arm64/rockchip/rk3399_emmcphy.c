@@ -137,10 +137,10 @@ rk_emmcphy_enable(struct phynode *phynode, bool enable)
 	sc = device_get_softc(dev);
 
 	if (bootverbose)
-		device_printf(dev, "Phy id: %ld\n", phy);
+		device_printf(dev, "Phy id: %ld\n", (long)phy);
 
 	if (phy != 0) {
-		device_printf(dev, "Unknown phy: %ld\n", phy);
+		device_printf(dev, "Unknown phy: %ld\n", (long)phy);
 		return (ERANGE);
 	}
 	if (enable) {
@@ -313,7 +313,7 @@ rk_emmcphy_attach(device_t dev)
 	}
 	if (bootverbose) {
 		phy = phynode_get_id(phynode);
-		device_printf(dev, "Attached phy id: %ld\n", phy);
+		device_printf(dev, "Attached phy id: %ld\n", (long)phy);
 	}
 	return (0);
 }
