@@ -717,6 +717,12 @@ sysdecode_sigill_code(int si_code)
 }
 
 const char *
+sysdecode_sigprot_code(int si_code)
+{
+	return (lookup_value(sigprotcode, si_code));
+}
+
+const char *
 sysdecode_sigsegv_code(int si_code)
 {
 
@@ -986,6 +992,8 @@ sysdecode_sigcode(int sig, int si_code)
 		return (sysdecode_sigbus_code(si_code));
 	case SIGSEGV:
 		return (sysdecode_sigsegv_code(si_code));
+	case SIGPROT:
+		return (sysdecode_sigprot_code(si_code));
 	case SIGFPE:
 		return (sysdecode_sigfpe_code(si_code));
 	case SIGTRAP:
