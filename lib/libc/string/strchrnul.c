@@ -22,11 +22,18 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+
+#include <sys/param.h>
+
+#ifdef __CHERI_PURE_CAPABILITY__
+#include <cheri/cheric.h>
+#endif
+
 #include <limits.h>
 #include <stdint.h>
 #include <string.h>
 
-#define ALIGN (sizeof(size_t))
+#define SS (sizeof(size_t))
 #define ONES ((size_t)-1 / UCHAR_MAX)
 #define HIGHS (ONES * (UCHAR_MAX / 2 + 1))
 #define HASZERO(x) (((x)-ONES) & ~(x)&HIGHS)
@@ -43,11 +50,17 @@ __strchrnul(const char *s, int c)
 #ifdef __GNUC__
 	typedef size_t __attribute__((__may_alias__)) word;
 	const word *w;
-	for (; (uintptr_t)s % ALIGN; s++)
+	for (; (uintptr_t)s % SS; s++)
 		if (!*s || *(unsigned char *)s == c)
 			return (char *)s;
 	size_t k = ONES * c;
+#ifdef __CHERI__
+	size_t space = rounddown2(cheri_bytes_remaining(s), SS);
+	const word *end = (const void *)(s + space);
+	for (w = (void *)s; w < end && !HASZERO(*w) && !HASZERO(*w ^ k); w++)
+#else
 	for (w = (void *)s; !HASZERO(*w) && !HASZERO(*w ^ k); w++)
+#endif
 		;
 	s = (void *)w;
 #endif
