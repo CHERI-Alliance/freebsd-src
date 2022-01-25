@@ -109,6 +109,7 @@ BADHDRS= \
 	sys/sockopt.h \
 	sys/stack.h \
 	sys/stats.h \
+	sys/sysargmap.h \
 	sys/syscallsubr.h \
 	sys/syslimits.h \
 	sys/taskqueue.h \
