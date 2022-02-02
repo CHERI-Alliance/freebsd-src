@@ -6,3 +6,6 @@ include "GENERIC"
 include "std.CHERI"
 
 ident	GENERIC-MORELLO
+
+# Doesn't build with Morello LLVM
+nooptions 	PAC

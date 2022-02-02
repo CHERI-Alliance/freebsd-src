@@ -97,7 +97,9 @@ cpu_fork(struct thread *td1, struct proc *p2, struct thread *td2, int flags)
 	/* Clear the debug register state. */
 	bzero(&pcb2->pcb_dbg_regs, sizeof(pcb2->pcb_dbg_regs));
 
+#ifdef PAC
 	ptrauth_fork(td2, td1);
+#endif
 	mte_fork(td2, td1);
 
 	tf = td2->td_frame;
@@ -199,8 +201,10 @@ cpu_copy_thread(struct thread *td, struct thread *td0)
 	arc4random_buf(&td->td_md.md_canary, sizeof(td->td_md.md_canary));
 #endif
 
+#ifdef PAC
 	/* Generate new pointer authentication keys. */
 	ptrauth_copy_thread(td, td0);
+#endif
 	mte_copy_thread(td, td0);
 }
 
@@ -265,7 +269,9 @@ void
 cpu_thread_alloc(struct thread *td)
 {
 	td->td_pcb = uma_zalloc(pcb_zone, M_WAITOK);
+#ifdef PAC
 	ptrauth_thread_alloc(td);
+#endif
 	mte_thread_alloc(td);
 }
 
