@@ -450,7 +450,9 @@ init_proc0(void *kstack)
 	thread0.td_pcb->pcb_fpusaved = &thread0.td_pcb->pcb_fpustate;
 	thread0.td_pcb->pcb_vfpcpu = UINT_MAX;
 	thread0.td_frame = &proc0_tf;
+#ifdef PAC
 	ptrauth_thread0(&thread0);
+#endif
 	mte_thread0(&thread0);
 	pcpup->pc_curpcb = thread0.td_pcb;
 

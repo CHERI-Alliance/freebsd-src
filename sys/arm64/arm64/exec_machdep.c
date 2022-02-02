@@ -469,8 +469,10 @@ exec_setregs(struct thread *td, struct image_params *imgp, uintptr_t stack)
 		    : : "r" (asid));
 	}
 
+#ifdef PAC
 	/* Generate new pointer authentication keys */
 	ptrauth_exec(td);
+#endif
 	mte_exec(td);
 }
 
