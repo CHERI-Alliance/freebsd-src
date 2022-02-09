@@ -43,6 +43,13 @@ unwind_frame(struct thread *td, struct unwind_state *frame)
 	    !kstack_contains(td, fp, sizeof(fp) * 2))
 		return (false);
 
+#ifdef __CHERI_PURE_CAPABILITY__
+	if (!cheri_can_access((void *)fp, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP,
+	    sizeof(fp) * 2))
+
+		return (false);
+#endif
+
 	/* FP to previous frame (X29) */
 	frame->fp = ((uintptr_t *)fp)[0];
 	/* LR (X30) */
