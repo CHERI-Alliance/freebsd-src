@@ -29,7 +29,9 @@
 
 #include <sys/param.h>
 #include <sys/systm.h>
+#include <sys/abi_compat.h>
 #include <sys/pmc.h>
+#include <sys/sysent.h>
 
 #include <vm/vm.h>
 #include <vm/pmap.h>
@@ -76,6 +78,9 @@ pmc_save_kernel_callchain(uintptr_t *cc, int maxsamples, struct trapframe *tf)
 	for (count = 1; count < maxsamples; count++) {
 		if (!unwind_frame(curthread, &frame))
 			break;
+#ifdef __CHERI__
+		frame.pc &= ~1;
+#endif
 		if (!PMC_IN_KERNEL(frame.pc))
 			break;
 		*cc++ = frame.pc;
@@ -89,13 +94,16 @@ pmc_save_user_callchain(uintptr_t *cc, int maxsamples,
     struct trapframe *tf)
 {
 	uintptr_t pc, r, oldfp, fp;
+#ifdef __CHERI__
+	int64_t r64;
+#endif
 	int count;
 
 	KASSERT(TRAPF_USERMODE(tf), ("[arm64,%d] Not a user trap frame tf=%p",
 	    __LINE__, (void *) tf));
 
 	pc = PMC_TRAPFRAME_TO_PC(tf);
-	*cc++ = pc;
+	*cc++ = (uintptr_t)pc;
 
 	if (maxsamples <= 1)
 		return (1);
@@ -108,9 +116,20 @@ pmc_save_user_callchain(uintptr_t *cc, int maxsamples,
 
 	for (count = 1; count < maxsamples; count++) {
 		/* Use saved lr as pc. */
-		r = fp + sizeof(uintptr_t);
-		if (copyin((void *)r, &pc, sizeof(pc)) != 0)
-			break;
+#ifdef __CHERI__
+		if (SV_CURPROC_FLAG(SV_CHERI | SV_LP64) == SV_LP64) {
+			r = fp + sizeof(r64);
+			if (fueword64(USER_PTR(r, sizeof(r64)), &r64) != 0)
+				break;
+			pc = r64;
+		} else
+#endif
+		{
+			r = fp + sizeof(uintptr_t);
+			if (fueptr((void *)r, &pc) != 0)
+				break;
+		}
+		pc &= ~1;
 		if (!PMC_IN_USERSPACE(pc))
 			break;
 
@@ -119,8 +138,16 @@ pmc_save_user_callchain(uintptr_t *cc, int maxsamples,
 		/* Switch to next frame up */
 		oldfp = fp;
 		r = fp;
-		if (copyin((void *)r, &fp, sizeof(fp)) != 0)
-			break;
+#ifdef COMPAT_FREEBSD64
+		if (SV_CURPROC_FLAG(SV_CHERI | SV_LP64) == SV_LP64) {
+			if (fueword64(USER_PTR(r, sizeof(r64)), &r64) != 0)
+				break;
+		} else
+#endif
+		{
+			if (fueptr((void *)r, &fp) != 0)
+				break;
+		}
 		if (fp < oldfp || !PMC_IN_USERSPACE(fp))
 			break;
 	}
