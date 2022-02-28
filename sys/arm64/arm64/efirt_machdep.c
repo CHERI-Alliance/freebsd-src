@@ -293,7 +293,11 @@ efi_arch_leave(void)
 	 * the pmap pointer.
 	 */
 	__asm __volatile(
+#ifdef __CHERI_PURE_CAPABILITY__
+	    "mrs c18, ctpidr_el1\n"
+#else
 	    "mrs x18, tpidr_el1	\n"
+#endif
 	);
 	proc_tcr = curthread->td_proc->p_md.md_tcr;
 	tcr = READ_SPECIALREG(tcr_el1);
