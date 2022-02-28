@@ -69,10 +69,25 @@ typedef struct efi_guid {
 	uint8_t		Data4[8];
 } efi_guid_t;	/* Type puns with GUID and EFI_GUID */
 
+/*
+ * Currently no pure-capability EFI exists so we have to shim to a legacy
+ * integer address based interface. Rather than mess with the structs we can
+ * make use of the pointer_interpretation pragma to turn the pointers into
+ * integer addresses.
+ */
+#ifdef __CHERI_PURE_CAPABILITY__
+#pragma pointer_interpretation push
+#pragma pointer_interpretation integer
+#endif
+
 struct efi_cfgtbl {
 	efi_guid_t	ct_guid;
 	void		*ct_data;
 };
+
+#ifdef __CHERI_PURE_CAPABILITY__
+#pragma pointer_interpretation pop
+#endif
 
 #define EFI_MEMORY_DESCRIPTOR_VERSION 1
 
@@ -187,6 +202,12 @@ struct efi_memory_attribute_table {
 
 #ifdef _KERNEL
 
+/* See efi_cfgtbl */
+#ifdef __CHERI_PURE_CAPABILITY__
+#pragma pointer_interpretation push
+#pragma pointer_interpretation integer
+#endif
+
 #ifdef EFIABI_ATTR
 struct efi_rt {
 	struct efi_tblhdr rt_hdr;
@@ -230,6 +251,10 @@ struct efi_systbl {
 	uint64_t	st_cfgtbl;
 };
 
+#ifdef __CHERI_PURE_CAPABILITY__
+#pragma pointer_interpretation pop
+#endif
+
 extern vm_paddr_t efi_systbl_phys;
 
 /*
@@ -265,8 +290,11 @@ struct efirt_callinfo;
 /* Internal MD EFI functions */
 int efi_arch_enter(void);
 void efi_arch_leave(void);
-vm_offset_t efi_phys_to_kva(vm_paddr_t);
+vm_pointer_t efi_phys_to_kva(vm_paddr_t);
 int efi_rt_arch_call(struct efirt_callinfo *);
+#ifdef __CHERI_PURE_CAPABILITY__
+int efi_rt_arch_call_nofault(struct efirt_callinfo *);
+#endif
 bool efi_create_1t1_map(struct efi_md *, int, int);
 void efi_destroy_1t1_map(void);
 

@@ -61,6 +61,11 @@
 #include <vm/pmap.h>
 #include <vm/vm_map.h>
 
+#ifdef __CHERI__
+#include <cheri/cheri.h>
+#include <cheri/cheric.h>
+#endif
+
 #ifdef DEV_ACPI
 #include <contrib/dev/acpica/include/acpi.h>
 #endif
@@ -199,8 +204,20 @@ efi_init(void)
 			printf("EFI systbl signature invalid\n");
 		return (0);
 	}
+
+#ifdef __CHERI_PURE_CAPABILITY__
+#define	EFI_ST_ARRAY(table, name, num)					\
+    ((struct efi_##name *)cheri_perms_and(cheri_bounds_set(		\
+	    cheri_address_set(kernel_root_cap, (table)->st_##name),	\
+	    sizeof(struct efi_##name) * (num)), CHERI_PERMS_KERNEL_DATA))
+#else
+#define	EFI_ST_ARRAY(table, name, num)					\
+    ((struct efi_##name *)(table)->st_##name)
+#endif
+#define	EFI_ST_PTR(table, name)	EFI_ST_ARRAY(table, name, 1)
+
 	efi_cfgtbl = (efi_systbl->st_cfgtbl == 0) ? NULL :
-	    (struct efi_cfgtbl *)efi_systbl->st_cfgtbl;
+	    EFI_ST_ARRAY(efi_systbl, cfgtbl, efi_systbl->st_entries);
 	if (efi_cfgtbl == NULL) {
 		if (bootverbose)
 			printf("EFI config table is not present\n");
@@ -226,13 +243,16 @@ efi_init(void)
 	}
 
 	efi_runtime = (efi_systbl->st_rt == 0) ? NULL :
-	    (struct efi_rt *)efi_systbl->st_rt;
+	    EFI_ST_PTR(efi_systbl, rt);
 	if (efi_runtime == NULL) {
 		if (bootverbose)
 			printf("EFI runtime services table is not present\n");
 		efi_destroy_1t1_map();
 		return (ENXIO);
 	}
+
+#undef EFI_ST_PTR
+#undef EFI_ST_ARRAY
 
 #if defined(__aarch64__) || defined(__amd64__)
 	/*
@@ -356,7 +376,7 @@ get_table(efi_guid_t *guid, void **ptr)
 	ct = efi_cfgtbl;
 	while (count--) {
 		if (!bcmp(&ct->ct_guid, guid, sizeof(*guid))) {
-			*ptr = ct->ct_data;
+			*ptr = (void *)(uintptr_t)ct->ct_data;
 			efi_leave();
 			return (0);
 		}
@@ -527,6 +547,7 @@ SYSCTL_INT(_machdep, OID_AUTO, efi_rt_handle_faults, CTLFLAG_RWTUN,
     &efi_rt_handle_faults, 0,
     "Call EFI RT methods with fault handler wrapper around");
 
+#ifndef __CHERI_PURE_CAPABILITY__
 static int
 efi_rt_arch_call_nofault(struct efirt_callinfo *ec)
 {
@@ -566,6 +587,7 @@ efi_rt_arch_call_nofault(struct efirt_callinfo *ec)
 
 	return (0);
 }
+#endif
 
 static int
 efi_call(struct efirt_callinfo *ecp)
@@ -585,9 +607,17 @@ efi_call(struct efirt_callinfo *ecp)
 	return (error);
 }
 
+#ifdef __CHERI_PURE_CAPABILITY__
+#define	EFI_RT_METHOD_PA(method)				\
+    ((uintptr_t)cheri_sentry_create(cheri_perms_and(			\
+	cheri_address_set(kernel_root_cap,			\
+	    ((struct efi_rt *)efi_phys_to_kva((uintptr_t)	\
+	    efi_runtime))->method), CHERI_PERMS_KERNEL_CODE)))
+#else
 #define	EFI_RT_METHOD_PA(method)				\
     ((uintptr_t)((struct efi_rt *)efi_phys_to_kva((uintptr_t)	\
     efi_runtime))->method)
+#endif
 
 static int
 efi_get_time_locked(struct efi_tm *tm, struct efi_tmcap *tmcap)

@@ -81,6 +81,20 @@ ASSYM(TF_SIZE, sizeof(struct trapframe));
 ASSYM(TF_SP, offsetof(struct trapframe, tf_sp));
 ASSYM(TF_LR, offsetof(struct trapframe, tf_lr));
 ASSYM(TF_ELR, offsetof(struct trapframe, tf_elr));
+#ifdef __CHERI__
+ASSYM(TF_DDC, offsetof(struct trapframe, tf_ddc));
+#endif
 ASSYM(TF_SPSR, offsetof(struct trapframe, tf_spsr));
 ASSYM(TF_ESR, offsetof(struct trapframe, tf_esr));
 ASSYM(TF_X, offsetof(struct trapframe, tf_x));
+
+#ifdef __CHERI_PURE_CAPABILITY__
+ASSYM(EC_EFI_STATUS, offsetof(struct efirt_callinfo, ec_efi_status));
+ASSYM(EC_FPTR, offsetof(struct efirt_callinfo, ec_fptr));
+ASSYM(EC_ARGCNT, offsetof(struct efirt_callinfo, ec_argcnt));
+ASSYM(EC_ARG1, offsetof(struct efirt_callinfo, ec_arg1));
+ASSYM(EC_ARG2, offsetof(struct efirt_callinfo, ec_arg2));
+ASSYM(EC_ARG3, offsetof(struct efirt_callinfo, ec_arg3));
+ASSYM(EC_ARG4, offsetof(struct efirt_callinfo, ec_arg4));
+ASSYM(EC_ARG5, offsetof(struct efirt_callinfo, ec_arg5));
+#endif
