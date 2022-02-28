@@ -52,7 +52,7 @@
 struct efirt_callinfo {
 	const char	*ec_name;
 	register_t	ec_efi_status;
-	register_t	ec_fptr;
+	uintptr_t	ec_fptr;
 	register_t	ec_argcnt;
 	register_t	ec_arg1;
 	register_t	ec_arg2;
