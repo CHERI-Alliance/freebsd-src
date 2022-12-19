@@ -33,6 +33,7 @@
 #include <machine/_bus.h>
 #include <sys/_bus_dma.h>
 #include <sys/ioccom.h>
+#include <sys/stddef.h>
 
 /**
  * @defgroup NEWBUS newbus - a generic framework for managing devices
@@ -80,8 +81,8 @@ typedef enum device_property_type {
  */
 #define BUS_USER_BUFFER		(3 * 1024)
 struct u_device {
-	uintptr_t	dv_handle;
-	uintptr_t	dv_parent;
+	ptraddr_t	dv_handle;
+	ptraddr_t	dv_parent;
 	uint32_t	dv_devflags;		/**< @brief API Flags for device */
 	uint16_t	dv_flags;		/**< @brief flags for dev state */
 	device_state_t	dv_state;		/**< @brief State of attachment */
