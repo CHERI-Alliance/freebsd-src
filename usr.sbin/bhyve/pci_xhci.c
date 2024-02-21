@@ -1802,7 +1802,7 @@ retry:
 				ccs ^= 0x1;
 
 			xfer_block = usb_data_xfer_append(xfer, NULL, 0,
-			                                  (void *)addr, ccs);
+			    (void *)(uintptr_t)addr, ccs);
 			xfer_block->processed = 1;
 			break;
 
@@ -1823,7 +1823,7 @@ retry:
 			       sizeof(struct usb_device_request));
 
 			xfer_block = usb_data_xfer_append(xfer, NULL, 0,
-			                                  (void *)addr, ccs);
+			    (void *)(uintptr_t)addr, ccs);
 			xfer_block->processed = 1;
 			break;
 
@@ -1841,23 +1841,24 @@ retry:
 			xfer_block = usb_data_xfer_append(xfer,
 			     (void *)(trb3 & XHCI_TRB_3_IDT_BIT ?
 			         &trb->qwTrb0 : XHCI_GADDR(sc, trb->qwTrb0)),
-			     trb->dwTrb2 & 0x1FFFF, (void *)addr, ccs);
+			     trb->dwTrb2 & 0x1FFFF, (void *)(uintptr_t)addr,
+			     ccs);
 			break;
 
 		case XHCI_TRB_TYPE_STATUS_STAGE:
 			xfer_block = usb_data_xfer_append(xfer, NULL, 0,
-			                                  (void *)addr, ccs);
+			    (void *)(uintptr_t)addr, ccs);
 			break;
 
 		case XHCI_TRB_TYPE_NOOP:
 			xfer_block = usb_data_xfer_append(xfer, NULL, 0,
-			                                  (void *)addr, ccs);
+			    (void *)(uintptr_t)addr, ccs);
 			xfer_block->processed = 1;
 			break;
 
 		case XHCI_TRB_TYPE_EVENT_DATA:
 			xfer_block = usb_data_xfer_append(xfer, NULL, 0,
-			                                  (void *)addr, ccs);
+			    (void *)(uintptr_t)addr, ccs);
 			if ((epid > 1) && (trb3 & XHCI_TRB_3_IOC_BIT)) {
 				xfer_block->processed = 1;
 			}
