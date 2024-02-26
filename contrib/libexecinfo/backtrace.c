@@ -196,7 +196,7 @@ backtrace_symbols_fmt(void *const *trace, size_t len, const char *fmt)
 	/* We store only offsets in the first pass because of realloc */
 	for (size_t i = 0; i < len; i++) {
 		ssize_t x;
-		((char **)(void *)ptr)[i] = (void *)offs;
+		((char **)(void *)ptr)[i] = (void *)(uintptr_t)offs;
 		x = format_address(st, &ptr, &psize, offs, fmt, trace[i]);
 		if (x == -1) {
 			free(ptr);
@@ -209,8 +209,10 @@ backtrace_symbols_fmt(void *const *trace, size_t len, const char *fmt)
 	}
 
 	/* Change offsets to pointers */
-	for (size_t j = 0; j < len; j++)
-		((char **)(void *)ptr)[j] += (intptr_t)ptr;
+	for (size_t j = 0; j < len; j++) {
+		ptrdiff_t ptr_offs = (intptr_t)((char **)(void *)ptr)[j];
+		((char **)(void *)ptr)[j] = ptr + ptr_offs;
+	}
 
 out:
 	symtab_destroy(st);
