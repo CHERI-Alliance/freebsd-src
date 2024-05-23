@@ -137,6 +137,18 @@ struct sndstioc_nv_arg32 {
 	_IOC_NEWTYPE(SNDSTIOC_ADD_USER_DEVS, struct sndstioc_nv_arg32)
 
 #endif
-#endif
 
+#ifdef COMPAT_FREEBSD64
+
+struct sndstioc_nv_arg64 {
+	uint64_t nbytes;
+	uint64_t buf;
+};
+
+#define SNDSTIOC_GET_DEVS64 \
+	_IOC_NEWTYPE(SNDSTIOC_GET_DEVS, struct sndstioc_nv_arg64)
+#define SNDSTIOC_ADD_USER_DEVS64 \
+	_IOC_NEWTYPE(SNDSTIOC_ADD_USER_DEVS, struct sndstioc_nv_arg64)
+#endif
+#endif
 #endif /* !_SYS_SNDSTAT_H_ */
