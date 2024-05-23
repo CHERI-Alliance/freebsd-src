@@ -40,6 +40,7 @@
 #endif
 
 #include <sys/param.h>
+#include <sys/abi_compat.h>
 #include <sys/dnv.h>
 #include <sys/lock.h>
 #include <sys/malloc.h>
@@ -1053,6 +1054,11 @@ sndstat_ioctl(
 	struct sndstioc_nv_arg *arg;
 #ifdef COMPAT_FREEBSD32
 	struct sndstioc_nv_arg32 *arg32;
+#endif
+#ifdef COMPAT_FREEBSD64
+	struct sndstioc_nv_arg64 *arg64;
+#endif
+#if defined(COMPAT_FREEBSD32) || defined(COMPAT_FREEBSD64)
 	size_t nbytes;
 #endif
 
@@ -1077,6 +1083,17 @@ sndstat_ioctl(
 		}
 		break;
 #endif
+#ifdef COMPAT_FREEBSD64
+	case SNDSTIOC_GET_DEVS64:
+		arg64 = (struct sndstioc_nv_arg64 *)data;
+		nbytes = arg64->nbytes;
+		err = sndstat_get_devs(pf, USER_PTR(arg64->buf, nbytes),
+		    &nbytes);
+		if (err == 0) {
+			arg64->nbytes = nbytes;
+		}
+		break;
+#endif
 	case SNDSTIOC_ADD_USER_DEVS:
 		arg = (struct sndstioc_nv_arg *)data;
 		err = sndstat_add_user_devs(pf, arg->buf, arg->nbytes);
@@ -1086,6 +1103,13 @@ sndstat_ioctl(
 		arg32 = (struct sndstioc_nv_arg32 *)data;
 		err = sndstat_add_user_devs(pf, (void *)(uintptr_t)arg32->buf,
 		    arg32->nbytes);
+		break;
+#endif
+#ifdef COMPAT_FREEBSD64
+	case SNDSTIOC_ADD_USER_DEVS64:
+		arg64 = (struct sndstioc_nv_arg64 *)data;
+		err = sndstat_add_user_devs(pf, USER_PTR(arg64->buf,
+		    arg64->nbytes), arg64->nbytes);
 		break;
 #endif
 	case SNDSTIOC_REFRESH_DEVS:
