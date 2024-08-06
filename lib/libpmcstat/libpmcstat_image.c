@@ -181,10 +181,10 @@ pmcstat_image_add_symbols(struct pmcstat_image *image, Elf *e,
 
 void
 pmcstat_image_link(struct pmcstat_process *pp, struct pmcstat_image *image,
-    uintfptr_t start)
+    ptraddr_t start)
 {
 	struct pmcstat_pcmap *pcm, *pcmnew;
-	uintfptr_t offset;
+	ptraddr_t offset;
 #ifdef __powerpc__
 	unsigned long kernbase;
 	size_t kernbase_len;
@@ -308,11 +308,11 @@ pmcstat_image_get_elf_params(struct pmcstat_image *image,
     struct pmcstat_args *args)
 {
 	int fd;
-	size_t i, nph, nsh;
+	size_t i, nph, nsh, pagesize;
 	const char *path, *elfbase;
 	char *p, *endp;
 	bool first_exec_segment;
-	uintfptr_t minva, maxva, pagesize;
+	ptraddr_t minva, maxva;
 	Elf *e;
 	Elf_Scn *scn;
 	GElf_Ehdr eh;
@@ -323,8 +323,8 @@ pmcstat_image_get_elf_params(struct pmcstat_image *image,
 
 	assert(image->pi_type == PMCSTAT_IMAGE_UNKNOWN);
 
-	image->pi_start = minva = ~(uintfptr_t) 0;
-	image->pi_end = maxva = (uintfptr_t) 0;
+	image->pi_start = minva = ~(ptraddr_t) 0;
+	image->pi_end = maxva = (ptraddr_t) 0;
 	image->pi_type = image_type = PMCSTAT_IMAGE_INDETERMINABLE;
 	image->pi_isdynamic = 0;
 	image->pi_dynlinkerpath = NULL;
