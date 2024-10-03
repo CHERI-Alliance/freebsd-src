@@ -47,6 +47,7 @@ local config = {
 	abi_intptr_t = "intptr_t",
 	abi_uintptr_t = "uintptr_t",
 	ptr_intptr_t_cast = "intptr_t",
+	ptr_qualified = "*",
 	obsol = {},
 	unimpl = {},
 	compat_set = "native",
