@@ -117,11 +117,11 @@ do_copy_relocations(Obj_Entry *dstobj)
 
 /* Initialize the special GOT entries. */
 void
-init_pltgot(Obj_Entry *obj)
+init_pltgot(Plt_Entry *plt)
 {
-	if (obj->pltgot != NULL) {
-		obj->pltgot[1] = (Elf_Addr)obj;
-		obj->pltgot[2] = (Elf_Addr)&_rtld_bind_start;
+	if (plt->pltgot != NULL) {
+		plt->pltgot[1] = (Elf_Addr)plt;
+		plt->pltgot[2] = (Elf_Addr)&_rtld_bind_start;
 	}
 }
 
@@ -286,13 +286,14 @@ done:
 
 /* Process the PLT relocations. */
 int
-reloc_plt(Obj_Entry *obj, int flags __unused, RtldLockState *lockstate __unused)
+reloc_plt(Plt_Entry *plt, int flags __unused, RtldLockState *lockstate __unused)
 {
+	Obj_Entry *obj = plt->obj;
 	const Elf_Rel *rellim;
 	const Elf_Rel *rel;
 
-	rellim = (const Elf_Rel *)((const char *)obj->pltrel + obj->pltrelsize);
-	for (rel = obj->pltrel; rel < rellim; rel++) {
+	rellim = (const Elf_Rel *)((const char *)plt->rel + plt->relsize);
+	for (rel = plt->rel;  rel < rellim;  rel++) {
 		Elf_Addr *where;
 
 		switch (ELF_R_TYPE(rel->r_info)) {
@@ -317,15 +318,16 @@ reloc_plt(Obj_Entry *obj, int flags __unused, RtldLockState *lockstate __unused)
 
 /* Relocate the jump slots in an object. */
 int
-reloc_jmpslots(Obj_Entry *obj, int flags, RtldLockState *lockstate)
+reloc_jmpslots(Plt_Entry *plt, int flags, RtldLockState *lockstate)
 {
+	Obj_Entry *obj = plt->obj;
 	const Elf_Rel *rellim;
 	const Elf_Rel *rel;
 
-	if (obj->jmpslots_done)
+	if (plt->jmpslots_done)
 		return (0);
-	rellim = (const Elf_Rel *)((const char *)obj->pltrel + obj->pltrelsize);
-	for (rel = obj->pltrel; rel < rellim; rel++) {
+	rellim = (const Elf_Rel *)((const char *)plt->rel + plt->relsize);
+	for (rel = plt->rel;  rel < rellim;  rel++) {
 		Elf_Addr *where, target;
 		const Elf_Sym *def;
 		const Obj_Entry *defobj;
@@ -355,7 +357,7 @@ reloc_jmpslots(Obj_Entry *obj, int flags, RtldLockState *lockstate)
 		}
 	}
 
-	obj->jmpslots_done = true;
+	plt->jmpslots_done = true;
 	return (0);
 }
 
@@ -382,20 +384,29 @@ reloc_iresolve_one(Obj_Entry *obj, const Elf_Rel *rel, RtldLockState *lockstate)
 	*where = target;
 }
 
-int
-reloc_iresolve(Obj_Entry *obj, RtldLockState *lockstate)
+static void
+reloc_iresolve_plt(Plt_Entry *plt, RtldLockState *lockstate)
 {
 	const Elf_Rel *rellim;
 	const Elf_Rel *rel;
 
+	rellim = (const Elf_Rel *)((const char *)plt->rel + plt->relsize);
+	for (rel = plt->rel;  rel < rellim;  rel++) {
+		if (ELF_R_TYPE(rel->r_info) == R_386_IRELATIVE)
+			reloc_iresolve_one(plt->obj, rel, lockstate);
+	}
+}
+
+int
+reloc_iresolve(Obj_Entry *obj, RtldLockState *lockstate)
+{
+	unsigned long i;
+
 	if (!obj->irelative)
 		return (0);
 	obj->irelative = false;
-	rellim = (const Elf_Rel *)((const char *)obj->pltrel + obj->pltrelsize);
-	for (rel = obj->pltrel; rel < rellim; rel++) {
-		if (ELF_R_TYPE(rel->r_info) == R_386_IRELATIVE)
-			reloc_iresolve_one(obj, rel, lockstate);
-	}
+	for (i = 0; i < obj->nplts; i++)
+		reloc_iresolve_plt(&obj->plts[i], lockstate);
 	return (0);
 }
 
@@ -416,16 +427,15 @@ reloc_iresolve_nonplt(Obj_Entry *obj, RtldLockState *lockstate)
 	return (0);
 }
 
-int
-reloc_gnu_ifunc(Obj_Entry *obj, int flags, RtldLockState *lockstate)
+static bool
+reloc_gnu_ifunc_plt(Plt_Entry *plt, int flags, RtldLockState *lockstate)
 {
+	Obj_Entry *obj = plt->obj;
 	const Elf_Rel *rellim;
 	const Elf_Rel *rel;
 
-	if (!obj->gnu_ifunc)
-		return (0);
-	rellim = (const Elf_Rel *)((const char *)obj->pltrel + obj->pltrelsize);
-	for (rel = obj->pltrel; rel < rellim; rel++) {
+	rellim = (const Elf_Rel *)((const char *)plt->rel + plt->relsize);
+	for (rel = plt->rel;  rel < rellim;  rel++) {
 		Elf_Addr *where, target;
 		const Elf_Sym *def;
 		const Obj_Entry *defobj;
@@ -436,7 +446,7 @@ reloc_gnu_ifunc(Obj_Entry *obj, int flags, RtldLockState *lockstate)
 			def = find_symdef(ELF_R_SYM(rel->r_info), obj, &defobj,
 			    SYMLOOK_IN_PLT | flags, NULL, lockstate);
 			if (def == NULL)
-				return (-1);
+				return (false);
 			if (ELF_ST_TYPE(def->st_info) != STT_GNU_IFUNC)
 				continue;
 			lock_release(rtld_bind_lock, lockstate);
@@ -446,7 +456,19 @@ reloc_gnu_ifunc(Obj_Entry *obj, int flags, RtldLockState *lockstate)
 			break;
 		}
 	}
+	return (true);
+}
 
+int
+reloc_gnu_ifunc(Obj_Entry *obj, int flags, RtldLockState *lockstate)
+{
+	unsigned long i;
+
+	if (!obj->gnu_ifunc)
+		return (0);
+	for (i = 0; i < obj->nplts; i++)
+		if (!reloc_gnu_ifunc_plt(&obj->plts[i], flags, lockstate))
+			return (-1);
 	obj->gnu_ifunc = false;
 	return (0);
 }
