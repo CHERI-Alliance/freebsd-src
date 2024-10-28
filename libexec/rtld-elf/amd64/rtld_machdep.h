@@ -35,6 +35,8 @@
 
 struct Struct_Obj_Entry;
 
+#define	MD_PLT_ENTRY
+
 #define	MD_OBJ_ENTRY			\
 	STAILQ_HEAD(, tlsdesc_dynarg) tlsdesc_dynargs;
 

@@ -84,7 +84,7 @@ ENTRY(_rtld_bind_start)
 	lsl	x3, x1, #1	/* x3 = 2 * offset */
 	add	x1, x1, x3	/* x1 = x3 + offset = 3 * offset */
 
-	/* Load obj */
+	/* Load plt */
 	ldr	x0, [x16, #-8]
 
 	/* Call into rtld */
