@@ -71,6 +71,8 @@ dump_relocations (Obj_Entry *obj0)
 void
 dump_obj_relocations (Obj_Entry *obj)
 {
+    Plt_Entry *plt;
+    unsigned long i;
 
     rtld_printf("Object \"%s\", relocbase %p\n", obj->path, obj->relocbase);
 
@@ -86,16 +88,19 @@ dump_obj_relocations (Obj_Entry *obj)
         dump_Elf_Rela(obj, obj->rela, obj->relasize);
     }
 
-    if (obj->pltrelsize) {
-        rtld_printf("PLT Relocations: %ld\n",
-            (obj->pltrelsize / sizeof(Elf_Rel)));
-        dump_Elf_Rel(obj, obj->pltrel, obj->pltrelsize);
-    }
+    for (i = 0; i < obj->nplts; i++) {
+	plt = &obj->plts[i];
+        if (plt->relsize) {
+            rtld_printf("PLT Relocations: %ld\n",
+                (plt->relsize / sizeof(Elf_Rel)));
+            dump_Elf_Rel(obj, plt->rel, plt->relsize);
+        }
 
-    if (obj->pltrelasize) {
-        rtld_printf("PLT Relocations with Addend: %ld\n",
-            (obj->pltrelasize / sizeof(Elf_Rela)));
-        dump_Elf_Rela(obj, obj->pltrela, obj->pltrelasize);
+        if (plt->relasize) {
+            rtld_printf("PLT Relocations with Addend: %ld\n",
+                (plt->relasize / sizeof(Elf_Rela)));
+            dump_Elf_Rela(obj, plt->rela, plt->relasize);
+        }
     }
 }
 

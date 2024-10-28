@@ -101,12 +101,11 @@ arch_digest_note(struct Struct_Obj_Entry *obj __unused, const Elf_Note *note)
 }
 
 void
-init_pltgot(Obj_Entry *obj)
+init_pltgot(Plt_Entry *plt)
 {
-
-	if (obj->pltgot != NULL) {
-		obj->pltgot[1] = (Elf_Addr) obj;
-		obj->pltgot[2] = (Elf_Addr) &_rtld_bind_start;
+	if (plt->pltgot != NULL) {
+		plt->pltgot[1] = (Elf_Addr) plt;
+		plt->pltgot[2] = (Elf_Addr) &_rtld_bind_start;
 	}
 }
 
@@ -235,17 +234,17 @@ reloc_tlsdesc(const Obj_Entry *obj, const Elf_Rela *rela,
  * Process the PLT relocations.
  */
 int
-reloc_plt(Obj_Entry *obj, int flags, RtldLockState *lockstate)
+reloc_plt(Plt_Entry *plt, int flags, RtldLockState *lockstate)
 {
+	Obj_Entry *obj = plt->obj;
 	const Obj_Entry *defobj;
 	const Elf_Rela *relalim;
 	const Elf_Rela *rela;
 	const Elf_Sym *def, *sym;
 	bool lazy;
 
-	relalim = (const Elf_Rela *)((const char *)obj->pltrela +
-	    obj->pltrelasize);
-	for (rela = obj->pltrela; rela < relalim; rela++) {
+	relalim = (const Elf_Rela *)((const char *)plt->rela + plt->relasize);
+	for (rela = plt->rela; rela < relalim; rela++) {
 		Elf_Addr *where, target;
 
 		where = (Elf_Addr *)(obj->relocbase + rela->r_offset);
@@ -309,19 +308,19 @@ reloc_plt(Obj_Entry *obj, int flags, RtldLockState *lockstate)
  * LD_BIND_NOW was set - force relocation for all jump slots
  */
 int
-reloc_jmpslots(Obj_Entry *obj, int flags, RtldLockState *lockstate)
+reloc_jmpslots(Plt_Entry *plt, int flags, RtldLockState *lockstate)
 {
+	Obj_Entry *obj = plt->obj;
 	const Obj_Entry *defobj;
 	const Elf_Rela *relalim;
 	const Elf_Rela *rela;
 	const Elf_Sym *def;
 
-	if (obj->jmpslots_done)
+	if (plt->jmpslots_done)
 		return (0);
 
-	relalim = (const Elf_Rela *)((const char *)obj->pltrela +
-	    obj->pltrelasize);
-	for (rela = obj->pltrela; rela < relalim; rela++) {
+	relalim = (const Elf_Rela *)((const char *)plt->rela + plt->relasize);
+	for (rela = plt->rela; rela < relalim; rela++) {
 		Elf_Addr *where, target;
 
 		where = (Elf_Addr *)(obj->relocbase + rela->r_offset);
@@ -341,7 +340,7 @@ reloc_jmpslots(Obj_Entry *obj, int flags, RtldLockState *lockstate)
 			break;
 		}
 	}
-	obj->jmpslots_done = true;
+	plt->jmpslots_done = true;
 
 	return (0);
 }
@@ -360,21 +359,33 @@ reloc_iresolve_one(Obj_Entry *obj, const Elf_Rela *rela,
 	*where = target;
 }
 
-int
-reloc_iresolve(Obj_Entry *obj, struct Struct_RtldLockState *lockstate)
+static int
+reloc_iresolve_plt(Plt_Entry *plt, struct Struct_RtldLockState *lockstate)
 {
 	const Elf_Rela *relalim;
 	const Elf_Rela *rela;
 
+	relalim = (const Elf_Rela *)((const char *)plt->rela + plt->relasize);
+	for (rela = plt->rela;  rela < relalim;  rela++) {
+		switch (ELF_R_TYPE(rela->r_info)) {
+		case R_AARCH64_IRELATIVE:
+			reloc_iresolve_one(plt->obj, rela, lockstate);
+			break;
+		}
+	}
+	return (0);
+}
+
+int
+reloc_iresolve(Obj_Entry *obj, struct Struct_RtldLockState *lockstate)
+{
+	unsigned long i;
+
 	if (!obj->irelative)
 		return (0);
 	obj->irelative = false;
-	relalim = (const Elf_Rela *)((const char *)obj->pltrela +
-	    obj->pltrelasize);
-	for (rela = obj->pltrela;  rela < relalim;  rela++) {
-		if (ELF_R_TYPE(rela->r_info) == R_AARCH64_IRELATIVE)
-			reloc_iresolve_one(obj, rela, lockstate);
-	}
+	for (i = 0; i < obj->nplts; i++)
+		reloc_iresolve_plt(&obj->plts[i], lockstate);
 	return (0);
 }
 
@@ -395,26 +406,25 @@ reloc_iresolve_nonplt(Obj_Entry *obj, struct Struct_RtldLockState *lockstate)
 	return (0);
 }
 
-int
-reloc_gnu_ifunc(Obj_Entry *obj, int flags,
+static bool
+reloc_gnu_ifunc_plt(Plt_Entry *plt, int flags,
    struct Struct_RtldLockState *lockstate)
 {
+	Obj_Entry *obj = plt->obj;
 	const Elf_Rela *relalim;
 	const Elf_Rela *rela;
 	Elf_Addr *where, target;
 	const Elf_Sym *def;
 	const Obj_Entry *defobj;
 
-	if (!obj->gnu_ifunc)
-		return (0);
-	relalim = (const Elf_Rela *)((const char *)obj->pltrela + obj->pltrelasize);
-	for (rela = obj->pltrela;  rela < relalim;  rela++) {
+	relalim = (const Elf_Rela *)((const char *)plt->rela + plt->relasize);
+	for (rela = plt->rela;  rela < relalim;  rela++) {
 		if (ELF_R_TYPE(rela->r_info) == R_AARCH64_JUMP_SLOT) {
 			where = (Elf_Addr *)(obj->relocbase + rela->r_offset);
 			def = find_symdef(ELF_R_SYM(rela->r_info), obj, &defobj,
 			    SYMLOOK_IN_PLT | flags, NULL, lockstate);
 			if (def == NULL)
-				return (-1);
+				return (false);
 			if (ELF_ST_TYPE(def->st_info) != STT_GNU_IFUNC)
 				continue;
 			lock_release(rtld_bind_lock, lockstate);
@@ -424,6 +434,20 @@ reloc_gnu_ifunc(Obj_Entry *obj, int flags,
 			    (const Elf_Rel *)rela);
 		}
 	}
+	return (true);
+}
+
+int
+reloc_gnu_ifunc(Obj_Entry *obj, int flags,
+    struct Struct_RtldLockState *lockstate)
+{
+	unsigned long i;
+
+	if (!obj->gnu_ifunc)
+		return (0);
+	for (i = 0; i < obj->nplts; i++)
+		if (!reloc_gnu_ifunc_plt(&obj->plts[i], flags, lockstate))
+			return (-1);
 	obj->gnu_ifunc = false;
 	return (0);
 }
