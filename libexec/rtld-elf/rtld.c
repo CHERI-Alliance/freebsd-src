@@ -2047,6 +2047,18 @@ digest_phdr(const Elf_Phdr *phdr, int phnum, caddr_t entry, const char *path)
 		return (NULL);
 	}
 
+#ifdef __CHERI__
+	/*
+	 * Derive text_rodata cap from AT_ENTRY (but set the address to
+	 * the beginning of the object).
+	 */
+	obj->text_rodata_cap = (const char *)cheri_address_copy(entry,
+	    obj->relocbase);
+	fix_obj_mapping_cap_permissions(obj, path);
+	if (!create_pcc_caps(obj, path))
+		return (NULL);
+#endif
+
 	obj->entry = entry;
 	return (obj);
 }
@@ -2788,15 +2800,21 @@ init_rtld(caddr_t mapbase, Elf_Auxinfo **aux_info)
 		rtld_die();
 	assert(objtmp.needed == NULL);
 	assert(!objtmp.textrel);
+	ehdr = (Elf_Ehdr *)mapbase;
+	objtmp.phdr = (Elf_Phdr *)((char *)mapbase + ehdr->e_phoff);
+	objtmp.phnum = ehdr->e_phnum;
+#ifdef __CHERI__
+	objtmp.text_rodata_cap = objtmp.relocbase;
+	fix_obj_mapping_cap_permissions(&objtmp, "RTLD");
+	if (!create_pcc_caps(&objtmp, "RTLD"))
+		rtld_die();
+#endif
+
 	/*
 	 * Temporarily put the dynamic linker entry into the object list, so
 	 * that symbols can be found.
 	 */
 	relocate_objects(&objtmp, true, &objtmp, 0, NULL);
-
-	ehdr = (Elf_Ehdr *)mapbase;
-	objtmp.phdr = (Elf_Phdr *)((char *)mapbase + ehdr->e_phoff);
-	objtmp.phnum = ehdr->e_phnum;
 
 	/* Initialize the object list. */
 	TAILQ_INIT(&obj_list);
@@ -4556,7 +4574,7 @@ do_dlsym(void *handle, const char *name, void *retaddr, const Ver_Entry *ve,
 			ti.ti_offset = def->st_value - TLS_DTV_OFFSET;
 			sym = __tls_get_addr(&ti);
 		} else
-			sym = defobj->relocbase + def->st_value;
+			sym = make_data_pointer(def, defobj);
 		LD_UTRACE(UTRACE_DLSYM_STOP, handle, sym, 0, 0, name);
 		return (sym);
 	}
