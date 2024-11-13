@@ -68,6 +68,9 @@ extern size_t ld_static_tls_extra;
 #ifdef TLS_TGOT
 extern size_t ld_static_tgot_extra;
 #endif
+#ifdef __CHERI_PURE_CAPABILITY__
+extern Elf_Ehdr __ehdr_start;
+#endif
 
 extern int npagesizes;
 extern size_t *pagesizes;
@@ -177,6 +180,17 @@ typedef struct Struct_Obj_Entry {
     caddr_t mapbase;		/* Base address of mapped region */
     size_t mapsize;		/* Size of mapped region in bytes */
     Elf_Addr vaddrbase;		/* Base address in shared object file */
+#ifdef __CHERI__
+    /*
+     * For CHERI we need a capability for the executable + rodata segments so
+     * that we can derive code capabilities from it.
+     * By having this additional member we can remove execute permissions from
+     * relocbase and mapbase.
+     */
+    const char *text_rodata_cap;	/* Cap for the executable mapping */
+    const char **pcc_caps;
+    unsigned long npcc_caps;
+#endif
     caddr_t relocbase;		/* Relocation constant = mapbase - vaddrbase */
     const Elf_Dyn *dynamic;	/* Dynamic section */
     caddr_t entry;		/* Entry point */
@@ -467,6 +481,25 @@ extern Elf_Addr _GLOBAL_OFFSET_TABLE_[];
 extern Elf_Sym sym_zero;	/* For resolving undefined weak refs. */
 extern bool ld_bind_not;
 extern bool ld_fast_sigblock;
+
+#ifdef __CHERI__
+bool create_pcc_caps(Obj_Entry *, const char *);
+const char *pcc_cap(const Obj_Entry *, Elf_Off);
+
+#define get_codesegment_cap(obj)				\
+	(cheri_perms_clear((obj)->text_rodata_cap, CAP_RELOC_REMOVE_PERMS))
+#define get_datasegment_cap(obj)				\
+	(cheri_perms_clear((obj)->relocbase, CAP_RELOC_REMOVE_PERMS))
+
+#define	make_data_pointer(def, defobj)	make_data_cap(def, defobj)
+#else
+#define	make_data_pointer(def, defobj)	(defobj->relocbase + def->st_value)
+#endif
+
+#ifdef __CHERI__
+/* Requires Obj_Entry and get_datasegment_cap */
+#include "rtld_cheri_machdep.h"
+#endif
 
 void dump_relocations(Obj_Entry *);
 void dump_obj_relocations(Obj_Entry *);
