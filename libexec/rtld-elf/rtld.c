@@ -92,7 +92,8 @@ struct tcb_list_entry {
 static bool allocate_tls_offset_common(size_t *offp, size_t tlssize,
     size_t tlsalign, size_t tlspoffset);
 static const char *basename(const char *);
-static void digest_dynamic1(Obj_Entry *, int, const Elf_Dyn **,
+static bool digest_dynamic(Obj_Entry *, int);
+static bool digest_dynamic1(Obj_Entry *, int, const Elf_Dyn **,
     const Elf_Dyn **, const Elf_Dyn **);
 static bool digest_dynamic2(Obj_Entry *, const Elf_Dyn *, const Elf_Dyn *,
     const Elf_Dyn *);
@@ -1342,7 +1343,7 @@ count_plts(const Elf_Dyn *dynp)
  * Process a shared object's DYNAMIC section, and save the important
  * information in its Obj_Entry structure.
  */
-static void
+static bool
 digest_dynamic1(Obj_Entry *obj, int early, const Elf_Dyn **dyn_rpath,
     const Elf_Dyn **dyn_soname, const Elf_Dyn **dyn_runpath)
 {
@@ -1366,7 +1367,7 @@ digest_dynamic1(Obj_Entry *obj, int early, const Elf_Dyn **dyn_rpath,
 	obj->bind_now = false;
 	dynp = obj->dynamic;
 	if (dynp == NULL)
-		return;
+		return (true);
 	obj->nplts = count_plts(dynp);
 	if (obj->nplts != 0)
 		obj->plts = xcalloc(obj->nplts, sizeof(*obj->plts));
@@ -1667,10 +1668,16 @@ digest_dynamic1(Obj_Entry *obj, int early, const Elf_Dyn **dyn_rpath,
 
 	obj->traced = false;
 
-	if (plttype == DT_RELA) {
-		for (i = 0; i < obj->nplts; i++) {
-			plt = &obj->plts[i];
-			plt->rela = (const Elf_Rela *)plt->rel;
+	if (!(jmprel == pltrelsz && jmprel == pltgot)) {
+		_rtld_error("PLT dynamic tag mismatch");
+		return (false);
+	}
+
+	for (i = 0; i < obj->nplts; i++) {
+		plt = &obj->plts[i];
+		plt->obj = obj;
+		if (plttype == DT_RELA) {
+			plt->rela = (const Elf_Rela *) plt->rel;
 			plt->rel = NULL;
 			plt->relasize = plt->relsize;
 			plt->relsize = 0;
@@ -1696,6 +1703,8 @@ digest_dynamic1(Obj_Entry *obj, int early, const Elf_Dyn **dyn_rpath,
 	if (obj->linkmap.l_refname != NULL)
 		obj->linkmap.l_refname = obj->strtab +
 		    (unsigned long)obj->linkmap.l_refname;
+
+	return (true);
 }
 
 static bool
@@ -1711,19 +1720,6 @@ static bool
 digest_dynamic2(Obj_Entry *obj, const Elf_Dyn *dyn_rpath,
     const Elf_Dyn *dyn_soname, const Elf_Dyn *dyn_runpath)
 {
-	unsigned long i;
-	Plt_Entry *plt;
-
-	for (i = 0; i < obj->nplts; i++) {
-		plt = &obj->plts[i];
-		if (plt->pltgot == NULL)
-			return (false);
-		if (plt->rel == NULL && plt->rela == NULL)
-			return (false);
-		if (plt->relsize == 0 && plt->relasize == 0)
-			return (false);
-		plt->obj = obj;
-	}
 	if (obj->z_origin && !obj_resolve_origin(obj))
 		return (false);
 
@@ -1747,7 +1743,8 @@ digest_dynamic(Obj_Entry *obj, int early)
 	const Elf_Dyn *dyn_soname;
 	const Elf_Dyn *dyn_runpath;
 
-	digest_dynamic1(obj, early, &dyn_rpath, &dyn_soname, &dyn_runpath);
+	if (!digest_dynamic1(obj, early, &dyn_rpath, &dyn_soname, &dyn_runpath))
+		return (false);
 	return (digest_dynamic2(obj, dyn_rpath, dyn_soname, dyn_runpath));
 }
 
@@ -2567,7 +2564,8 @@ init_rtld(caddr_t mapbase, Elf_Auxinfo **aux_info)
 	objtmp.relocbase = mapbase;
 
 	objtmp.dynamic = rtld_dynamic(&objtmp);
-	digest_dynamic1(&objtmp, 1, &dyn_rpath, &dyn_soname, &dyn_runpath);
+	if (!digest_dynamic1(&objtmp, 1, &dyn_rpath, &dyn_soname, &dyn_runpath))
+		rtld_die();
 	assert(objtmp.needed == NULL);
 	assert(!objtmp.textrel);
 	/*
@@ -2592,7 +2590,8 @@ init_rtld(caddr_t mapbase, Elf_Auxinfo **aux_info)
 	if (aux_info[AT_OSRELDATE] != NULL)
 		osreldate = aux_info[AT_OSRELDATE]->a_un.a_val;
 
-	digest_dynamic2(&obj_rtld, dyn_rpath, dyn_soname, dyn_runpath);
+	if (!digest_dynamic2(&obj_rtld, dyn_rpath, dyn_soname, dyn_runpath))
+		rtld_die();
 
 	/* Replace the path with a dynamically allocated copy. */
 	obj_rtld.path = xstrdup(ld_path_rtld);
