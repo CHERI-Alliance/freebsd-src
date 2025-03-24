@@ -491,8 +491,14 @@ do_trap_user(struct trapframe *frame)
 	}
 	intr_enable();
 
+#ifdef __CHERI__
+	CTR5(KTR_TRAP, "%s: exception=%lu, sepc=%#lx, stval=%#lx stval2=%#lx",
+            __func__, exception, (unsigned long)frame->tf_sepc, frame->tf_stval,
+	    frame->tf_stval2);
+#else
 	CTR4(KTR_TRAP, "%s: exception=%lu, sepc=%#lx, stval=%#lx", __func__,
 	    exception, frame->tf_sepc, frame->tf_stval);
+#endif
 
 	switch (exception) {
 	case SCAUSE_LOAD_ACCESS_FAULT:
