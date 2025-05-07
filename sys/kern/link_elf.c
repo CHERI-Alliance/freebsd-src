@@ -168,7 +168,7 @@ static long	link_elf_strtab_get(linker_file_t, caddr_t *);
 #ifdef VIMAGE
 static void	link_elf_propagate_vnets(linker_file_t);
 #endif
-static int	elf_lookup(linker_file_t, Elf_Size, int, Elf_Addr *);
+static int	elf_lookup(linker_file_t, Elf_Size, int, uintptr_t *);
 
 static kobj_method_t link_elf_methods[] = {
 	KOBJMETHOD(linker_lookup_symbol,	link_elf_lookup_symbol),
@@ -2049,7 +2049,7 @@ link_elf_propagate_vnets(linker_file_t lf)
  */
 static int
 elf_lookup_ifunc(linker_file_t lf, Elf_Size symidx, int deps __unused,
-    Elf_Addr *res)
+    uintptr_t *res)
 {
 	elf_file_t ef;
 	const Elf_Sym *symp;
@@ -2059,7 +2059,7 @@ elf_lookup_ifunc(linker_file_t lf, Elf_Size symidx, int deps __unused,
 	symp = ef->symtab + symidx;
 	if (ELF_ST_TYPE(symp->st_info) == STT_GNU_IFUNC) {
 		val = (caddr_t)ef->address + symp->st_value;
-		*res = ((Elf_Addr (*)(void))val)();
+		*res = ((uintptr_t (*)(void))val)();
 		return (0);
 	}
 	return (ENOENT);
