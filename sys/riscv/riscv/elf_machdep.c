@@ -289,7 +289,8 @@ elf_reloc_internal(linker_file_t lf, char *relocbase, const void *data,
 {
 	Elf_Size rtype, symidx;
 	const Elf_Rela *rela;
-	Elf_Addr val, addr;
+	uintptr_t addr;
+	Elf_Addr val;
 	Elf64_Addr *where;
 	Elf_Addr addend;
 	uint32_t before32_1;
