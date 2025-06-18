@@ -467,6 +467,9 @@ lookup_symbol_by_addr(Elf *e, struct symtab *symtab, uintptr_t addr,
 	while (min <= max) {
 		mid = (max + min) / 2;
 		(void)gelf_getsym(data, symtab->index[mid], &sym);
+#if defined(__aarch64__) && defined(__CHERI__)
+		sym.st_value &= ~0x1ul;
+#endif
 		if (addr >= sym.st_value && addr < sym.st_value + sym.st_size)
 			break;
 
@@ -483,6 +486,9 @@ lookup_symbol_by_addr(Elf *e, struct symtab *symtab, uintptr_t addr,
 	 */
 	for (i = mid; i < symtab->nsyms; i++) {
 		(void)gelf_getsym(data, symtab->index[i], &sym);
+#if defined(__aarch64__) && defined(__CHERI__)
+		sym.st_value &= ~0x1ul;
+#endif
 		if (addr < sym.st_value || addr >= sym.st_value + sym.st_size)
 			break;
 	}
