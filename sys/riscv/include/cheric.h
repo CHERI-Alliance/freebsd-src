@@ -33,8 +33,9 @@
 #ifndef _MACHINE_CHERIC_H_
 #define	_MACHINE_CHERIC_H_
 
-#if __has_feature(capabilities)
+#if defined(__CHERI__)
 #define	cheri_capmode(cap)	cheri_flags_set(cap, CHERI_FLAGS_CAP_MODE)
+#define	cheri_legacymode(cap)	cheri_flags_set(cap, CHERI_FLAGS_LEGACY_MODE)
 #endif
 
 #endif /* !_MACHINE_CHERIC_H_ */
