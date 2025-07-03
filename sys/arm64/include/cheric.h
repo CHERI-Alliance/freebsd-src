@@ -30,7 +30,7 @@
 
 #include <machine/vmparam.h>
 
-#if __has_feature(capabilities) && defined(_KERNEL)
+#if defined(__CHERI__) && defined(_KERNEL)
 /*
  * ERET in Morello does not use the LSB of the saved elr to set
  * PSR_C64, nor does it support unsealing sentry capabilities.
@@ -56,8 +56,9 @@ trapframe_set_elr(struct trapframe *tf, uintptr_t elr)
 }
 #endif
 
-#if __has_feature(capabilities)
+#ifdef __CHERI__
 #define	cheri_capmode(cap)	(__typeof(cap))((uintptr_t)(cap) | 1)
+#define	cheri_legacymode(cap)	(__typeof(cap))((uintptr_t)(cap) & ~1)
 #endif
 
 #endif /* !_MACHINE_CHERIC_H_ */
