@@ -223,7 +223,7 @@
 #define	cheri_is_ddc_violation(frame)					\
 	(TVAL_CAP_TYPE((frame)->tf_stval2) == CHERI_EXCTYPE_DATA_FAULT && \
 	(cheri_getflags((frame)->tf_sepc) & CHERI_FLAGS_CAP_MODE_MASK) == \
-	    CHERI_FLAGS_INT_MODE)
+	    CHERI_FLAGS_LEGACY_MODE)
 #endif
 
 #define	XLEN		__riscv_xlen
