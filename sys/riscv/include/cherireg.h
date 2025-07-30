@@ -330,46 +330,6 @@
 /*
  * List of CHERI capability cause code constants.
  */
-#ifdef __riscv_xcheri
-#define	CHERI_EXCCODE_NONE		0x00
-#define	CHERI_EXCCODE_LENGTH		0x01
-#define	CHERI_EXCCODE_TAG		0x02
-#define	CHERI_EXCCODE_SEAL		0x03
-#define	CHERI_EXCCODE_TYPE		0x04
-#define	_CHERI_EXCCODE_RESERVED05	0x05
-#define	_CHERI_EXCCODE_RESERVED06	0x06
-#define	_CHERI_EXCCODE_RESERVED07	0x07
-#define	CHERI_EXCCODE_USER_PERM		0x08
-#define	CHERI_EXCCODE_PERM_USER		CHERI_EXCCODE_USER_PERM
-#define	_CHERI_EXCCODE_RESERVED09	0x09
-#define	CHERI_EXCCODE_IMPRECISE		0x0a
-#define	CHERI_EXCCODE_UNALIGNED_BASE	0x0b
-#define	_CHERI_EXCCODE_RESERVED0c	0x0c
-#define	_CHERI_EXCCODE_RESERVED0d	0x0d
-#define	_CHERI_EXCCODE_RESERVED0e	0x0e
-#define	_CHERI_EXCCODE_RESERVED0f	0x0f
-#define	CHERI_EXCCODE_GLOBAL		0x10
-#define	CHERI_EXCCODE_PERM_EXECUTE	0x11
-#define	CHERI_EXCCODE_PERM_LOAD		0x12
-#define	CHERI_EXCCODE_PERM_STORE	0x13
-#define	CHERI_EXCCODE_PERM_LOADCAP	0x14
-#define	CHERI_EXCCODE_PERM_STORECAP	0x15
-#define	CHERI_EXCCODE_STORE_LOCALCAP	0x16
-#define	CHERI_EXCCODE_PERM_SEAL		0x17
-#define	CHERI_EXCCODE_SYSTEM_REGS	0x18
-#define	CHERI_EXCCODE_PERM_CINVOKE	0x19
-#define	_CHERI_EXCCODE_RESERVED1a	0x1a
-#define	CHERI_EXCCODE_PERM_UNSEAL	0x1b
-#define	CHERI_EXCCODE_PERM_SET_CID	0x1c
-#define	_CHERI_EXCCODE_RESERVED1d	0x1d
-#define	_CHERI_EXCCODE_RESERVED1e	0x1e
-#define	_CHERI_EXCCODE_RESERVED1f	0x1f
-
-#define	is_cheri_load_cap_fault(frame)				\
-	(frame->tf_scause == SCAUSE_LOAD_CAP_PAGE_FAULT)
-#define	is_cheri_store_amo_cap_fault(frame)			\
-	(frame->tf_scause == SCAUSE_STORE_AMO_CAP_PAGE_FAULT)
-#else /* !defined(__riscv_xcheri) */
 #define	CHERI_EXCTYPE_FETCH_FAULT	0x00
 #define	CHERI_EXCTYPE_DATA_FAULT	0x01
 #define	CHERI_EXCTYPE_BRANCH_FAULT	0x02
@@ -385,8 +345,4 @@
 #define	is_cheri_store_amo_cap_fault(frame)			\
 	(frame->tf_scause == SCAUSE_STORE_PAGE_FAULT &&		\
 	frame->tf_stval2 == 1)
-#endif /* !defined(__riscv_xcheri) */
-
-
-
 #endif /* !_MACHINE_CHERIREG_H_ */
