@@ -56,6 +56,9 @@
 #define	SCAUSE_LOAD_GUEST_PAGE_FAULT	21
 #define	SCAUSE_VIRTUAL_INSTRUCTION	22
 #define	SCAUSE_STORE_GUEST_PAGE_FAULT	23
+#ifdef __CHERI__
+#define	SCAUSE_CHERI			28
+#endif
 
 #define	SSTATUS_UIE			(1 << 0)
 #define	SSTATUS_SIE			(1 << 1)
@@ -200,8 +203,17 @@
 #define	SATP_MODE_SV39	(8ULL << SATP_MODE_S)
 #define	SATP_MODE_SV48	(9ULL << SATP_MODE_S)
 
-#ifdef __riscv_zcherihybrid
+#ifdef __CHERI__
 #define	SENVCFG_CRE	(0x01 << 28)
+
+#define	TVAL_CAP_CAUSE_SHIFT	0
+#define	TVAL_CAP_CAUSE_MASK	(0x0f << TVAL_CAP_CAUSE_SHIFT)
+#define	TVAL_CAP_TYPE_SHIFT	16
+#define	TVAL_CAP_TYPE_MASK	(0x0f << TVAL_CAP_TYPE_SHIFT)
+#define	TVAL_CAP_TYPE(tval)						\
+	(((tval) & TVAL_CAP_TYPE_MASK) >> TVAL_CAP_TYPE_SHIFT)
+#define	TVAL_CAP_CAUSE(tval)						\
+	(((tval) & TVAL_CAP_CAUSE_MASK) >> TVAL_CAP_CAUSE_SHIFT)
 #endif
 
 #define	XLEN		__riscv_xlen
