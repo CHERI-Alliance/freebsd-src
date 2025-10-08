@@ -1,3 +1,18 @@
+FreeBSD/CHERI
+-------------
+
+This repositry is a staging ground for changes to FreeBSD to support
+[CHERI](https://cheri-cpu.org).  These changes are being extracted from
+[CheriBSD](https://cheribsd.org) and are being staged here while they
+await review.
+
+The `cheri` branch will contain the main line of development as patches
+are accumulated.  It will be **rebased** atop the `main` branch which will
+be updated periodically.
+
+This work is being performed under *CheriBSD feature extraction,
+maturity, and testing* project sponsored by Innovate UK.
+
 FreeBSD Source:
 ---------------
 This is the top level of the FreeBSD source directory.
