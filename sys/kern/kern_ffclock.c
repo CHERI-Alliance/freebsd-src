@@ -386,6 +386,12 @@ struct ffclock_getcounter_args {
 int
 sys_ffclock_getcounter(struct thread *td, struct ffclock_getcounter_args *uap)
 {
+	return (kern_ffclock_getcounter(td, ffcountp));
+}
+
+int
+kern_ffclock_getcounter(struct thread *td, ffcounter *ffcountp)
+{
 	ffcounter ffcount;
 	int error;
 
@@ -393,7 +399,7 @@ sys_ffclock_getcounter(struct thread *td, struct ffclock_getcounter_args *uap)
 	ffclock_read_counter(&ffcount);
 	if (ffcount == 0)
 		return (EAGAIN);
-	error = copyout(&ffcount, uap->ffcount, sizeof(ffcounter));
+	error = copyout(&ffcount, ffcount, sizeof(ffcounter));
 
 	return (error);
 }
@@ -415,6 +421,13 @@ struct ffclock_setestimate_args {
 int
 sys_ffclock_setestimate(struct thread *td, struct ffclock_setestimate_args *uap)
 {
+	return (kern_ffclock_setestimate(td, uap->cest));
+}
+
+int
+kern_ffclock_setestimate(struct thread *td,
+    const struct ffclock_estimate *ucest)
+{
 	struct ffclock_estimate cest;
 	int error;
 
@@ -422,7 +435,7 @@ sys_ffclock_setestimate(struct thread *td, struct ffclock_setestimate_args *uap)
 	if ((error = priv_check(td, PRIV_CLOCK_SETTIME)) != 0)
 		return (error);
 
-	if ((error = copyin(uap->cest, &cest, sizeof(struct ffclock_estimate)))
+	if ((error = copyin(cest, &cest, sizeof(struct ffclock_estimate)))
 	    != 0)
 		return (error);
 
@@ -447,13 +460,19 @@ struct ffclock_getestimate_args {
 int
 sys_ffclock_getestimate(struct thread *td, struct ffclock_getestimate_args *uap)
 {
+	return (kern_ffclock_getestimate(td, uap->cest));
+}
+
+int
+kern_ffclock_getestimate(struct thread *td, struct ffclock_estimate *ucest)
+{
 	struct ffclock_estimate cest;
 	int error;
 
 	mtx_lock(&ffclock_mtx);
 	memcpy(&cest, &ffclock_estimate, sizeof(struct ffclock_estimate));
 	mtx_unlock(&ffclock_mtx);
-	error = copyout(&cest, uap->cest, sizeof(struct ffclock_estimate));
+	error = copyout(&cest, cest, sizeof(struct ffclock_estimate));
 	return (error);
 }
 
