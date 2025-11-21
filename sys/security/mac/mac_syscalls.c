@@ -56,6 +56,7 @@
 #include <sys/mac.h>
 #include <sys/proc.h>
 #include <sys/systm.h>
+#include <sys/syscallsubr.h>
 #include <sys/sysctl.h>
 #include <sys/sysent.h>
 #include <sys/sysproto.h>
@@ -75,11 +76,6 @@
 #ifdef MAC
 
 FEATURE(security_mac, "Mandatory Access Control Framework support");
-
-static int	kern___mac_get_path(struct thread *td, const char *path_p,
-		    struct mac *mac_p, int follow);
-static int	kern___mac_set_path(struct thread *td, const char *path_p,
-		    struct mac *mac_p, int follow);
 
 #ifdef COMPAT_FREEBSD32
 struct mac32 {
@@ -148,17 +144,23 @@ free_copied_label(const struct mac *const mac)
 int
 sys___mac_get_pid(struct thread *td, struct __mac_get_pid_args *uap)
 {
+	return (kern___mac_get_pid(td, uap->pid, uap->mac_p));
+}
+
+int
+kern___mac_get_pid(struct thread *td, pid_t pid, void *mac_p)
+{
 	char *buffer, *u_buffer;
 	struct mac mac;
 	struct proc *tproc;
 	struct ucred *tcred;
 	int error;
 
-	error = mac_label_copyin(uap->mac_p, &mac, &u_buffer);
+	error = mac_label_copyin(mac_p, &mac, &u_buffer);
 	if (error)
 		return (error);
 
-	tproc = pfind(uap->pid);
+	tproc = pfind(pid);
 	if (tproc == NULL) {
 		error = ESRCH;
 		goto free_mac_and_exit;
@@ -188,11 +190,17 @@ free_mac_and_exit:
 int
 sys___mac_get_proc(struct thread *td, struct __mac_get_proc_args *uap)
 {
+	return (kern___mac_get_proc(td, uap->mac_p));
+}
+
+int
+kern___mac_get_proc(struct thread *td, void *mac_p)
+{
 	char *buffer, *u_buffer;
 	struct mac mac;
 	int error;
 
-	error = mac_label_copyin(uap->mac_p, &mac, &u_buffer);
+	error = mac_label_copyin(mac_p, &mac, &u_buffer);
 	if (error)
 		return (error);
 
@@ -291,13 +299,19 @@ mac_set_proc_finish(struct thread *const td, bool proc_label_set,
 int
 sys___mac_set_proc(struct thread *td, struct __mac_set_proc_args *uap)
 {
+	return (kern___mac_set_proc(td, uap->mac_p));
+}
+
+int
+kern___mac_set_proc(struct thread *td, void *mac_p)
+{
 	struct ucred *newcred, *oldcred;
 	void *intlabel;
 	struct proc *const p = td->td_proc;
 	struct mac mac;
 	int error;
 
-	error = mac_label_copyin(uap->mac_p, &mac, NULL);
+	error = mac_label_copyin(mac_p, &mac, NULL);
 	if (error)
 		return (error);
 
@@ -333,6 +347,12 @@ free_label:
 int
 sys___mac_get_fd(struct thread *td, struct __mac_get_fd_args *uap)
 {
+	return (kern___mac_get_fd(td, uap->fd, uap->mac_p));
+}
+
+int
+kern___mac_get_fd(struct thread *td, int fd, void *mac_p)
+{
 	char *u_buffer, *buffer;
 	struct label *intlabel;
 	struct file *fp;
@@ -343,13 +363,12 @@ sys___mac_get_fd(struct thread *td, struct __mac_get_fd_args *uap)
 	cap_rights_t rights;
 	int error;
 
-	error = mac_label_copyin(uap->mac_p, &mac, &u_buffer);
+	error = mac_label_copyin(mac_p, &mac, &u_buffer);
 	if (error)
 		return (error);
 
 	buffer = malloc(mac.m_buflen, M_MACTEMP, M_WAITOK | M_ZERO);
-	error = fget(td, uap->fd, cap_rights_init_one(&rights, CAP_MAC_GET),
-	    &fp);
+	error = fget(td, fd, cap_rights_init_one(&rights, CAP_MAC_GET), &fp);
 	if (error)
 		goto out;
 
@@ -416,19 +435,17 @@ out:
 int
 sys___mac_get_file(struct thread *td, struct __mac_get_file_args *uap)
 {
-
-	return (kern___mac_get_path(td, uap->path_p, uap->mac_p, FOLLOW));
+	return (kern_mac_get_path(td, uap->path_p, uap->mac_p, FOLLOW));
 }
 
 int
 sys___mac_get_link(struct thread *td, struct __mac_get_link_args *uap)
 {
-
-	return (kern___mac_get_path(td, uap->path_p, uap->mac_p, NOFOLLOW));
+	return (kern_mac_get_path(td, uap->path_p, uap->mac_p, NOFOLLOW));
 }
 
-static int
-kern___mac_get_path(struct thread *td, const char *path_p, struct mac *mac_p,
+int
+kern_mac_get_path(struct thread *td, const char *path_p, struct mac *mac_p,
    int follow)
 {
 	char *u_buffer, *buffer;
@@ -471,6 +488,12 @@ out:
 int
 sys___mac_set_fd(struct thread *td, struct __mac_set_fd_args *uap)
 {
+	return (kern___mac_set_fd(td, uap->fd, uap->mac_p));
+}
+
+int
+kern___mac_set_fd(struct thread *td, int fd, void *mac_p)
+{
 	struct label *intlabel;
 	struct pipe *pipe;
 	struct socket *so;
@@ -481,11 +504,11 @@ sys___mac_set_fd(struct thread *td, struct __mac_set_fd_args *uap)
 	cap_rights_t rights;
 	int error;
 
-	error = mac_label_copyin(uap->mac_p, &mac, NULL);
+	error = mac_label_copyin(mac_p, &mac, NULL);
 	if (error)
 		return (error);
 
-	error = fget(td, uap->fd, cap_rights_init_one(&rights, CAP_MAC_SET),
+	error = fget(td, fd, cap_rights_init_one(&rights, CAP_MAC_SET),
 	    &fp);
 	if (error)
 		goto out;
@@ -561,19 +584,17 @@ out:
 int
 sys___mac_set_file(struct thread *td, struct __mac_set_file_args *uap)
 {
-
-	return (kern___mac_set_path(td, uap->path_p, uap->mac_p, FOLLOW));
+	return (kern_mac_set_path(td, uap->path_p, uap->mac_p, FOLLOW));
 }
 
 int
 sys___mac_set_link(struct thread *td, struct __mac_set_link_args *uap)
 {
-
-	return (kern___mac_set_path(td, uap->path_p, uap->mac_p, NOFOLLOW));
+	return (kern_mac_set_path(td, uap->path_p, uap->mac_p, NOFOLLOW));
 }
 
-static int
-kern___mac_set_path(struct thread *td, const char *path_p, struct mac *mac_p,
+int
+kern_mac_set_path(struct thread *td, const char *path_p, struct mac *mac_p,
     int follow)
 {
 	struct label *intlabel;
@@ -615,11 +636,17 @@ out:
 int
 sys_mac_syscall(struct thread *td, struct mac_syscall_args *uap)
 {
+	return (kern_mac_syscall(td, uap->policy, uap->call, uap->arg));
+}
+
+int
+kern_mac_syscall(struct thread *td, const char *policy, int call, void *arg)
+{
 	struct mac_policy_conf *mpc;
 	char target[MAC_MAX_POLICY_NAME];
 	int error;
 
-	error = copyinstr(uap->policy, target, sizeof(target), NULL);
+	error = copyinstr(policy, target, sizeof(target), NULL);
 	if (error)
 		return (error);
 
@@ -627,8 +654,7 @@ sys_mac_syscall(struct thread *td, struct mac_syscall_args *uap)
 	LIST_FOREACH(mpc, &mac_static_policy_list, mpc_list) {
 		if (strcmp(mpc->mpc_name, target) == 0 &&
 		    mpc->mpc_ops->mpo_syscall != NULL) {
-			error = mpc->mpc_ops->mpo_syscall(td,
-			    uap->call, uap->arg);
+			error = mpc->mpc_ops->mpo_syscall(td, call, arg);
 			goto out;
 		}
 	}
@@ -638,8 +664,8 @@ sys_mac_syscall(struct thread *td, struct mac_syscall_args *uap)
 		LIST_FOREACH(mpc, &mac_policy_list, mpc_list) {
 			if (strcmp(mpc->mpc_name, target) == 0 &&
 			    mpc->mpc_ops->mpo_syscall != NULL) {
-				error = mpc->mpc_ops->mpo_syscall(td,
-				    uap->call, uap->arg);
+				error = mpc->mpc_ops->mpo_syscall(td, call,
+				    arg);
 				break;
 			}
 		}
