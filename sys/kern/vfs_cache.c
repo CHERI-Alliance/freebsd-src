@@ -3218,11 +3218,15 @@ vfs_cache_lookup(struct vop_lookup_args *ap)
 int
 sys___getcwd(struct thread *td, struct __getcwd_args *uap)
 {
+	return (kern___getcwd(td, uap->buf, uap->buflen));
+}
+
+int
+kern___getcwd(struct thread *td, char *ubuf, size_t buflen)
+{
 	char *buf, *retbuf;
-	size_t buflen;
 	int error;
 
-	buflen = uap->buflen;
 	if (__predict_false(buflen < 2))
 		return (EINVAL);
 	if (buflen > MAXPATHLEN)
@@ -3231,7 +3235,7 @@ sys___getcwd(struct thread *td, struct __getcwd_args *uap)
 	buf = uma_zalloc(namei_zone, M_WAITOK);
 	error = vn_getcwd(buf, &retbuf, &buflen);
 	if (error == 0)
-		error = copyout(retbuf, uap->buf, buflen);
+		error = copyout(retbuf, ubuf, buflen);
 	uma_zfree(namei_zone, buf);
 	return (error);
 }
@@ -3272,7 +3276,7 @@ vn_getcwd(char *buf, char **retbuf, size_t *buflen)
  *   walk in userspace. Moreover, the path we return is inaccessible if the
  *   calling thread lacks permission to traverse "quux".
  */
-static int
+int
 kern___realpathat(struct thread *td, int fd, const char *path, char *buf,
     size_t size, int flags, enum uio_seg pathseg)
 {
