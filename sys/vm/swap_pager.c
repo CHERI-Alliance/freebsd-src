@@ -92,6 +92,7 @@
 #include <sys/resourcevar.h>
 #include <sys/rwlock.h>
 #include <sys/sbuf.h>
+#include <sys/syscallsubr.h>
 #include <sys/sysctl.h>
 #include <sys/sysproto.h>
 #include <sys/systm.h>
@@ -2618,6 +2619,12 @@ struct swapon_args {
 int
 sys_swapon(struct thread *td, struct swapon_args *uap)
 {
+	return (kern_swapon(td, uap->name));
+}
+
+int
+kern_swapon(struct thread *td, const char *name)
+{
 	struct vattr attr;
 	struct vnode *vp;
 	struct nameidata nd;
@@ -2639,7 +2646,7 @@ sys_swapon(struct thread *td, struct swapon_args *uap)
 	}
 
 	NDINIT(&nd, LOOKUP, ISOPEN | FOLLOW | LOCKLEAF | AUDITVNODE1,
-	    UIO_USERSPACE, uap->name);
+	    UIO_USERSPACE, name);
 	error = namei(&nd);
 	if (error)
 		goto done;
@@ -2758,7 +2765,7 @@ swaponsomething(struct vnode *vp, void *id, u_long nblks,
  * rather than filename as specification.  We keep sw_vp around
  * only to make this work.
  */
-static int
+int
 kern_swapoff(struct thread *td, const char *name, enum uio_seg name_seg,
     u_int flags)
 {
