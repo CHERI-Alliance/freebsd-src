@@ -174,6 +174,8 @@ int	kern_fhstatfs(struct thread *td, fhandle_t fh, struct statfs *buf);
 int	kern_fpathconf(struct thread *td, int fd, int name, long *valuep);
 int	kern_freebsd11_getfsstat(struct thread *td,
 	    struct freebsd11_statfs *ubuf, long bufsize, int mode);
+int	kern_frmdirat(struct thread *td, int dfd, const char *path, int fd,
+	    enum uio_seg pathseg, int flag);
 int	kern_fstat(struct thread *td, int fd, struct stat *sbp);
 int	kern_fstatfs(struct thread *td, int fd, struct statfs *buf);
 int	kern_fsync(struct thread *td, int fd, bool fullsync);
@@ -304,8 +306,6 @@ int	kern_recvit(struct thread *td, int s, struct msghdr *mp,
 	    enum uio_seg fromseg, struct mbuf **controlp);
 int	kern_renameat(struct thread *td, int oldfd, const char *old, int newfd,
 	    const char *new, enum uio_seg pathseg);
-int	kern_frmdirat(struct thread *td, int dfd, const char *path, int fd,
-	    enum uio_seg pathseg, int flag);
 int	kern_sched_getparam(struct thread *td, struct thread *targettd,
 	    struct sched_param *param);
 int	kern_sched_getscheduler(struct thread *td, struct thread *targettd,
