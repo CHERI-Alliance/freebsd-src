@@ -45,7 +45,6 @@ enum idtype;
 struct itimerval;
 struct image_args;
 struct jail;
-struct kevent;
 struct kevent_copyops;
 struct kexec_segment;
 struct kld_file_stat;
