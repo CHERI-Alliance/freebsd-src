@@ -180,6 +180,8 @@ int	kern_fstat(struct thread *td, int fd, struct stat *sbp);
 int	kern_fstatfs(struct thread *td, int fd, struct statfs *buf);
 int	kern_fsync(struct thread *td, int fd, bool fullsync);
 int	kern_ftruncate(struct thread *td, int fd, off_t length);
+int	kern_funlinkat(struct thread *td, int dfd, const char *path, int fd,
+	    enum uio_seg pathseg, int flag, ino_t oldinum);
 int	kern_futimes(struct thread *td, int fd, const struct timeval *tptr,
 	    enum uio_seg tptrseg);
 int	kern_futimens(struct thread *td, int fd, const struct timespec *tptr,
@@ -385,8 +387,6 @@ int	kern_timerfd_settime(struct thread *td, int fd, int flags,
 	    const struct itimerspec *new_value, struct itimerspec *old_value);
 int	kern_truncate(struct thread *td, const char *path,
 	    enum uio_seg pathseg, off_t length);
-int	kern_funlinkat(struct thread *td, int dfd, const char *path, int fd,
-	    enum uio_seg pathseg, int flag, ino_t oldinum);
 int	kern_utimesat(struct thread *td, int fd, const char *path,
 	    enum uio_seg pathseg, const struct timeval *tptr,
 	    enum uio_seg tptrseg);
