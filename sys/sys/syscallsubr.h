@@ -296,6 +296,8 @@ int	kern_kevent_anonymous(struct thread *td, int nevents,
 int	kern_kevent_fp(struct thread *td, struct file *fp, int nchanges,
 	    int nevents, struct kevent_copyops *k_ops,
 	    const struct timespec *timeout);
+int	kern_kexec_load(struct thread *td, u_long entry,
+	    u_long nseg, struct kexec_segment *seg, u_long flags);
 int	kern_kill(struct thread *td, pid_t pid, int signum);
 int	kern_kldfind(struct thread *td, const char *file);
 int	kern_kldload(struct thread *td, const char *file, int *fileid);
@@ -544,8 +546,6 @@ int	kern_writev(struct thread *td, int fd, struct uio *auio);
 int	kern_socketpair(struct thread *td, int domain, int type, int protocol,
 	    int *rsv);
 int	kern_unmount(struct thread *td, const char *path, int flags);
-int	kern_kexec_load(struct thread *td, u_long entry,
-	    u_long nseg, struct kexec_segment *seg, u_long flags);
 
 int	user___specialfd(struct thread *td, int type, const void *req,
 	    size_t len);
