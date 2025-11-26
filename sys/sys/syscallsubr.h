@@ -104,6 +104,12 @@ struct mmap_req {
  */
 typedef int (copyinuio_t)(const struct iovec *iovp, unsigned int iovcnt,
     struct uio **iov);
+/*
+ * A updateiov_t takes a pointer to a struct uio previously created with
+ * copyinuio_t and a pointer to the corresponding iovec in userspace.
+ * It updates all lengths in userspace to match those in the uio.
+ */
+typedef int(updateiov_t)(const struct uio *uiop, struct iovec *iovp);
 
 uint64_t at2cnpflags(u_int at_flags, u_int mask);
 int	kern___acl_aclcheck_fd(struct thread *td, int filedes,
@@ -614,6 +620,11 @@ int	user_getsockopt(struct thread *td, int s, int level, int name,
 	    void *val, socklen_t *avalsize);
 int	user_ioctl(struct thread *td, int fd, u_long ucom, void *udata,
 	    void *datap);
+int	user_jail_get(struct thread *td, struct iovec *iovp,
+	    unsigned int iovcnt, int flags, copyinuio_t *copyinuio_f,
+	    updateiov_t *updateiov_f);
+int	user_jail_set(struct thread *td, struct iovec *iovp,
+	    unsigned int iovcnt, int flags, copyinuio_t *copyinuio_f);
 int	user_kldload(struct thread *td, const char *file);
 int	user_pdgetpid(struct thread *td, int fd, pid_t *pidp);
 int	user_poll(struct thread *td, struct pollfd *fds, u_int nfds,
