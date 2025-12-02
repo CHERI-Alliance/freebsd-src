@@ -141,10 +141,11 @@ TARGET_TRIPLE_ABI=	gnueabi
 .endif
 .endif
 MACHINE_TRIPLE_ABI?=	unknown
-MACHINE_TRIPLE?=${MACHINE_ARCH:S/amd64/x86_64/:S/riscv64c/riscv64/}-${MACHINE_TRIPLE_ABI}-freebsd${OS_REVISION}
+MACHINE_TRIPLE?=${MACHINE_ARCH:S/aarch64c/aarch64/:S/amd64/x86_64/:S/riscv64c/riscv64/}-${MACHINE_TRIPLE_ABI}-freebsd${OS_REVISION}
 TARGET_TRIPLE_ABI?=	unknown
-TARGET_TRIPLE?=	${TARGET_ARCH:S/amd64/x86_64/:S/riscv64c/riscv64/}-${TARGET_TRIPLE_ABI}-freebsd${OS_REVISION}
+TARGET_TRIPLE?=	${TARGET_ARCH:S/aarch64c/aarch64/:S/amd64/x86_64/:S/riscv64c/riscv64/}-${TARGET_TRIPLE_ABI}-freebsd${OS_REVISION}
 KNOWN_ARCHES?=	aarch64/arm64 \
+		aarch64c/arm64 \
 		amd64 \
 		armv7/arm \
 		i386 \
@@ -167,7 +168,7 @@ _t=		${TARGET_ARCH}/${TARGET}
 
 .if ${TARGET_ARCH} == "amd64"
 LIBCOMPAT_INCLUDE_DIRS+= i386
-.elif ${TARGET_ARCH} == "aarch64"
+.elif ${TARGET_ARCH:Maarch64*}
 LIBCOMPAT_INCLUDE_DIRS+= arm
 .endif
 

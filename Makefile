@@ -540,6 +540,7 @@ packages update-packages: .PHONY
 EXTRA_ARCHES_powerpc=	powerpc
 .endif
 .if defined(NO_CHERI_TARGETS)
+CHERI_ARCHES_arm64=
 CHERI_ARCHES_riscv=
 .endif
 TARGETS?= ${TARGET_MACHINE_LIST}
@@ -755,7 +756,7 @@ _THINNER=grep 'LINT' || true
 _THINNER=xargs grep -L "^.NO_UNIVERSE" || true
 .endif
 .if defined(NO_CHERI_KERNELS)
-_THINNER:=grep -v 'CHERI' | ${_THINNER}
+_THINNER:=grep -v 'CHERI\|MORELLO' | ${_THINNER}
 .endif
 KERNCONFS!=	cd ${KERNSRCDIR}/${TARGET}/conf && \
 		find [[:upper:][:digit:]]*[[:upper:][:digit:]] \
