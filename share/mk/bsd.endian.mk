@@ -1,6 +1,6 @@
 
 MACHINE_ARCH_LIST.little = \
-	aarch64 \
+	aarch64* \
 	amd64 \
 	armv7 \
 	i386 \

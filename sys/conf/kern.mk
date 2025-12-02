@@ -152,6 +152,21 @@ LDFLAGS += -Wl,-zbti-report=error
 # TODO: support outline atomics
 CFLAGS += -mno-outline-atomics
 INLINE_LIMIT?=	8000
+
+.if ${MACHINE_CPU:Mcheri}
+CFLAGS+=	-march=morello
+# XXX: these items below should be ABI defaults
+CFLAGS+=	-Xclang -morello-vararg=new -Xclang -morello-bounded-memargs
+CFLAGS+=	-cheri-codeptr-relocs
+LDFLAGS+=	-cheri-codeptr-relocs
+
+.if ${MACHINE_ARCH:Maarch*c*}
+CFLAGS+=	-mabi=purecap
+.else
+CFLAGS+=	-mabi=aapcs
+.endif
+.endif
+
 .endif
 
 #
@@ -411,6 +426,7 @@ CCLDFLAGS+=	-fuse-ld=${LD:[1]:S/^ld.//1W}
 
 # Set target-specific linker emulation name.
 LD_EMULATION_aarch64=aarch64elf
+LD_EMULATION_aarch64c=aarch64elf
 LD_EMULATION_amd64=elf_x86_64_fbsd
 LD_EMULATION_arm=armelf_fbsd
 LD_EMULATION_armv7=armelf_fbsd

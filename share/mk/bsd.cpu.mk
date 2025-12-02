@@ -6,7 +6,10 @@
 .if !defined(CPUTYPE) || empty(CPUTYPE)
 _CPUCFLAGS =
 . if ${MACHINE_CPUARCH} == "aarch64"
-MACHINE_CPU = arm64
+.  if ${MACHINE_ARCH:Maarch64*c*}
+MACHINE_CPU = cheri morello
+.  endif
+MACHINE_CPU += arm64
 . elif ${MACHINE_CPUARCH} == "amd64"
 MACHINE_CPU = amd64 sse2 sse mmx
 . elif ${MACHINE_CPUARCH} == "arm"
@@ -130,6 +133,11 @@ _CPUCFLAGS = -mcpu=${CPUTYPE}
 .  if ${CPUTYPE:Marmv*} != ""
 # Use -march when the CPU type is an architecture value, e.g. armv8.1-a
 _CPUCFLAGS = -march=${CPUTYPE}
+.  elif ${CPUTYPE} == "morello"
+# Don't use -march; we will add -march=morello later so it's not necessary, and
+# it's not sufficient to use _CPUCFLAGS either as NO_CPU_CFLAGS should not
+# suppress enabling Morello support.
+# It is also not a valid value for -mcpu.
 .  else
 # Otherwise assume we have a CPU type
 _CPUCFLAGS = -mcpu=${CPUTYPE}
@@ -279,6 +287,12 @@ MACHINE_CPU = ssse3 sse3
 MACHINE_CPU = sse3
 .  endif
 MACHINE_CPU += amd64 sse2 sse mmx
+###### arm64
+. elif ${MACHINE_CPUARCH} == "aarch64"
+.  if ${CPUTYPE} == "morello"
+MACHINE_CPU = cheri morello
+.  endif
+MACHINE_CPU += arm64
 ########## powerpc
 . elif ${MACHINE_ARCH} == "powerpc64"
 .  if ${CPUTYPE} == "e5500"
@@ -305,6 +319,21 @@ MACHINE_CPU += vsx3
 MACHINE_CPU = cheri
 .  endif
 MACHINE_CPU += riscv
+. endif
+.endif
+
+.if ${MACHINE_CPUARCH} == "aarch64"
+. if ${MACHINE_CPU:Mcheri}
+CFLAGS+=	-march=morello
+CFLAGS+=	-Xclang -morello-vararg=new -Xclang -morello-bounded-memargs
+. endif
+
+. if ${MACHINE_ARCH:Maarch64*c*}
+CFLAGS+=	-mabi=purecap
+LDFLAGS+=	-mabi=purecap
+. else
+CFLAGS+=	-mabi=aapcs
+LDFLAGS+=	-mabi=aapcs
 . endif
 .endif
 
@@ -408,7 +437,7 @@ MACHINE_ABI+=	long64
 .else
 MACHINE_ABI+=	long32
 .endif
-.if ${MACHINE_ARCH:Mriscv*c*}
+.if ${MACHINE_ARCH:Maarch64*c*} || ${MACHINE_ARCH:Mriscv*c*}
 MACHINE_ABI+=	purecap ptr128c
 .elif ${MACHINE_ABI:Mlong64}
 MACHINE_ABI+=	ptr64
