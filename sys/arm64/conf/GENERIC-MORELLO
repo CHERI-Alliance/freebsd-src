@@ -1,0 +1,8 @@
+#
+# GENERIC-MORELLO -- Generic kernel configuration file for Arm Morello platform
+#
+
+include "GENERIC"
+include "std.CHERI"
+
+ident	GENERIC-MORELLO
