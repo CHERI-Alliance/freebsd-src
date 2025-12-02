@@ -166,8 +166,18 @@ INLINE_LIMIT?=	8000
 # code model as "medium" and "medany" respectively.
 #
 .if ${MACHINE_CPUARCH} == "riscv"
-CFLAGS+=	-march=rv64imafdch_zifencei
-CFLAGS+=	-mabi=lp64
+RISCV_MARCH=	rv64imafdch_zifencei
+.if ${MACHINE_CPU:Mcheri}
+RISCV_MARCH:=	${RISCV_MARCH}xcheri
+.endif
+
+.if ${MACHINE_ARCH:Mriscv*c*}
+RISCV_ABI=	l64pc128
+.else
+RISCV_ABI=	lp64
+.endif
+
+CFLAGS+=	-march=${RISCV_MARCH} -mabi=${RISCV_ABI}
 CFLAGS.clang+=	-mcmodel=medium
 CFLAGS.gcc+=	-mcmodel=medany
 INLINE_LIMIT?=	8000
@@ -234,7 +244,7 @@ CFLAGS+=	-fwrapv
 #
 # Stack Smashing Protection (SSP) support
 #
-.if ${MK_SSP} != "no"
+.if ${MK_SSP} != "no" && !${MACHINE_ABI:Mpurecap}
 CFLAGS+=	-fstack-protector-strong
 .endif
 
@@ -409,4 +419,5 @@ LD_EMULATION_powerpc= elf32ppc_fbsd
 LD_EMULATION_powerpc64= elf64ppc_fbsd
 LD_EMULATION_powerpc64le= elf64lppc_fbsd
 LD_EMULATION_riscv64= elf64lriscv
+LD_EMULATION_riscv64c= elf64lriscv
 LD_EMULATION=${LD_EMULATION_${MACHINE_ARCH}}

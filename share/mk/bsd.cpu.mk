@@ -20,7 +20,10 @@ MACHINE_CPU = aim altivec
 . elif ${MACHINE_ARCH} == "powerpc64le"
 MACHINE_CPU = aim altivec vsx vsx2
 . elif ${MACHINE_CPUARCH} == "riscv"
-MACHINE_CPU = riscv
+.  if ${MACHINE_ARCH:Mriscv*c*}
+MACHINE_CPU = cheri
+.  endif
+MACHINE_CPU += riscv
 . endif
 .else
 
@@ -298,7 +301,10 @@ MACHINE_CPU += vsx3
 .  endif
 ########## riscv
 . elif ${MACHINE_CPUARCH} == "riscv"
-MACHINE_CPU = riscv
+.  if ${CPUTYPE} == "cheri"
+MACHINE_CPU = cheri
+.  endif
+MACHINE_CPU += riscv
 . endif
 .endif
 
@@ -328,7 +334,19 @@ LDFLAGS.bfd+= -Wl,--secure-plt
 .endif
 
 .if ${MACHINE_CPUARCH} == "riscv"
-CFLAGS += -march=rv64imafdc -mabi=lp64d
+RISCV_MARCH=	rv64imafdc
+.if ${MACHINE_CPU:Mcheri}
+RISCV_MARCH:=	${RISCV_MARCH}xcheri
+.endif
+
+.if ${MACHINE_ARCH:Mriscv*c*}
+RISCV_ABI=	l64pc128d
+.else
+RISCV_ABI=	lp64d
+.endif
+
+CFLAGS += -march=${RISCV_MARCH} -mabi=${RISCV_ABI}
+LDFLAGS += -march=${RISCV_MARCH} -mabi=${RISCV_ABI}
 .endif
 
 # NB: COPTFLAGS is handled in /usr/src/sys/conf/kern.pre.mk
@@ -371,8 +389,9 @@ CXXFLAGS += ${CXXFLAGS.${MACHINE_ARCH}}
 # Byte order:			big-endian, little-endian
 # Floating point ABI:		soft-float, hard-float
 # Size of long (size_t, etc):	long32, long64
-# Pointer type:			ptr32, ptr64
+# Pointer type:			ptr32, ptr64, ptr128c
 # Size of time_t:		time32, time64
+# Capability ABI:		purecap
 #
 .if (${MACHINE} == "arm" && (defined(CPUTYPE) && ${CPUTYPE:M*soft*})) || \
     (${MACHINE_ARCH} == "powerpc" && (defined(CPUTYPE) && ${CPUTYPE} == "e500"))
@@ -389,7 +408,9 @@ MACHINE_ABI+=	long64
 .else
 MACHINE_ABI+=	long32
 .endif
-.if ${MACHINE_ABI:Mlong64}
+.if ${MACHINE_ARCH:Mriscv*c*}
+MACHINE_ABI+=	purecap ptr128c
+.elif ${MACHINE_ABI:Mlong64}
 MACHINE_ABI+=	ptr64
 .else
 MACHINE_ABI+=	ptr32
