@@ -141,9 +141,9 @@ TARGET_TRIPLE_ABI=	gnueabi
 .endif
 .endif
 MACHINE_TRIPLE_ABI?=	unknown
-MACHINE_TRIPLE?=${MACHINE_ARCH:S/amd64/x86_64/}-${MACHINE_TRIPLE_ABI}-freebsd${OS_REVISION}
+MACHINE_TRIPLE?=${MACHINE_ARCH:S/amd64/x86_64/:S/riscv64c/riscv64/}-${MACHINE_TRIPLE_ABI}-freebsd${OS_REVISION}
 TARGET_TRIPLE_ABI?=	unknown
-TARGET_TRIPLE?=	${TARGET_ARCH:S/amd64/x86_64/}-${TARGET_TRIPLE_ABI}-freebsd${OS_REVISION}
+TARGET_TRIPLE?=	${TARGET_ARCH:S/amd64/x86_64/:S/riscv64c/riscv64/}-${TARGET_TRIPLE_ABI}-freebsd${OS_REVISION}
 KNOWN_ARCHES?=	aarch64/arm64 \
 		amd64 \
 		armv7/arm \
@@ -151,7 +151,8 @@ KNOWN_ARCHES?=	aarch64/arm64 \
 		powerpc \
 		powerpc64/powerpc \
 		powerpc64le/powerpc \
-		riscv64/riscv
+		riscv64/riscv \
+		riscv64c/riscv
 
 .if ${TARGET} == ${TARGET_ARCH}
 _t=		${TARGET}
