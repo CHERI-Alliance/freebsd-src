@@ -268,7 +268,11 @@ typedef	__vm_size_t	vm_size_t;
 
 typedef __rman_res_t    rman_res_t;
 
+#ifdef __CHERI__
+typedef __intcap_t	syscallarg_t;
+#else
 typedef __register_t	syscallarg_t;
+#endif
 
 #ifdef _KERNEL
 typedef	unsigned int	boolean_t;

@@ -49,7 +49,7 @@ typedef	int	sy_call_t(struct thread *, void *);
 
 typedef	void	(*systrace_probe_func_t)(struct syscall_args *,
 		    enum systrace_probe_t, int);
-typedef	void	(*systrace_args_func_t)(int, void *, uint64_t *, int *);
+typedef	void	(*systrace_args_func_t)(int, void *, uintptr_t *, int *);
 
 #ifdef _KERNEL
 extern systrace_probe_func_t	systrace_probe_func;
@@ -223,7 +223,7 @@ struct syscall_module_data {
 /* separate initialization vector so it can be used in a substructure */
 #define SYSENT_INIT_VALS(_syscallname) {			\
 	.sy_narg = (sizeof(struct _syscallname ## _args )	\
-	    / sizeof(register_t)),				\
+	    / sizeof(syscallarg_t)),				\
 	.sy_call = (sy_call_t *)&sys_##_syscallname,		\
 	.sy_auevent = SYS_AUE_##_syscallname,			\
 	.sy_systrace_args_func = NULL,				\
@@ -239,7 +239,7 @@ static struct sysent syscallname##_sysent = SYSENT_INIT_VALS(syscallname);
 #define	MAKE_SYSENT_COMPAT(syscallname)				\
 static struct sysent syscallname##_sysent = {			\
 	(sizeof(struct syscallname ## _args )			\
-	    / sizeof(register_t)),				\
+	    / sizeof(syscallarg_t)),				\
 	(sy_call_t *)& syscallname,				\
 	SYS_AUE_##syscallname					\
 }
@@ -279,7 +279,7 @@ struct syscall_helper_data {
 #define SYSCALL_INIT_HELPER_F(syscallname, flags) {		\
     .new_sysent = {						\
 	.sy_narg = (sizeof(struct syscallname ## _args )	\
-	    / sizeof(register_t)),				\
+	    / sizeof(syscallarg_t)),				\
 	.sy_call = (sy_call_t *)& sys_ ## syscallname,		\
 	.sy_auevent = SYS_AUE_##syscallname,			\
 	.sy_flags = (flags)					\
@@ -289,7 +289,7 @@ struct syscall_helper_data {
 #define SYSCALL_INIT_HELPER_COMPAT_F(syscallname, flags) {	\
     .new_sysent = {						\
 	.sy_narg = (sizeof(struct syscallname ## _args )	\
-	    / sizeof(register_t)),				\
+	    / sizeof(syscallarg_t)),				\
 	.sy_call = (sy_call_t *)& syscallname,			\
 	.sy_auevent = SYS_AUE_##syscallname,			\
 	.sy_flags = (flags)					\

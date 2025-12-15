@@ -82,7 +82,7 @@ SYSCALL32_MODULE(syscallname,                           \
 #define SYSCALL32_INIT_HELPER_F(syscallname, flags) {		\
     .new_sysent = {						\
 	.sy_narg = (sizeof(struct syscallname ## _args )	\
-	    / sizeof(register_t)),				\
+	    / sizeof(syscallarg_t)),				\
 	.sy_call = (sy_call_t *)& syscallname,			\
 	.sy_flags = (flags)					\
     },								\
@@ -92,7 +92,7 @@ SYSCALL32_MODULE(syscallname,                           \
 #define SYSCALL32_INIT_HELPER_COMPAT_F(syscallname, flags) {	\
     .new_sysent = {						\
 	.sy_narg = (sizeof(struct syscallname ## _args )	\
-	    / sizeof(register_t)),				\
+	    / sizeof(syscallarg_t)),				\
 	.sy_call = (sy_call_t *)& sys_ ## syscallname,		\
 	.sy_flags = (flags)					\
     },								\
