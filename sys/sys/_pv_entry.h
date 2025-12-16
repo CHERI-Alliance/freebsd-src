@@ -61,7 +61,10 @@ typedef struct pv_entry {
  * chunk is completely free.
  */
 #if PAGE_SIZE == 4 * 1024
-#ifdef __LP64__
+#ifdef __CHERI__
+#define	_NPCPV	83
+#define	_NPAD	2
+#elif __LP64__
 #define	_NPCPV	168
 #define	_NPAD	0
 #else
@@ -69,7 +72,10 @@ typedef struct pv_entry {
 #define	_NPAD	0
 #endif
 #elif PAGE_SIZE == 16 * 1024
-#ifdef __LP64__
+#ifdef __CHERI__
+#define	_NPCPV	338
+#define	_NPAD	4
+#elif __LP64__
 #define	_NPCPV	677
 #define	_NPAD	1
 #endif
