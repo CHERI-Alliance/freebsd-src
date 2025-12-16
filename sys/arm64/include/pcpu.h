@@ -40,6 +40,12 @@ typedef int (*pcpu_bp_harden)(void);
 typedef int (*pcpu_ssbd)(int);
 struct debug_monitor_state;
 
+#ifdef __CHERI__
+#define	PCPU_MD_FIELDS_PAD	0
+#else
+#define	PCPU_MD_FIELDS_PAD	189
+#endif
+
 #define	PCPU_MD_FIELDS							\
 	u_int	pc_acpi_id;	/* ACPI CPU id */			\
 	u_int	pc_midr;	/* stored MIDR value */			\
@@ -51,7 +57,7 @@ struct debug_monitor_state;
 	uint64_t pc_mpidr;						\
 	u_int	pc_bcast_tlbi_workaround;				\
 	uint64_t pc_release_addr;					\
-	char __pad[189]
+	char __pad[PCPU_MD_FIELDS_PAD]
 
 #ifdef _KERNEL
 
@@ -62,7 +68,11 @@ get_pcpu(void)
 {
 	struct pcpu *pcpu;
 
+#ifdef __CHERI__
+	__asm __volatile("mov   %0, c18" : "=&C"(pcpu));
+#else
 	__asm __volatile("mov   %0, x18" : "=&r"(pcpu));
+#endif
 	return (pcpu);
 }
 
@@ -71,8 +81,30 @@ get_curthread(void)
 {
 	struct thread *td;
 
+#ifdef __CHERI__
+	__asm __volatile("ldr   %0, [c18]" : "=&C"(td));
+#else
 	__asm __volatile("ldr	%0, [x18]" : "=&r"(td));
+#endif
 	return (td);
+}
+
+/*
+ * Set the pcpu pointer with a backup in tpidr_el1 to be
+ * loaded when entering the kernel from userland.
+ */
+static inline void
+init_cpu_pcpup(void *pcpup)
+{
+#ifdef __CHERI__
+	__asm __volatile(
+	    "mov c18, %0 \n"
+	    "msr ctpidr_el1, %0" :: "C"(pcpup));
+#else
+	__asm __volatile(
+	    "mov x18, %0 \n"
+	    "msr tpidr_el1, %0" :: "r"(pcpup));
+#endif
 }
 
 #define	curthread get_curthread()

@@ -807,13 +807,8 @@ initarm(struct arm64_bootparams *abp)
 	pcpup = &pcpu0;
 	pcpu_init(pcpup, 0, sizeof(struct pcpu));
 
-	/*
-	 * Set the pcpu pointer with a backup in tpidr_el1 to be
-	 * loaded when entering the kernel from userland.
-	 */
-	__asm __volatile(
-	    "mov x18, %0 \n"
-	    "msr tpidr_el1, %0" :: "r"(pcpup));
+	/* Initialize the pcpu pointer for this cpu. */
+	init_cpu_pcpup(pcpup);
 
 	/* locore.S sets sp_el0 to &thread0 so no need to set it here. */
 	PCPU_SET(curthread, &thread0);
