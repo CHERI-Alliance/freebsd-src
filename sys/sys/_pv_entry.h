@@ -61,7 +61,10 @@ typedef struct pv_entry {
  * chunk is completely free.
  */
 #if PAGE_SIZE == 4 * 1024
-#ifdef __LP64__
+#ifdef __CHERI__
+#define	_NPCPV	83
+#define	_NPAD	2
+#elif defined(__LP64__)
 #define	_NPCPV	168
 #define	_NPAD	0
 #else
@@ -69,7 +72,10 @@ typedef struct pv_entry {
 #define	_NPAD	0
 #endif
 #elif PAGE_SIZE == 16 * 1024
-#ifdef __LP64__
+#ifdef __CHERI__
+#define	_NPCPV	338
+#define	_NPAD	4
+#elif defined(__LP64__)
 #define	_NPCPV	677
 #define	_NPAD	1
 #endif
@@ -131,7 +137,7 @@ pc_is_free(struct pv_chunk *pc)
 static __inline struct pv_chunk *
 pv_to_chunk(pv_entry_t pv)
 {
-	return ((struct pv_chunk *)((uintptr_t)pv & ~(uintptr_t)PAGE_MASK));
+	return ((struct pv_chunk *)rounddown2((uintptr_t)pv, PAGE_SIZE));
 }
 
 #define PV_PMAP(pv) (pv_to_chunk(pv)->pc_pmap)
