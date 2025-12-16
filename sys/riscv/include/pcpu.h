@@ -41,13 +41,19 @@
 #include <machine/cpu.h>
 #include <machine/cpufunc.h>
 
+#ifdef __CHERI__
+#define	__PCPU_PAD	160
+#else
+#define	__PCPU_PAD	48
+#endif
+
 /* Keep in sync with db_show_mdpcpu() */
 #define	PCPU_MD_FIELDS							\
 	struct pmap *pc_curpmap;	/* Currently active pmap */	\
 	uint32_t pc_pending_ipis;	/* IPIs pending to this CPU */	\
 	uint32_t pc_hart;		/* Hart ID */			\
 	uint64_t pc_clock;						\
-	char __pad[48]			/* Pad to factor of PAGE_SIZE */
+	char __pad[__PCPU_PAD]		/* Pad to factor of PAGE_SIZE */
 
 #ifdef _KERNEL
 
@@ -59,7 +65,15 @@ get_pcpu(void)
 {
 	struct pcpu *pcpu;
 
+#ifdef __CHERI__
+#ifdef __riscv_xcheri
+	__asm __volatile("cmove %0, ctp" : "=&C"(pcpu));
+#else
+	__asm __volatile("cmv %0, ctp" : "=&C"(pcpu));
+#endif
+#else
 	__asm __volatile("mv %0, tp" : "=&r"(pcpu));
+#endif
 
 	return (pcpu);
 }
@@ -69,7 +83,15 @@ get_curthread(void)
 {
 	struct thread *td;
 
+#ifdef __CHERI__
+#ifdef __riscv_xcheri
+	__asm __volatile("clc %0, 0(ctp)" : "=&C"(td));
+#else
+	__asm __volatile("lc %0, 0(ctp)" : "=&C"(td));
+#endif
+#else
 	__asm __volatile("ld %0, 0(tp)" : "=&r"(td));
+#endif
 
 	return (td);
 }
