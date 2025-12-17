@@ -102,7 +102,7 @@
 #define	atomic_load_8(p)	__atomic_load_generic(p, int8_t, uint8_t, 8)
 #define	atomic_load_16(p)	__atomic_load_generic(p, int16_t, uint16_t, 16)
 #define	atomic_load_32(p)	__atomic_load_generic(p, int32_t, uint32_t, 32)
-#ifdef __LP64__
+#if __SIZEOF_LONG__ >= 8
 #define	atomic_load_64(p)	__atomic_load_generic(p, int64_t, uint64_t, 64)
 #endif
 #define	atomic_store_char(p, v)			\
@@ -119,7 +119,7 @@
 	__atomic_store_generic(p, v, int16_t, uint16_t, 16)
 #define	atomic_store_32(p, v)			\
 	__atomic_store_generic(p, v, int32_t, uint32_t, 32)
-#ifdef __LP64__
+#if __SIZEOF_LONG__ >= 8
 #define	atomic_store_64(p, v)			\
 	__atomic_store_generic(p, v, int64_t, uint64_t, 64)
 #endif
