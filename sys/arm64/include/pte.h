@@ -53,6 +53,16 @@ typedef	uint64_t	pt_entry_t;		/* page table entry */
 #define	ATTR_MASK_H		UINT64_C(0xfffc000000000000)
 #define	ATTR_MASK_L		UINT64_C(0x0000000000000fff)
 #define	ATTR_MASK		(ATTR_MASK_H | ATTR_MASK_L)
+#ifdef __CHERI__
+#define	ATTR_LC_MASK		(3UL << 61)
+#define	ATTR_LC_GEN_MASK	(1UL << 61)
+#define	ATTR_LC_DISABLED	(0UL << 61)
+#define	ATTR_LC_ENABLED		(1UL << 61)
+#define	ATTR_LC_GEN0		(2UL << 61)
+#define	ATTR_LC_GEN1		(3UL << 61)
+#define	ATTR_SC			(1UL << 60)
+#define	ATTR_CDBM		(1UL << 59)
+#endif
 
 /* Bits 58:55 are reserved for software */
 #define	ATTR_SW_UNUSED1		(1UL << 58)
@@ -126,6 +136,10 @@ typedef	uint64_t	pt_entry_t;		/* page table entry */
 #define	 ATTR_S2_MEMATTR_NC		0xf
 #define	 ATTR_S2_MEMATTR_WT		0xa
 #define	 ATTR_S2_MEMATTR_WB		0xf
+
+#ifdef __CHERI__
+#define	ATTR_CAP_RW	(ATTR_LC_ENABLED | ATTR_SC)
+#endif
 
 #define	ATTR_DESCR_MASK		3
 #define	ATTR_DESCR_VALID	1
