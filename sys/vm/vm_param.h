@@ -67,6 +67,8 @@
 
 #include <machine/vmparam.h>
 
+#include <cheri/cheric.h>
+
 /*
  * CTL_VM identifiers
  */
@@ -120,6 +122,31 @@ struct xswdev {
 #define PHYS_AVAIL_ENTRIES      (VM_PHYSSEG_MAX * 2)
 #endif
 #define PHYS_AVAIL_COUNT        (PHYS_AVAIL_ENTRIES + 2)
+
+/*
+ * Check that a physical address range completely lies within the direct map.
+ */
+#define	PHYS_SZ_IN_DMAP(pa, sz)					\
+    (PHYS_IN_DMAP((pa)) && PHYS_IN_DMAP((pa) + (sz) - 1))
+
+#define	PHYS_TO_DMAP_PAGE(pa)						\
+({									\
+	KASSERT(__is_aligned(pa, PAGE_SIZE),				\
+	    ("%s: PA is not page aligned, PA: 0x%jx", __func__,		\
+	    (uintmax_t)(pa)));						\
+	cheri_kern_bounds_set_exact(PHYS_TO_DMAP(pa), PAGE_SIZE);	\
+})
+
+#define	PHYS_TO_DMAP_SUBPAGE(pa, len)					\
+({									\
+	KASSERT(PHYS_SZ_IN_DMAP(pa, len),				\
+	    ("%s: PA region is outside of dmap, PA: [0x%jx, 0x%jx)",	\
+	    __func__, (uintmax_t)(pa), (uintmax_t)((pa) + (len))));	\
+	KASSERT(trunc_page(pa) == trunc_page((pa) + (len) - 1),		\
+	    ("%s: PA chunk crosses page boundary, PA: [0x%jx, 0x%jx)",	\
+	    __func__, (uintmax_t)(pa), (uintmax_t)((pa) + (len))));	\
+	cheri_kern_bounds_set_exact(PHYS_TO_DMAP(pa), (len));		\
+})
 
 #ifndef ASSEMBLER
 #ifdef _KERNEL
