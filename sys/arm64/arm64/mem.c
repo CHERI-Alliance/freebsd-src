@@ -109,8 +109,9 @@ memrw(struct cdev *dev, struct uio *uio, int flags)
 		case CDEV_MINOR_MEM:
 			/* If within the DMAP use this to copy from */
 			if (PHYS_IN_DMAP(v)) {
-				v = PHYS_TO_DMAP(v);
-				error = uiomove((void *)v, cnt, uio);
+				error = uiomove(
+				    (void *)PHYS_TO_DMAP_SUBPAGE(v, cnt),
+				    cnt, uio);
 				break;
 			}
 
