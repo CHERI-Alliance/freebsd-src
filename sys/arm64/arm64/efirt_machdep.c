@@ -56,6 +56,7 @@
 #include <vm/vm_object.h>
 #include <vm/vm_page.h>
 #include <vm/vm_pager.h>
+#include <vm/vm_param.h>
 #include <vm/vm_radix.h>
 
 static vm_object_t obj_1t1_pt;
@@ -113,7 +114,7 @@ efi_1t1_l3(vm_offset_t va)
 		mphys = PTE_TO_PHYS(*l0);
 	}
 
-	l1 = PHYS_TO_DMAP(mphys);
+	l1 = PHYS_TO_DMAP_PAGE(mphys);
 	l1_idx = pmap_l1_index(va);
 	l1 += l1_idx;
 	if (*l1 == 0) {
@@ -125,7 +126,7 @@ efi_1t1_l3(vm_offset_t va)
 		mphys = PTE_TO_PHYS(*l1);
 	}
 
-	l2 = PHYS_TO_DMAP(mphys);
+	l2 = PHYS_TO_DMAP_PAGE(mphys);
 	l2_idx = pmap_l2_index(va);
 	l2 += l2_idx;
 	if (*l2 == 0) {
@@ -137,7 +138,7 @@ efi_1t1_l3(vm_offset_t va)
 		mphys = PTE_TO_PHYS(*l2);
 	}
 
-	l3 = PHYS_TO_DMAP(mphys);
+	l3 = PHYS_TO_DMAP_PAGE(mphys);
 	l3 += pmap_l3_index(va);
 	KASSERT(*l3 == 0, ("%s: Already mapped: va %#jx *pt %#jx", __func__,
 	    va, *l3));
@@ -312,3 +313,10 @@ efi_arch_leave(void)
 	vm_fault_enable_pagefaults(curthread->td_md.md_efirt_dis_pf);
 }
 
+#ifdef __CHERI__
+int
+efi_rt_arch_call(struct efirt_callinfo *ec)
+{
+	panic("not implemented");
+}
+#endif
