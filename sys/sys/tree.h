@@ -32,6 +32,11 @@
 #define	_SYS_TREE_H_
 
 #include <sys/cdefs.h>
+#ifdef _KERNEL
+#include <sys/stddef.h>
+#else
+#include <stddef.h>
+#endif
 
 /*
  * This file defines data structures for different types of trees:
@@ -331,9 +336,9 @@ struct {								\
  */
 #define _RB_LINK(elm, dir, field)	(elm)->field.rbe_link[dir]
 #define _RB_UP(elm, field)		_RB_LINK(elm, 0, field)
-#define _RB_L				((__uintptr_t)1)
-#define _RB_R				((__uintptr_t)2)
-#define _RB_LR				((__uintptr_t)3)
+#define _RB_L				((ptraddr_t)1)
+#define _RB_R				((ptraddr_t)2)
+#define _RB_LR				((ptraddr_t)3)
 #define _RB_BITS(elm)			((__uintptr_t)elm)
 #define _RB_BITSUP(elm, field)		_RB_BITS(_RB_UP(elm, field))
 #define _RB_PTR_OP(elm, op, dir)	((__typeof(elm))		\
@@ -350,7 +355,7 @@ struct {								\
 
 #define RB_SET_PARENT(dst, src, field) do {				\
 	_RB_UP(dst, field) = (__typeof(src))((__uintptr_t)src |		\
-	    (_RB_BITSUP(dst, field) & _RB_LR));				\
+	    (ptraddr_t)(_RB_BITSUP(dst, field) & _RB_LR));		\
 } while (/*CONSTCOND*/ 0)
 
 #define RB_SET(elm, parent, field) do {					\
@@ -541,7 +546,7 @@ name##_RB_INSERT_COLOR(struct name *head,				\
 	 * one.								\
 	 */								\
 	struct type *child, *child_up, *gpar;				\
-	__uintptr_t elmdir, sibdir;					\
+	ptraddr_t elmdir, sibdir;					\
 									\
 	do {								\
 		/* the rank of the tree rooted at elm grew */		\
@@ -647,7 +652,7 @@ name##_RB_REMOVE_COLOR(struct name *head,				\
     struct type *parent, struct type *elm)				\
 {									\
 	struct type *gpar, *sib, *up;					\
-	__uintptr_t elmdir, sibdir;					\
+	ptraddr_t elmdir, sibdir;					\
 									\
 	if (RB_RIGHT(parent, field) == elm &&				\
 	    RB_LEFT(parent, field) == elm) {				\
