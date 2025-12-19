@@ -41,3 +41,8 @@ SYSCTL_NODE(_security, OID_AUTO, cheri, CTLFLAG_RD, 0,
 
 SYSCTL_NODE(_security_cheri, OID_AUTO, stats, CTLFLAG_RD, 0,
     "CHERI statistics");
+
+bool	security_cheri_bound_legacy_capabilities;
+SYSCTL_BOOL(_security_cheri, OID_AUTO, bound_legacy_capabilities,
+    CTLFLAG_RWTUN, &security_cheri_bound_legacy_capabilities, 0,
+    "Set bounds on userspace capabilities created for legacy ABIs.");
