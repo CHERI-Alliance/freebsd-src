@@ -543,7 +543,7 @@ copyout_map(struct thread *td, vm_offset_t *addr, size_t sz)
 	size = (vm_size_t)round_page(sz);
 	if (size == 0)
 		return (EINVAL);
-	error = vm_mmap_object(&vms->vm_map, addr, size, VM_PROT_RW_CAP,
+	error = vm_mmap_object(&vms->vm_map, addr, 0, size, VM_PROT_RW_CAP,
 	    VM_PROT_ALL, MAP_PRIVATE | MAP_ANON, NULL, 0,
 	    FALSE, td);
 	return (error);
