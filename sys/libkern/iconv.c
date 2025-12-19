@@ -29,10 +29,13 @@
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/kernel.h>
+#include <sys/abi_compat.h>
 #include <sys/iconv.h>
 #include <sys/malloc.h>
 #include <sys/mount.h>
+#include <sys/proc.h>
 #include <sys/sx.h>
+#include <sys/sysctl.h>
 #include <sys/syslog.h>
 
 #include "iconv_converter_if.h"
@@ -396,6 +399,28 @@ iconv_add(const char *converter, const char *to, const char *from)
 	return iconv_register_cspair(to, from, dcp, NULL, &csp);
 }
 
+#ifdef COMPAT_FREEBSD32
+struct iconv_add32 {
+	int	ia_version;
+	char	ia_converter[ICONV_CNVNMAXLEN];
+	char	ia_to[ICONV_CSNMAXLEN];
+	char	ia_from[ICONV_CSNMAXLEN];
+	int	ia_datalen;
+	uint32_t ia_data;
+};
+#endif
+
+#ifdef COMPAT_FREEBSD64
+struct iconv_add64 {
+	int	ia_version;
+	char	ia_converter[ICONV_CNVNMAXLEN];
+	char	ia_to[ICONV_CSNMAXLEN];
+	char	ia_from[ICONV_CSNMAXLEN];
+	int	ia_datalen;
+	uint64_t ia_data;
+};
+#endif
+
 /*
  * Add new charset pair
  */
@@ -404,34 +429,61 @@ iconv_sysctl_add(SYSCTL_HANDLER_ARGS)
 {
 	struct iconv_converter_class *dcp;
 	struct iconv_cspair *csp;
-	struct iconv_add_in din;
+	union {
+		struct iconv_add_in din;
+#ifdef COMPAT_FREEBSD32
+		struct iconv_add32 din32;
+#endif
+#ifdef COMPAT_FREEBSD64
+		struct iconv_add64 din64;
+#endif
+	} du;
+	const void *ia_data;
 	struct iconv_add_out dout;
 	int error;
 
-	error = SYSCTL_IN(req, &din, sizeof(din));
+#ifdef COMPAT_FREEBSD32
+	if (req->flags & SCTL_MASK32) {
+		error = SYSCTL_IN(req, &du.din32, sizeof(du.din32));
+		ia_data = USER_PTR((void*)(uintptr_t)du.din32.ia_data,
+		    du.din32.ia_datalen);
+	} else
+#endif
+#ifdef COMPAT_FREEBSD64
+	if (req->flags & SCTL_MASK64) {
+		error = SYSCTL_IN(req, &du.din64, sizeof(du.din64));
+		ia_data = USER_PTR((void*)(uintptr_t)du.din64.ia_data,
+		    du.din64.ia_datalen);
+	} else
+#endif
+	{
+		error = SYSCTL_IN(req, &du.din, sizeof(du.din));
+		ia_data = du.din.ia_data;
+	}
 	if (error)
 		return error;
-	if (din.ia_version != ICONV_ADD_VER)
+	if (du.din.ia_version != ICONV_ADD_VER)
 		return EINVAL;
-	if (din.ia_datalen > ICONV_CSMAXDATALEN)
+	if (du.din.ia_datalen > ICONV_CSMAXDATALEN)
 		return EINVAL;
-	if (strnlen(din.ia_from, sizeof(din.ia_from)) >= ICONV_CSNMAXLEN)
+	if (strnlen(du.din.ia_from, sizeof(du.din.ia_from)) >= ICONV_CSNMAXLEN)
 		return EINVAL;
-	if (strnlen(din.ia_to, sizeof(din.ia_to)) >= ICONV_CSNMAXLEN)
+	if (strnlen(du.din.ia_to, sizeof(du.din.ia_to)) >= ICONV_CSNMAXLEN)
 		return EINVAL;
-	if (strnlen(din.ia_converter, sizeof(din.ia_converter)) >= ICONV_CNVNMAXLEN)
+	if (strnlen(du.din.ia_converter, sizeof(du.din.ia_converter)) >= ICONV_CNVNMAXLEN)
 		return EINVAL;
-	if (iconv_lookupconv(din.ia_converter, &dcp) != 0)
+	if (iconv_lookupconv(du.din.ia_converter, &dcp) != 0)
 		return EINVAL;
 	sx_xlock(&iconv_lock);
-	error = iconv_register_cspair(din.ia_to, din.ia_from, dcp, NULL, &csp);
+	error = iconv_register_cspair(du.din.ia_to, du.din.ia_from, dcp,
+	    NULL, &csp);
 	if (error) {
 		sx_xunlock(&iconv_lock);
 		return error;
 	}
-	if (din.ia_datalen) {
-		csp->cp_data = malloc(din.ia_datalen, M_ICONVDATA, M_WAITOK);
-		error = copyin(din.ia_data, csp->cp_data, din.ia_datalen);
+	if (du.din.ia_datalen) {
+		csp->cp_data = malloc(du.din.ia_datalen, M_ICONVDATA, M_WAITOK);
+		error = copyin(ia_data, csp->cp_data, du.din.ia_datalen);
 		if (error)
 			goto bad;
 	}
@@ -440,7 +492,8 @@ iconv_sysctl_add(SYSCTL_HANDLER_ARGS)
 	if (error)
 		goto bad;
 	sx_xunlock(&iconv_lock);
-	ICDEBUG("%s => %s, %d bytes\n",din.ia_from, din.ia_to, din.ia_datalen);
+	ICDEBUG("%s => %s, %d bytes\n", du.din.ia_from, du.din.ia_to,
+	    du.din.ia_datalen);
 	return 0;
 bad:
 	iconv_unregister_cspair(csp);
@@ -449,7 +502,7 @@ bad:
 }
 
 SYSCTL_PROC(_kern_iconv, OID_AUTO, add,
-    CTLFLAG_RW | CTLTYPE_OPAQUE | CTLFLAG_MPSAFE, NULL, 0,
+    CTLFLAG_RW | CTLTYPE_OPAQUE | CTLFLAG_MPSAFE | CTLFLAG_PTRIN, NULL, 0,
     iconv_sysctl_add, "S,xlat",
     "register charset pair");
 
