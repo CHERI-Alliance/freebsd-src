@@ -1002,7 +1002,7 @@ pci_bar_mmap(device_t pcidev, struct pci_bar_mmap *pbm)
 	}
 	if ((pbm->pbm_flags & PCIIO_BAR_MMAP_EXCL) != 0)
 		flags |= MAP_CHECK_EXCL;
-	error = vm_mmap_object(map, &addr, plen, prot, prot, flags, obj, 0,
+	error = vm_mmap_object(map, &addr, 0, plen, prot, prot, flags, obj, 0,
 	    FALSE, td);
 	if (error != 0) {
 		vm_object_deallocate(obj);

@@ -1563,12 +1563,12 @@ out:
 
 static int
 shm_mmap_large(struct shmfd *shmfd, vm_map_t map, vm_offset_t *addr,
-    vm_size_t size, vm_prot_t prot, vm_prot_t max_prot, int flags,
-    vm_ooffset_t foff, struct thread *td)
+    vm_offset_t maxaddr, vm_size_t size, vm_prot_t prot, vm_prot_t max_prot,
+    int flags, vm_ooffset_t foff, struct thread *td)
 {
 	struct vmspace *vms;
 	vm_map_entry_t next_entry, prev_entry;
-	vm_offset_t align, mask, maxaddr;
+	vm_offset_t align, mask;
 	int docow, error, rv, try;
 	bool curmap;
 
@@ -1596,9 +1596,8 @@ shm_mmap_large(struct shmfd *shmfd, vm_map_t map, vm_offset_t *addr,
 	mask = pagesizes[shmfd->shm_lp_psind] - 1;
 	if ((foff & mask) != 0)
 		return (EINVAL);
-	maxaddr = vm_map_max(map);
-	if ((flags & MAP_32BIT) != 0 && maxaddr > MAP_32BIT_MAX_ADDR)
-		maxaddr = MAP_32BIT_MAX_ADDR;
+	if (maxaddr == 0)
+		maxaddr = vm_map_max(map);
 	if (size == 0 || (size & mask) != 0 ||
 	    (*addr != 0 && ((*addr & mask) != 0 ||
 	    *addr + size < *addr || *addr + size > maxaddr)))
@@ -1676,9 +1675,9 @@ fail:
 }
 
 static int
-shm_mmap(struct file *fp, vm_map_t map, vm_offset_t *addr, vm_size_t objsize,
-    vm_prot_t prot, vm_prot_t max_maxprot, int flags,
-    vm_ooffset_t foff, struct thread *td)
+shm_mmap(struct file *fp, vm_map_t map, vm_pointer_t *addr,
+    vm_offset_t max_addr, vm_size_t objsize, vm_prot_t prot,
+    vm_prot_t max_maxprot, int flags, vm_ooffset_t foff, struct thread *td)
 {
 	struct shmfd *shmfd;
 	vm_prot_t maxprot;
@@ -1746,15 +1745,15 @@ shm_mmap(struct file *fp, vm_map_t map, vm_offset_t *addr, vm_size_t objsize,
 
 	if (shm_largepage(shmfd)) {
 		writecnt = false;
-		error = shm_mmap_large(shmfd, map, addr, objsize, prot,
-		    maxprot, flags, foff, td);
+		error = shm_mmap_large(shmfd, map, addr, max_addr, objsize,
+		    prot, maxprot, flags, foff, td);
 	} else {
 		if (writecnt) {
 			vm_pager_update_writecount(shmfd->shm_object, 0,
 			    objsize);
 		}
-		error = vm_mmap_object(map, addr, objsize, prot, maxprot, flags,
-		    shmfd->shm_object, foff, writecnt, td);
+		error = vm_mmap_object(map, addr, max_addr, objsize, prot,
+		    maxprot, flags, shmfd->shm_object, foff, writecnt, td);
 	}
 	if (error != 0) {
 		if (writecnt)

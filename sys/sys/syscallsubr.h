@@ -90,6 +90,7 @@ typedef int (*mmap_check_fp_fn)(struct file *, int, int, int);
 
 struct mmap_req {
 	vm_offset_t		mr_hint;
+	vm_offset_t		mr_max_addr;
 	vm_size_t		mr_len;
 	int			mr_prot;
 	int			mr_flags;

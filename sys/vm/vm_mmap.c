@@ -181,7 +181,7 @@ kern_mmap(struct thread *td, const struct mmap_req *mrp)
 	struct file *fp;
 	struct proc *p;
 	off_t pos;
-	vm_offset_t addr, orig_addr;
+	vm_offset_t addr, max_addr, orig_addr;
 	vm_size_t len, pageoff, size;
 	vm_prot_t cap_maxprot;
 	int align, error, fd, flags, max_prot, prot;
@@ -189,6 +189,7 @@ kern_mmap(struct thread *td, const struct mmap_req *mrp)
 	mmap_check_fp_fn check_fp_fn;
 
 	orig_addr = addr = mrp->mr_hint;
+	max_addr = mrp->mr_max_addr;
 	len = mrp->mr_len;
 	prot = mrp->mr_prot;
 	flags = mrp->mr_flags;
@@ -324,12 +325,22 @@ kern_mmap(struct thread *td, const struct mmap_req *mrp)
 			EXTERROR(EINVAL, "mapping outside vm_map");
 			return (EINVAL);
 		}
-		if (flags & MAP_32BIT && addr + size > MAP_32BIT_MAX_ADDR) {
-			return (EXTERROR(EINVAL,
+		if (flags & MAP_32BIT) {
+			if (max_addr == 0)
+				max_addr = MAP_32BIT_MAX_ADDR;
+			else
+				max_addr = MIN(max_addr, MAP_32BIT_MAX_ADDR);
+			if (addr + size > MAP_32BIT_MAX_ADDR) {
+				return (EXTERROR(EINVAL,
 		    "fixed 32bit mapping of [%#jx %#jx] does not fit into 4G",
-			    addr, addr + size));
+				    addr, addr + size));
+			}
 		}
 	} else if (flags & MAP_32BIT) {
+		if (max_addr == 0)
+			max_addr = MAP_32BIT_MAX_ADDR;
+		else
+			max_addr = MIN(max_addr, MAP_32BIT_MAX_ADDR);
 		/*
 		 * For MAP_32BIT, override the hint if it is too high and
 		 * do not bother moving the mapping past the heap (since
@@ -364,16 +375,16 @@ kern_mmap(struct thread *td, const struct mmap_req *mrp)
 		 */
 		error = 0;
 	} else if ((flags & MAP_GUARD) != 0) {
-		error = vm_mmap_object(&vms->vm_map, &addr, size, VM_PROT_NONE,
-		    VM_PROT_NONE, flags, NULL, pos, FALSE, td);
+		error = vm_mmap_object(&vms->vm_map, &addr, max_addr, size,
+		    VM_PROT_NONE, VM_PROT_NONE, flags, NULL, pos, FALSE, td);
 	} else if ((flags & MAP_ANON) != 0) {
 		/*
 		 * Mapping blank space is trivial.
 		 *
 		 * This relies on VM_PROT_* matching PROT_*.
 		 */
-		error = vm_mmap_object(&vms->vm_map, &addr, size, prot,
-		    max_prot, flags, NULL, pos, FALSE, td);
+		error = vm_mmap_object(&vms->vm_map, &addr, max_addr, size,
+		    prot, max_prot, flags, NULL, pos, FALSE, td);
 	} else {
 		/*
 		 * Mapping file, get fp for validation and don't let the
@@ -408,8 +419,8 @@ kern_mmap(struct thread *td, const struct mmap_req *mrp)
 		if (fp->f_ops == &shm_ops && shm_largepage(fp->f_data))
 			addr = orig_addr;
 		/* This relies on VM_PROT_* matching PROT_*. */
-		error = fo_mmap(fp, &vms->vm_map, &addr, size, prot,
-		    max_prot & cap_maxprot, flags, pos, td);
+		error = fo_mmap(fp, &vms->vm_map, &addr, max_addr, size,
+		    prot, max_prot & cap_maxprot, flags, pos, td);
 	}
 
 	if (error == 0)
@@ -1508,7 +1519,7 @@ vm_mmap(vm_map_t map, vm_offset_t *addr, vm_size_t size, vm_prot_t prot,
 	if (error)
 		return (error);
 
-	error = vm_mmap_object(map, addr, size, prot, maxprot, flags, object,
+	error = vm_mmap_object(map, addr, 0, size, prot, maxprot, flags, object,
 	    foff, writecounted, td);
 	if (error != 0 && object != NULL) {
 		/*
@@ -1560,11 +1571,12 @@ kern_mmap_racct_check(struct thread *td, vm_map_t map, vm_size_t size)
  * map.  Called by mmap for MAP_ANON, vm_mmap, shm_mmap, and vn_mmap.
  */
 int
-vm_mmap_object(vm_map_t map, vm_offset_t *addr, vm_size_t size, vm_prot_t prot,
-    vm_prot_t maxprot, int flags, vm_object_t object, vm_ooffset_t foff,
-    boolean_t writecounted, struct thread *td)
+vm_mmap_object(vm_map_t map, vm_offset_t *addr, vm_offset_t max_addr,
+    vm_size_t size, vm_prot_t prot, vm_prot_t maxprot, int flags,
+    vm_object_t object, vm_ooffset_t foff, boolean_t writecounted,
+    struct thread *td)
 {
-	vm_offset_t default_addr, max_addr;
+	vm_offset_t default_addr;
 	int docow, error, findspace, rv;
 	bool curmap, fitit;
 
@@ -1645,9 +1657,6 @@ vm_mmap_object(vm_map_t map, vm_offset_t *addr, vm_size_t size, vm_prot_t prot,
 			    MAP_ALIGNMENT_SHIFT);
 		else
 			findspace = VMFS_OPTIMAL_SPACE;
-		max_addr = 0;
-		if ((flags & MAP_32BIT) != 0)
-			max_addr = MAP_32BIT_MAX_ADDR;
 		if (curmap) {
 			default_addr =
 			    round_page((vm_offset_t)td->td_proc->p_vmspace->
@@ -1658,6 +1667,10 @@ vm_mmap_object(vm_map_t map, vm_offset_t *addr, vm_size_t size, vm_prot_t prot,
 			    default_addr, max_addr, findspace, prot, maxprot,
 			    docow);
 		} else {
+			if (max_addr != 0 && *addr + size > max_addr) {
+				return (EXTERROR(ENOMEM,
+				    "range extends past max_addr"));
+			}
 			rv = vm_map_find(map, object, foff, addr, size,
 			    max_addr, findspace, prot, maxprot, docow);
 		}

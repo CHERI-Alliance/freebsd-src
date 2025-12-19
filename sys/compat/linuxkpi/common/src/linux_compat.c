@@ -1654,8 +1654,9 @@ linux_file_mmap_sub(struct thread *td, vm_size_t objsize, vm_prot_t prot,
 }
 
 static int
-linux_file_mmap(struct file *fp, vm_map_t map, vm_offset_t *addr, vm_size_t size,
-    vm_prot_t prot, vm_prot_t cap_maxprot, int flags, vm_ooffset_t foff,
+linux_file_mmap(struct file *fp, vm_map_t map, vm_pointer_t *addr,
+    vm_offset_t max_addr, vm_size_t size, vm_prot_t prot,
+    vm_prot_t cap_maxprot, int flags, vm_ooffset_t foff,
     struct thread *td)
 {
 	struct linux_file *filp;
@@ -1713,8 +1714,8 @@ linux_file_mmap(struct file *fp, vm_map_t map, vm_offset_t *addr, vm_size_t size
 	if (error != 0)
 		goto out;
 
-	error = vm_mmap_object(map, addr, size, prot, maxprot, flags, object,
-	    foff, FALSE, td);
+	error = vm_mmap_object(map, addr, max_addr, size, prot, maxprot,
+	    flags, object, foff, FALSE, td);
 	if (error != 0)
 		vm_object_deallocate(object);
 out:
