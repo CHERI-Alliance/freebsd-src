@@ -31,6 +31,10 @@
 
 #include <sys/abi_types.h>
 
+#ifdef __CHERI__
+#include <cheri/cheri.h>
+#endif
+
 /*
  * Helper types and macros for translating objects between different ABIs.
  */
@@ -81,5 +85,56 @@
 	CP((src).fld, (dst).fld, sec);				\
 	FU64_CP((src).fld, (dst).fld, frac);			\
 } while (0)
+
+/*
+ * Macros to create userspace capabilities from virtual addresses.
+ * Addresses are assumed to be relative to the current userspace
+ * thread's address space and are created from the DDC or PCC of
+ * the current PCB.
+ */
+#ifdef __CHERI__
+/*
+ * Derive out-of-bounds and small values from NULL.  This allows common
+ * sentinel values to work.
+ */
+#define ___USER_CFROMPTR(ptr, cap)					\
+    ((void *)(uintptr_t)(ptr) == NULL ? NULL :				\
+     ((vm_offset_t)(ptr) < 4096 ||					\
+      (vm_offset_t)(ptr) > VM_MAXUSER_ADDRESS) ?			\
+	(void * __capability)(__uintcap_t)(ptraddr_t)(ptr) :		\
+	__builtin_cheri_address_set((cap), (ptraddr_t)(ptr)))
+
+#define	USER_PTR_UNBOUND(ptr)						\
+	___USER_CFROMPTR((ptr), __USER_DDC)
+
+#define	USER_CODE_PTR(ptr)						\
+	___USER_CFROMPTR((ptr), __USER_PCC)
+
+#define	USER_PTR(ptr, len)						\
+({									\
+	void * __capability unbound = USER_PTR_UNBOUND(ptr);		\
+	(security_cheri_bound_legacy_capabilities &&			\
+	    __builtin_cheri_tag_get(unbound) ?				\
+	    __builtin_cheri_bounds_set(unbound, (len)) : unbound);	\
+})
+
+#else /* !__CHERI__ */
+
+#define	USER_PTR_UNBOUND(ptr)	((void *)(uintptr_t)(ptr))
+#define	USER_CODE_PTR(ptr)	((void *)(uintptr_t)(ptr))
+#define	USER_PTR(ptr, len)	((void *)(uintptr_t)(ptr))
+
+#endif /* !__CHERI__ */
+
+#define	USER_PTR_ADDR(ptr)	USER_PTR_UNBOUND(ptr)
+#define	USER_PTR_ARRAY(objp, cnt) \
+     USER_PTR((objp), sizeof(*(objp)) * (cnt))
+#define	USER_PTR_OBJ(objp)	USER_PTR((objp), sizeof(*(objp)))
+/*
+ * NOTE: we can't place tigher bounds because we don't know what the
+ * length is until after we use it.
+ */
+#define	USER_PTR_STR(strp)	USER_PTR_UNBOUND(strp)
+#define	USER_PTR_PATH(path)	USER_PTR((path), MAXPATHLEN)
 
 #endif /* !_ABI_COMPAT_H_ */
