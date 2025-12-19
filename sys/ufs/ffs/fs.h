@@ -265,6 +265,7 @@
 #define	FFS_ADJ_DEPTH		18	/* adjust directory inode depth */
 #define	FFS_MAXID		18	/* number of valid ffs ids */
 
+#ifndef MAKEFS
 /*
  * Command structure passed in to the filesystem to adjust filesystem values.
  */
@@ -272,10 +273,11 @@
 struct fsck_cmd {
 	int32_t	version;	/* version of command structure */
 	int32_t	handle;		/* reference to filesystem to be changed */
-	int64_t	value;		/* inode or block number to be affected */
+	int64ptr_t value;	/* inode or block number to be affected */
 	int64_t	size;		/* amount or range to be adjusted */
 	int64_t	spare;		/* reserved for future use */
 };
+#endif
 
 /*
  * A recovery structure placed at the end of the boot block area by newfs
