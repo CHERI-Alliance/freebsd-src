@@ -42,6 +42,7 @@ extern void *kernel_root_cap;
  */
 SYSCTL_DECL(_security_cheri);
 SYSCTL_DECL(_security_cheri_stats);
+extern bool	security_cheri_bound_legacy_capabilities;
 
 #endif /* _KERNEL */
 
