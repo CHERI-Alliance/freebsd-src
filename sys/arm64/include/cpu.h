@@ -329,9 +329,11 @@ ADDRESS_TRANSLATE_FUNC(s1e1w)
 
 #endif /* !__ASSEMBLER__ */
 
+#ifndef __CHERI__
 #define MEMSET_EARLY_FUNC	memset_std
 #define MEMCPY_EARLY_FUNC	memcpy_std
 #define MEMMOVE_EARLY_FUNC	memmove_std
+#endif
 
 #endif /* _KERNEL */
 

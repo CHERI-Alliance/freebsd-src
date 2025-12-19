@@ -10,7 +10,14 @@ kern/subr_efi_map.c				standard
 kern/subr_intr.c				optional intrng
 kern/subr_physmem.c				standard
 libkern/bcopy.c					optional cpu_cheri
+libkern/memcmp.c				optional cpu_cheri \
+	compile-with "${NORMAL_C:N-fsanitize*}"
+libkern/memset.c				optional cpu_cheri \
+	compile-with "${NORMAL_C:N-fsanitize*}"
+libkern/strcmp.c				optional cpu_cheri
 libkern/strlen.c		standard
+libkern/strncmp.c				optional cpu_cheri
+
 libkern/arm64/crc32c_armv8.S			standard
 
 arm/arm/generic_timer.c				standard
@@ -66,9 +73,9 @@ arm64/arm64/locore.S				standard no-obj
 arm64/arm64/machdep.c				standard
 arm64/arm64/machdep_boot.c			standard
 arm64/arm64/mem.c				standard
-arm64/arm64/memcmp.S				standard
+arm64/arm64/memcmp.S				optional !cpu_cheri
 arm64/arm64/memcpy.S				optional !cpu_cheri
-arm64/arm64/memset.S				standard
+arm64/arm64/memset.S				optional !cpu_cheri
 arm64/arm64/minidump_machdep.c			standard
 arm64/arm64/mp_machdep.c			optional smp
 arm64/arm64/nexus.c				standard
@@ -82,8 +89,8 @@ arm64/arm64/sdt_machdep.c			optional kdtrace_hooks
 arm64/arm64/sigtramp.S				standard
 arm64/arm64/spec_workaround.c			standard
 arm64/arm64/stack_machdep.c			optional ddb | stack
-arm64/arm64/strcmp.S				standard
-arm64/arm64/strncmp.S				standard
+arm64/arm64/strcmp.S				optional !cpu_cheri
+arm64/arm64/strncmp.S				optional !cpu_cheri
 arm64/arm64/support_ifunc.c			standard
 arm64/arm64/support.S				standard
 arm64/arm64/swtch.S				standard
