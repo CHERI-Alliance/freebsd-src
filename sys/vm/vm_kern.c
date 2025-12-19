@@ -279,7 +279,7 @@ kmem_alloc_attr_domain(int domain, vm_size_t size, int flags, vm_paddr_t low,
 		return (0);
 	offset = addr - VM_MIN_KERNEL_ADDRESS;
 	pflags = malloc2vm_flags(flags) | VM_ALLOC_WIRED;
-	prot = (flags & M_EXEC) != 0 ? VM_PROT_ALL : VM_PROT_RW;
+	prot = (flags & M_EXEC) != 0 ? VM_PROT_RWX : VM_PROT_RW;
 
 	pmap_enter_flags = prot | PMAP_ENTER_WIRED;
 	if ((flags & M_UNPROTECTED) != 0)
