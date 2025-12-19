@@ -144,7 +144,7 @@ struct fb_info {
 	fb_setblankmode_t *setblankmode;
 
 	vm_paddr_t	fb_pbase;	/* For FB mmap. */
-	vm_offset_t	fb_vbase;	/* if NULL, use fb_write/fb_read. */
+	vm_pointer_t	fb_vbase;	/* if NULL, use fb_write/fb_read. */
 	void		*fb_priv;	/* First argument for read/write. */
 	const char	*fb_name;
 	uint32_t	fb_flags;
