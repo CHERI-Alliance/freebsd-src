@@ -326,6 +326,22 @@ __nodiscard int copyout_nofault(
     const void * _Nonnull __restrict kaddr, void * __restrict udaddr,
     size_t len);
 
+#ifdef __CHERI__
+int __result_use_check copyinptr(const void * __restrict udaddr,
+    void * _Nonnull __restrict kaddr, size_t len);
+int __result_use_check copyoutptr(
+    const void * _Nonnull __restrict kaddr, void * __restrict udaddr,
+    size_t len);
+int __result_use_check copyoutptr_nofault(
+    const void * _Nonnull __restrict kaddr, void * __restrict udaddr,
+    size_t len);
+#else
+#define	copyinptr		copyin
+/* copyinptr_nofault not implemented due to no users */
+#define	copyoutptr		copyout
+#define	copyoutptr_nofault	copyout_nofault
+#endif
+
 #ifdef SAN_NEEDS_INTERCEPTORS
 int	SAN_INTERCEPTOR(copyin)(const void *, void *, size_t);
 int	SAN_INTERCEPTOR(copyinstr)(const void *, void *, size_t, size_t *);
