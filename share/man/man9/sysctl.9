@@ -23,7 +23,7 @@
 .\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 .\" SUCH DAMAGE.
 .\"
-.Dd September 28, 2025
+.Dd December 19, 2025
 .Dt SYSCTL 9
 .Os
 .Sh NAME
@@ -900,6 +900,10 @@ A process in capability mode can write to this sysctl.
 .It Dv CTLFLAG_SECURE
 This sysctl can be written to only if the effective securelevel of the
 process is \[<=] 0.
+.It Dv CTLFLAG_PTRIN
+Data copied in will be copied preserving pointer provenance.
+.It Dv CTLFLAG_PTROUT
+Data copied out will be copied preserving pointer provenance.
 .It Dv CTLFLAG_PRISON
 This sysctl can be written to by processes in
 .Xr jail 2 .
