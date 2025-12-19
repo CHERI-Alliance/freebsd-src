@@ -33,6 +33,7 @@
 #define	_UFS_FFS_FS_H_
 
 #include <sys/mount.h>
+#include <sys/stdint.h>
 #include <ufs/ufs/dinode.h>
 
 /*
@@ -165,10 +166,11 @@
 /*
  * There is a 128-byte region in the superblock reserved for in-core
  * pointers to summary information. Originally this included an array
- * of pointers to blocks of struct csum; now there are just a few
- * pointers and the remaining space is padded with fs_ocsp[].
+ * of pointers to blocks of struct csum; now there is just on pointer
+ * and 64-bits of padding for align it to 16-bytes and the remaining
+ * space is padded with fs_ocsp[].
  *
- * NOCSPTRS determines the size of this padding. Historically this
+ * NOCSP determines the size of this padding. Historically this
  * space was used to store pointers to structures that summaried
  * filesystem usage and layout information. However, these pointers
  * left various kernel pointers in the superblock which made otherwise
@@ -179,7 +181,7 @@
  * temporarily NULL'ed out so that the kernel pointer will not appear
  * in the on-disk copy of the superblock.
  */
-#define	NOCSPTRS	((128 / sizeof(void *)) - 1)
+#define	NOCSP	(128 - sizeof(void *) - sizeof(uint64_t))
 
 /*
  * A summary of contiguous blocks of various sizes is maintained
@@ -404,8 +406,9 @@ struct fs {
 	int32_t  fs_pad;		/* due to alignment of fs_swuid */
 /* these fields retain the current block allocation info */
 	int32_t	 fs_cgrotor;		/* last cg searched */
-	void 	*fs_ocsp[NOCSPTRS];	/* padding; was list of fs_cs buffers */
-	struct	 fs_summary_info *fs_si;/* In-core pointer to summary info */
+	uint64_t fs_align_pad1;		/* padding; was list of fs_cs buffers */
+	struct fs_summary_info *fs_si;	/* In-core pointer to summary info */
+	char	 fs_align_pad2[NOCSP];	/* padding */
 	int32_t	 fs_old_cpc;		/* cyl per cycle in postbl */
 	int32_t	 fs_maxbsize;		/* maximum blocking factor permitted */
 	int64_t	 fs_unrefs;		/* number of unreferenced inodes */
