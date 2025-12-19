@@ -106,6 +106,8 @@
  * for SYSCTL_PROC and SYSCTL_NODE.
  */
 #define	CTLFLAG_NEEDGIANT 0x00000800	/* Handler require Giant */
+#define	CTLFLAG_PTRIN	0x00000400	/* Copy in pointers */
+#define	CTLFLAG_PTROUT	0x00000200	/* Copy out pointers */
 
 /*
  * Secure level.   Note that CTLFLAG_SECURE == CTLFLAG_SECURE1.
@@ -153,6 +155,11 @@
 #ifdef COMPAT_FREEBSD32
 #define	SCTL_MASK32	1	/* 32 bit emulation */
 #endif
+#ifdef COMPAT_FREEBSD64
+#define	SCTL_MASK64	2	/* 64 bit emulation (on CHERI) */
+#endif
+#define	SCTL_PTRIN	4
+#define	SCTL_PTROUT	8
 
 /*
  * This describes the access space for a sysctl request.  This is needed
