@@ -1072,6 +1072,7 @@ DB_SHOW_COMMAND(vtop, db_show_vtop)
 }
 #endif
 
+#ifndef __CHERI__
 #undef memset
 #undef memmove
 #undef memcpy
@@ -1103,3 +1104,4 @@ DEFINE_IFUNC(, void *, memcpy, (void * _Nonnull, const void * _Nonnull,
 {
 	return ((elf_hwcap2 & HWCAP2_MOPS) != 0 ? memcpy_mops : memcpy_std);
 }
+#endif
