@@ -277,7 +277,7 @@ kmem_alloc_attr_domain(int domain, vm_size_t size, int flags, vm_paddr_t low,
 		return (0);
 	offset = addr - VM_MIN_KERNEL_ADDRESS;
 	pflags = malloc2vm_flags(flags) | VM_ALLOC_WIRED;
-	prot = (flags & M_EXEC) != 0 ? VM_PROT_ALL : VM_PROT_RW;
+	prot = (flags & M_EXEC) != 0 ? VM_PROT_RWX : VM_PROT_RW;
 	VM_OBJECT_WLOCK(object);
 	for (i = 0; i < asize; i += PAGE_SIZE) {
 		m = kmem_alloc_contig_pages(object, atop(offset + i),

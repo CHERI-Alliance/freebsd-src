@@ -3714,7 +3714,7 @@ fget_mmap(struct thread *td, int fd, const cap_rights_t *rightsp,
 #ifndef CAPABILITIES
 	error = _fget(td, fd, fpp, 0, rightsp);
 	if (maxprotp != NULL)
-		*maxprotp = VM_PROT_ALL;
+		*maxprotp = VM_PROT_RMX;
 	return (error);
 #else
 	cap_rights_t fdrights;

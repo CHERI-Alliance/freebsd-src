@@ -53,7 +53,7 @@ typedef unsigned long pgprot_t;
 #define	LINUXKPI_PROT_VALID (1 << 3)
 #define	LINUXKPI_CACHE_MODE_SHIFT 4
 
-CTASSERT((VM_PROT_ALL & -LINUXKPI_PROT_VALID) == 0);
+CTASSERT((VM_PROT_RWX & -LINUXKPI_PROT_VALID) == 0);
 
 #define	PAGE_KERNEL_IO	0x0000
 
