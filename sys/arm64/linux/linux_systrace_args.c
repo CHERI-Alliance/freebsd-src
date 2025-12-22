@@ -7,9 +7,9 @@
  */
 
 static void
-systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
+systrace_args(int sysnum, void *params, uintptr_t *uarg, int *n_args)
 {
-	int64_t *iarg = (int64_t *)uarg;
+	intptr_t *iarg = (intptr_t *)uarg;
 	int a = 0;
 	switch (sysnum) {
 	/* linux_setxattr */
