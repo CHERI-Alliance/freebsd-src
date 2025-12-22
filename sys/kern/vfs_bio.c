@@ -152,12 +152,14 @@ struct bufdomain {
 #define	BD_RUN_UNLOCK(bd)	mtx_unlock(BD_RUN_LOCKPTR((bd)))
 #define	BD_DOMAIN(bd)		(bd - bdomain)
 
+#define	STRUCT_BUF_SIZE \
+    (sizeof(struct buf) + sizeof(vm_page_t) * atop(maxbcachebuf))
+
 static char *buf;		/* buffer header pool */
 static struct buf *
 nbufp(unsigned i)
 {
-	return ((struct buf *)(buf + (sizeof(struct buf) +
-	    sizeof(vm_page_t) * atop(maxbcachebuf)) * i));
+	return ((struct buf *)(buf + STRUCT_BUF_SIZE * i));
 }
 
 caddr_t __read_mostly unmapped_buf;
@@ -1196,9 +1198,8 @@ kern_vfs_bio_buffer_alloc(caddr_t v, long physmem_est)
 	/*
 	 * Reserve space for the buffer cache buffers
 	 */
-	buf = (char *)v;
-	v = (caddr_t)buf + (sizeof(struct buf) + sizeof(vm_page_t) *
-	    atop(maxbcachebuf)) * nbuf;
+	buf = (void *)cheri_kern_bounds_set(v, nbuf * STRUCT_BUF_SIZE);
+	v = v + STRUCT_BUF_SIZE * nbuf;
 
 	return (v);
 }
@@ -1232,8 +1233,8 @@ bufinit(void)
 
 	/* finally, initialize each buffer header and stick on empty q */
 	for (i = 0; i < nbuf; i++) {
-		bp = nbufp(i);
-		bzero(bp, sizeof(*bp) + sizeof(vm_page_t) * atop(maxbcachebuf));
+		bp = cheri_kern_bounds_set_exact(nbufp(i), STRUCT_BUF_SIZE);
+		bzero(bp, STRUCT_BUF_SIZE);
 		bp->b_flags = B_INVAL;
 		bp->b_rcred = NOCRED;
 		bp->b_wcred = NOCRED;
@@ -1319,8 +1320,8 @@ bufinit(void)
 	/* Setup the kva and free list allocators. */
 	vmem_set_reclaim(buffer_arena, bufkva_reclaim);
 	buf_zone = uma_zcache_create("buf free cache",
-	    sizeof(struct buf) + sizeof(vm_page_t) * atop(maxbcachebuf),
-	    NULL, NULL, NULL, NULL, buf_import, buf_release, NULL, 0);
+	    STRUCT_BUF_SIZE, NULL, NULL, NULL, NULL, buf_import,
+	    buf_release, NULL, 0);
 
 	/*
 	 * Size the clean queue according to the amount of buffer space.
