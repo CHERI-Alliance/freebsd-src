@@ -1,3 +1,6 @@
+#ifdef __CHERI__
+#include "../../string/strncat.c"
+#else
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
  *
@@ -29,3 +32,4 @@ strncat(char *dest, const char *src, size_t n)
 
 	return (dest);
 }
+#endif

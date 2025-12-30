@@ -1,3 +1,6 @@
+#ifdef __CHERI__
+#include "../../string/strsep.c"
+#else
 /*-
  * Copyright (c) 2023 The FreeBSD Foundation
  *
@@ -55,3 +58,4 @@ strsep(char **stringp, const char *delim)
 
 	return (s);
 }
+#endif

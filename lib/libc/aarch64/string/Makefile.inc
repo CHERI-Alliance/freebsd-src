@@ -3,6 +3,7 @@
 # https://github.com/ARM-software/optimized-routines
 #
 
+.if !${MACHINE_ABI:Mpurecap}
 AARCH64_STRING_FUNCS= \
 	memcmp \
 	memmove \
@@ -79,3 +80,4 @@ CFLAGS.memchr.S+=-I${SRCTOP}/contrib/arm-optimized-routines/string
 CFLAGS.memcpy.S+=-I${SRCTOP}/contrib/arm-optimized-routines/string
 CFLAGS.memset.S+=-I${SRCTOP}/contrib/arm-optimized-routines/string
 CFLAGS.memset_zva64.S+=-I${SRCTOP}/contrib/arm-optimized-routines/string
+.endif
