@@ -70,7 +70,6 @@ struct sysentvec elf64_freebsd_sysvec_la48 = {
 	.sv_minuser	= VM_MIN_ADDRESS,
 	.sv_maxuser	= VM_MAXUSER_ADDRESS_LA48,
 	.sv_usrstack	= USRSTACK_LA48,
-	.sv_psstrings	= PS_STRINGS_LA48,
 	.sv_psstringssz	= sizeof(struct ps_strings),
 	.sv_stackprot	= VM_PROT_ALL,
 	.sv_copyout_auxargs = __elfN(freebsd_copyout_auxargs),
@@ -113,7 +112,6 @@ struct sysentvec elf64_freebsd_sysvec_la57 = {
 	.sv_minuser	= VM_MIN_ADDRESS,
 	.sv_maxuser	= VM_MAXUSER_ADDRESS_LA57,
 	.sv_usrstack	= USRSTACK_LA57,
-	.sv_psstrings	= PS_STRINGS_LA57,
 	.sv_psstringssz	= sizeof(struct ps_strings),
 	.sv_stackprot	= VM_PROT_ALL,
 	.sv_copyout_auxargs = __elfN(freebsd_copyout_auxargs),
@@ -160,7 +158,6 @@ amd64_lower_shared_page(struct sysentvec *sv)
 		sv->sv_maxuser -= PAGE_SIZE;
 		sv->sv_shared_page_base -= PAGE_SIZE;
 		sv->sv_usrstack -= PAGE_SIZE;
-		sv->sv_psstrings -= PAGE_SIZE;
 	}
 }
 
