@@ -198,6 +198,8 @@
     ..
     casper              tags=package=libcasper-dev
     ..
+    cheri
+    ..
     crypto
     ..
     dev
