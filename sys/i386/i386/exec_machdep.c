@@ -923,7 +923,7 @@ setup_priv_lcall_gate(struct proc *p)
 	bzero(&uap, sizeof(uap));
 	uap.start = 0;
 	uap.num = 1;
-	lcall_addr = p->p_sysent->sv_psstrings - sz_lcall_tramp;
+	lcall_addr = p->p_psstrings - sz_lcall_tramp;
 	bzero(&desc, sizeof(desc));
 	desc.sd.sd_type = SDT_MEMERA;
 	desc.sd.sd_dpl = SEL_UPL;
@@ -962,8 +962,8 @@ exec_setregs(struct thread *td, struct image_params *imgp, uintptr_t stack)
 		mtx_unlock_spin(&dt_lock);
 
 #ifdef COMPAT_43
-	if (td->td_proc->p_sysent->sv_psstrings !=
-	    elf32_freebsd_sysvec.sv_psstrings)
+	if (td->td_proc->p_psstrings != elf32_freebsd_sysvec.sv_usrstack -
+	    elf32_freebsd_sysvec.sv_psstringssz)
 		setup_priv_lcall_gate(td->td_proc);
 #endif
 
