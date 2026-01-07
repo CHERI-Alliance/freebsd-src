@@ -217,8 +217,6 @@
 #define	USRSTACK_SV39		SHAREDPAGE_SV39
 #define	USRSTACK_SV48		SHAREDPAGE_SV48
 #define	USRSTACK		USRSTACK_SV48
-#define	PS_STRINGS_SV39		(USRSTACK_SV39 - sizeof(struct ps_strings))
-#define	PS_STRINGS_SV48		(USRSTACK_SV48 - sizeof(struct ps_strings))
 
 /*
  * How many physical pages per kmem arena virtual page.

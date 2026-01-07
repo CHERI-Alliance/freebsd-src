@@ -68,8 +68,6 @@ static int	aout_fixup(uintptr_t *stack_base, struct image_params *imgp);
 
 #if defined(__i386__)
 
-#define	AOUT32_PS_STRINGS	(AOUT32_USRSTACK - sizeof(struct ps_strings))
-
 struct sysentvec aout_sysvec = {
 	.sv_size	= SYS_MAXSYSCALL,
 	.sv_table	= sysent,
@@ -109,8 +107,6 @@ extern const char _binary_elf_vdso32_so_1_start[];
 extern const char _binary_elf_vdso32_so_1_end[];
 extern char _binary_elf_vdso32_so_1_size;
 
-#define	AOUT32_PS_STRINGS \
-    (AOUT32_USRSTACK - sizeof(struct freebsd32_ps_strings))
 #define	AOUT32_MINUSER		FREEBSD32_MINUSER
 
 extern const char *freebsd32_syscallnames[];

@@ -120,8 +120,6 @@ struct linux32_ps_strings {
 	u_int32_t ps_envstr;	/* first of 0 or more environment strings */
 	u_int ps_nenvstr;	/* the number of environment strings */
 };
-#define	LINUX32_PS_STRINGS	(LINUX32_USRSTACK - \
-				    sizeof(struct linux32_ps_strings))
 
 LINUX_VDSO_SYM_INTPTR(__kernel_vsyscall);
 LINUX_VDSO_SYM_INTPTR(linux32_vdso_sigcode);

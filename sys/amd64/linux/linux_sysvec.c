@@ -85,8 +85,6 @@ MODULE_VERSION(linux64, 1);
 				 * of the native SHAREDPAGE
 				 */
 #define	LINUX_USRSTACK_LA48	LINUX_SHAREDPAGE_LA48
-#define	LINUX_PS_STRINGS_LA48	(LINUX_USRSTACK_LA48 - \
-				    sizeof(struct ps_strings))
 
 static int linux_szsigcode;
 static vm_object_t linux_vdso_obj;
