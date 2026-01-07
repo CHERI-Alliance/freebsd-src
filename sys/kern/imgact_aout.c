@@ -83,7 +83,6 @@ struct sysentvec aout_sysvec = {
 	.sv_minuser	= VM_MIN_ADDRESS,
 	.sv_maxuser	= AOUT32_USRSTACK,
 	.sv_usrstack	= AOUT32_USRSTACK,
-	.sv_psstrings	= AOUT32_PS_STRINGS,
 	.sv_psstringssz	= sizeof(struct ps_strings),
 	.sv_stackprot	= VM_PROT_ALL,
 	.sv_copyout_strings	= exec_copyout_strings,
@@ -132,7 +131,6 @@ struct sysentvec aout_sysvec = {
 	.sv_minuser	= AOUT32_MINUSER,
 	.sv_maxuser	= AOUT32_USRSTACK,
 	.sv_usrstack	= AOUT32_USRSTACK,
-	.sv_psstrings	= AOUT32_PS_STRINGS,
 	.sv_psstringssz	= sizeof(struct freebsd32_ps_strings),
 	.sv_stackprot	= VM_PROT_ALL,
 	.sv_copyout_strings	= freebsd32_copyout_strings,
@@ -214,7 +212,8 @@ exec_aout_imgact(struct image_params *imgp)
 		file_offset = 0;
 		/* Pass PS_STRINGS for BSD/OS binaries only. */
 		if (N_GETMID(*a_out) == MID_ZERO)
-			imgp->ps_strings = (void *)aout_sysvec.sv_psstrings;
+			imgp->ps_strings = (void *)(aout_sysvec.sv_usrstack -
+			    aout_sysvec.sv_psstringssz);
 		break;
 	default:
 		/* NetBSD compatibility */
