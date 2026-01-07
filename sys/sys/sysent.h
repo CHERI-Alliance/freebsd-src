@@ -122,7 +122,6 @@ struct sysentvec {
 	vm_offset_t	sv_minuser;	/* VM_MIN_ADDRESS */
 	vm_offset_t	sv_maxuser;	/* VM_MAXUSER_ADDRESS */
 	vm_offset_t	sv_usrstack;	/* USRSTACK */
-	vm_offset_t	sv_psstrings;	/* PS_STRINGS */
 	size_t		sv_psstringssz;	/* PS_STRINGS size */
 	int		sv_stackprot;	/* vm protection for stack */
 	int		(*sv_copyout_strings)(struct image_params *,

@@ -1702,7 +1702,8 @@ i386_setup_lcall_gate(void)
 	u_int lcall_addr;
 
 	sv = &elf32_freebsd_sysvec;
-	lcall_addr = (uintptr_t)sv->sv_psstrings - sz_lcall_tramp;
+	lcall_addr = (uintptr_t)sv->sv_usrstack - sv->sv_psstringssz -
+	    sz_lcall_tramp;
 
 	bzero(&desc, sizeof(desc));
 	desc.sd_type = SDT_MEMERA;

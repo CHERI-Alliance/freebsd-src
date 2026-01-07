@@ -1273,6 +1273,8 @@ exec_map_stack(struct image_params *imgp)
 		stack_top -= rounddown2(stack_off & PAGE_MASK, sizeof(void *));
 	}
 
+	p->p_psstrings = stack_top - sv->sv_psstringssz;
+
 	/* Map a shared page */
 	obj = sv->sv_shared_page_obj;
 	if (obj == NULL) {

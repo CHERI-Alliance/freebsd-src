@@ -745,6 +745,7 @@ struct proc {
 	const void	*p_elf_brandinfo; /* (x) Elf_Brandinfo, NULL for
 						 non ELF binaries. */
 	sbintime_t	p_umtx_min_timeout;
+	vm_offset_t	p_psstrings;	/* (x) Location of struct ps_strings */
 /* End area that is copied on creation. */
 #define	p_endcopy	p_xexit
 

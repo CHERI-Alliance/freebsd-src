@@ -74,7 +74,6 @@ static struct sysentvec elf64_freebsd_sysvec = {
 	.sv_minuser	= VM_MIN_ADDRESS,
 	.sv_maxuser	= 0,	/* Filled in during boot. */
 	.sv_usrstack	= 0,	/* Filled in during boot. */
-	.sv_psstrings	= 0,	/* Filled in during boot. */
 	.sv_psstringssz	= sizeof(struct ps_strings),
 	.sv_stackprot	= VM_PROT_READ | VM_PROT_WRITE,
 	.sv_copyout_auxargs = __elfN(freebsd_copyout_auxargs),
@@ -123,13 +122,11 @@ elf64_register_sysvec(void *arg)
 	case PMAP_MODE_SV48:
 		sv->sv_maxuser = VM_MAX_USER_ADDRESS_SV48;
 		sv->sv_usrstack = USRSTACK_SV48;
-		sv->sv_psstrings = PS_STRINGS_SV48;
 		sv->sv_shared_page_base = SHAREDPAGE_SV48;
 		break;
 	case PMAP_MODE_SV39:
 		sv->sv_maxuser = VM_MAX_USER_ADDRESS_SV39;
 		sv->sv_usrstack = USRSTACK_SV39;
-		sv->sv_psstrings = PS_STRINGS_SV39;
 		sv->sv_shared_page_base = SHAREDPAGE_SV39;
 		break;
 	}
