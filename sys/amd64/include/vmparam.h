@@ -233,8 +233,6 @@
 #define	USRSTACK_LA57		SHAREDPAGE_LA57
 #define	USRSTACK_LA48		SHAREDPAGE_LA48
 #define	USRSTACK		USRSTACK_LA48
-#define	PS_STRINGS_LA57		(USRSTACK_LA57 - sizeof(struct ps_strings))
-#define	PS_STRINGS_LA48		(USRSTACK_LA48 - sizeof(struct ps_strings))
 
 #define	VM_MAX_ADDRESS		UPT_MAX_ADDRESS
 #define	VM_MIN_ADDRESS		(0)
