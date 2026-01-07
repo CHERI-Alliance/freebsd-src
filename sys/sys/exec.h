@@ -73,7 +73,6 @@ struct execsw {
  * Address of ps_strings structure (in user space).
  * Prefer the kern.ps_strings or kern.proc.ps_strings sysctls to this constant.
  */
-#define	PS_STRINGS	(USRSTACK - sizeof(struct ps_strings))
 #define	PROC_PS_STRINGS(p)	((p)->p_psstrings)
 
 /*
