@@ -82,7 +82,6 @@ MODULE_VERSION(linux, 1);
 				 * of the native SHAREDPAGE
 				 */
 #define	LINUX_USRSTACK		LINUX_SHAREDPAGE
-#define	LINUX_PS_STRINGS	(LINUX_USRSTACK - sizeof(struct ps_strings))
 
 static int linux_szsigcode;
 static vm_object_t linux_vdso_obj;
