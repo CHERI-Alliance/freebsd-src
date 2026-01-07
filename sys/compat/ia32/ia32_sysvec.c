@@ -118,7 +118,6 @@ struct sysentvec ia32_freebsd_sysvec = {
 	.sv_minuser	= FREEBSD32_MINUSER,
 	.sv_maxuser	= FREEBSD32_MAXUSER,
 	.sv_usrstack	= FREEBSD32_USRSTACK,
-	.sv_psstrings	= FREEBSD32_PS_STRINGS,
 	.sv_psstringssz	= sizeof(struct freebsd32_ps_strings),
 	.sv_stackprot	= VM_PROT_ALL,
 	.sv_copyout_auxargs	= elf32_freebsd_copyout_auxargs,
