@@ -28,7 +28,7 @@
 .\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 .\" SUCH DAMAGE.
 .\"
-.Dd April 19, 2024
+.Dd January 8, 2026
 .Dt INTRO 2
 .Os
 .Sh NAME
@@ -753,6 +753,20 @@ Uses include allowing the
 command to return a different exit value to automate the running of
 .Xr fsck 8
 during a system boot.
+.It Er 98 EPROT Em "Memory protection violation" .
+A memory protection error occurred.
+.Er EPROT is returned when a CHERI capability is invalid to authorize an
+operation.
+Note that failed accesses to userspace using the
+.Xr copy 9 ,
+.Xr fetch 9 ,
+or
+.Xr store 9
+APIs do not distinguish between reasons for I/O failures and return
+.Xr EFAULT
+in all cases.
+.Er EPROT
+is typically returned as a result of manual checks.
 .El
 .Sh SEE ALSO
 .Xr intro 3 ,

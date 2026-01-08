@@ -155,12 +155,12 @@ const char *const sys_errlist[] = {
 	"State not recoverable",		/* 95 - ENOTRECOVERABLE */
 	"Previous owner died",			/* 96 - EOWNERDEAD */
 	"Integrity check failed",		/* 97 - EINTEGRITY */
+	"Memory protection violation",		/* 98 - EPROT */
 
 /*
  * Reserved space in sys_errlist, take the next slot for a next error code.
  * Reserve prevents the array size from changing for some time.
  */
-	__uprefix,				/* 98 */
 	__uprefix,				/* 99 */
 	__uprefix,				/* 100 */
 	__uprefix,				/* 101 */
