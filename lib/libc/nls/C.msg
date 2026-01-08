@@ -198,6 +198,8 @@ $ EOWNERDEAD
 96 Previous owner died
 $ EINTEGRITY
 97 Integrity check failed
+$ EPROT
+98 Memory protection violation
 $
 $ strsignal() support catalog
 $
