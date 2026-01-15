@@ -179,7 +179,7 @@ useracc(void *addr, int len, int rw)
 }
 
 int
-vslock(void *addr, size_t len)
+vslock(void *addr, size_t len, vm_prot_t prot __unused)
 {
 	vm_offset_t end, last, start;
 	vm_size_t npages;
