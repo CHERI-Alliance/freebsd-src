@@ -247,7 +247,7 @@ bintime_off(struct bintime *bt, u_int off)
 	do {
 		th = timehands;
 		gen = atomic_load_acq_int(&th->th_generation);
-		btp = (struct bintime *)((vm_offset_t)th + off);
+		btp = (struct bintime *)((char *)th + off);
 		*bt = *btp;
 		scale = th->th_scale;
 		delta = tc_delta(th);

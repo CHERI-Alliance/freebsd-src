@@ -837,7 +837,8 @@ ata_pio_read(struct ata_request *request, int length)
 				    bio->bio_ma[moff / PAGE_SIZE]);
 				moff %= PAGE_SIZE;
 				size = min(size, PAGE_SIZE - moff);
-				addr = page + moff;
+				addr = cheri_kern_bounds_set(page + moff,
+				    size);
 			}
 		} else
 			panic("ata_pio_read: Unsupported CAM data type %x\n",
@@ -854,9 +855,9 @@ ata_pio_read(struct ata_request *request, int length)
 		/* Process main part of data. */
 		resid = size % 2;
 		if (__predict_false((ch->flags & ATA_USE_16BIT) ||
-		    (size % 4) != 0 || ((uintptr_t)addr % 4) != 0)) {
+		    !__is_aligned(size, 4) || !__is_aligned(addr, 4))) {
 #ifndef __NO_STRICT_ALIGNMENT
-			if (__predict_false((uintptr_t)addr % 2)) {
+			if (__predict_false(!__is_aligned(addr, 2))) {
 				for (i = 0; i + 1 < size; i += 2) {
 					*(uint16_t *)&buf =
 					    ATA_IDX_INW_STRM(ch, ATA_DATA);
@@ -923,7 +924,8 @@ ata_pio_write(struct ata_request *request, int length)
 				    bio->bio_ma[moff / PAGE_SIZE]);
 				moff %= PAGE_SIZE;
 				size = min(size, PAGE_SIZE - moff);
-				addr = page + moff;
+				addr = cheri_kern_bounds_set(page + moff,
+				    size);
 			}
 		} else
 			panic("ata_pio_write: Unsupported CAM data type %x\n",
@@ -941,9 +943,9 @@ ata_pio_write(struct ata_request *request, int length)
 		/* Process main part of data. */
 		resid = size % 2;
 		if (__predict_false((ch->flags & ATA_USE_16BIT) ||
-		    (size % 4) != 0 || ((uintptr_t)addr % 4) != 0)) {
+		    !__is_aligned(size, 4) || !__is_aligned(addr, 4))) {
 #ifndef __NO_STRICT_ALIGNMENT
-			if (__predict_false((uintptr_t)addr % 2)) {
+			if (__predict_false(!__is_aligned(addr, 2))) {
 				for (i = 0; i + 1 < size; i += 2) {
 					buf[0] = addr[i];
 					buf[1] = addr[i + 1];
