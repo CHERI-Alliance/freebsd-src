@@ -63,16 +63,22 @@ struct image_params {
 	struct vattr *attr;		/* attributes of file */
 	const char *image_header;	/* header of file to exec */
 	unsigned long entry_addr;	/* entry address of target executable */
+	unsigned long start_addr;	/* start of mapped image (inc. bss) */
+	unsigned long end_addr;		/* end of mapped image (inc.  bss) */
 	unsigned long reloc_base;	/* load address of image */
 	unsigned long et_dyn_addr;	/* PIE load base */
+	unsigned long interp_start;	/* start of RTLD mapping (or zero) */
+	unsigned long interp_end;	/* end of RTLD mapping (or zero) */
 	char *interpreter_name;		/* name of the interpreter */
 	void *auxargs;			/* ELF Auxinfo structure pointer */
 	struct sf_buf *firstpage;	/* first page that we mapped */
+	void *strings;			/* pointer to string space (user) */
 	void *ps_strings;		/* pointer to ps_string (user space) */
 	struct image_args *args;	/* system call arguments */
 	struct sysentvec *sysent;	/* system entry vector */
 	void *argv;			/* pointer to argv (user space) */
 	void *envv;			/* pointer to envv (user space) */
+	void *auxv;			/* pointer to auxv (user space) */
 	char *execpath;
 	void *execpathp;
 	char *freepath;
@@ -80,6 +86,7 @@ struct image_params {
 	int canarylen;
 	void *pagesizes;
 	int pagesizeslen;
+	void *stack;
 	vm_prot_t stack_prot;
 	u_long stack_sz;
 	struct ucred *newcred;		/* new credentials if changing */
@@ -91,6 +98,9 @@ struct image_params {
 	bool opened;			/* we have opened executable vnode */
 	bool textset;
 	u_int map_flags;
+#ifdef __CHERI__
+	void *imgact_capability;	/* copyout and mapping cap */
+#endif
 #define IMGP_ASLR_SHARED_PAGE	0x1
 	uint32_t imgp_flags;
 	struct vnode *interpreter_vp;	/* vnode of the interpreter */
@@ -119,7 +129,7 @@ int	exec_map_stack(struct image_params *);
 int	exec_new_vmspace(struct image_params *, struct sysentvec *);
 void	exec_setregs(struct thread *, struct image_params *, uintptr_t);
 int	exec_shell_imgact(struct image_params *);
-int	exec_copyin_args(struct image_args *, const char *, char **, char **);
+int	exec_copyin_args(struct image_args *, const char *, void *, void *);
 int	pre_execve(struct thread *td, struct vmspace **oldvmspace);
 void	post_execve(struct thread *td, int error, struct vmspace *oldvmspace);
 #endif

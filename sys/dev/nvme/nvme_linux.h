@@ -21,8 +21,8 @@ struct nvme_passthru_cmd {
 	__uint32_t	nsid;
 	__uint32_t	cdw2;
 	__uint32_t	cdw3;
-	__uint64_t	metadata;
-	__uint64_t	addr;
+	__uint64ptr_t	metadata;
+	__uint64ptr_t	addr;
 	__uint32_t	metadata_len;
 	__uint32_t	data_len;
 	__uint32_t	cdw10;

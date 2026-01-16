@@ -95,8 +95,12 @@ struct mmap_req {
 	int			mr_prot;
 	int			mr_flags;
 	int			mr_fd;
+	int			mr_kern_flags;
 	off_t			mr_pos;
 	mmap_check_fp_fn	mr_check_fp_fn;
+#ifdef __CHERI__
+	void			*mr_source_cap;
+#endif
 };
 
 /*
@@ -205,7 +209,7 @@ int	kern_cpuset_setid(struct thread *td, cpuwhich_t which,
 	    id_t id, cpusetid_t setid);
 int	kern_dup(struct thread *td, u_int mode, int flags, int old, int new);
 int	kern_execve(struct thread *td, struct image_args *args,
-	    struct mac *mac_p, struct vmspace *oldvmspace);
+	    void *mac_p, struct vmspace *oldvmspace);
 int	kern_extattrctl(struct thread *td, const char *path, int cmd,
 	    const char *filename, int attrnamespace, const char *uattrname);
 int	kern_extattr_delete_fd(struct thread *td, int fd, int attrnamespace,

@@ -5,7 +5,31 @@
 include "GENERIC"
 include "std.CHERI"
 
+makeoptions WITHOUT_CTF=1
+makeoptions WITHOUT_MODULES="acpi dtrace ena hyperv ipfilter iscsi iwlwifi linux64 linuxkpi linuxkpi_wlan mfi nfscl mrsas opensolaris ossl p9fs pf proto rtw89 smbfs sym vmm wlan zfs"
+
 ident	GENERIC-MORELLO
 
-# Doesn't build with Morello LLVM
+# Doesn't build with Morello LLVM and doesn't make sense with CHERI
 nooptions 	PAC
+
+nooptions	NFSCL
+nooptions	NFSD
+nooptions	VIMAGE
+nodevice netmap
+nodevice dpaa2
+
+# weird -march
+nodevice armv8crypto
+
+# not yet
+nooptions dtrace
+nodevice vchiq
+nodevice hyperv
+
+# linuxkpi
+nodevice mlxfw
+nooptions COMPAT_LINUXKPI
+nodevice mlx
+nodevice mlx5
+nodevice mlx5en

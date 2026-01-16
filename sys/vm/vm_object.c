@@ -227,7 +227,7 @@ vm_object_zinit(void *mem, int size, int flags)
 }
 
 static void
-_vm_object_allocate(objtype_t type, vm_pindex_t size, u_short flags,
+_vm_object_allocate(objtype_t type, vm_pindex_t size, u_int flags,
     vm_object_t object, void *handle)
 {
 	LIST_INIT(&object->shadow_head);
@@ -283,6 +283,7 @@ vm_object_init(void)
 	kernel_object->pg_color = (u_short)atop(VM_MIN_KERNEL_ADDRESS);
 #endif
 	kernel_object->un_pager.phys.ops = &default_phys_pg_ops;
+	vm_object_set_flag(kernel_object, OBJ_HASCAP);
 
 	/*
 	 * The lock portion of struct vm_object must be type stable due
@@ -304,7 +305,7 @@ vm_object_init(void)
 }
 
 void
-vm_object_clear_flag(vm_object_t object, u_short bits)
+vm_object_clear_flag(vm_object_t object, u_int bits)
 {
 
 	VM_OBJECT_ASSERT_WLOCKED(object);
@@ -399,7 +400,7 @@ vm_object_t
 vm_object_allocate(objtype_t type, vm_pindex_t size)
 {
 	vm_object_t object;
-	u_short flags;
+	u_int flags;
 
 	switch (type) {
 	case OBJT_DEAD:
@@ -454,6 +455,7 @@ vm_object_allocate_anon(vm_pindex_t size, vm_object_t backing_object,
     struct ucred *cred)
 {
 	vm_object_t handle, object;
+	int capflag = OBJ_HASCAP;
 
 	if (backing_object == NULL)
 		handle = NULL;
@@ -461,9 +463,12 @@ vm_object_allocate_anon(vm_pindex_t size, vm_object_t backing_object,
 		handle = backing_object->handle;
 	else
 		handle = backing_object;
+	if (backing_object != NULL &&
+	    (backing_object->flags & OBJ_NOCAP) != 0)
+		capflag = OBJ_NOCAP;
 	object = uma_zalloc(obj_zone, M_WAITOK);
 	_vm_object_allocate(OBJT_SWAP, size,
-	    OBJ_ANON | OBJ_ONEMAPPING | OBJ_SWAP, object, handle);
+	    OBJ_ANON | OBJ_ONEMAPPING | OBJ_SWAP | capflag, object, handle);
 	object->cred = cred;
 	return (object);
 }
@@ -1856,6 +1861,9 @@ vm_object_collapse(vm_object_t object)
 		    ("vm_object_collapse: Backing object already collapsing."));
 		KASSERT((object->flags & (OBJ_COLLAPSING | OBJ_DEAD)) == 0,
 		    ("vm_object_collapse: object is already collapsing."));
+		KASSERT((object->flags & OBJ_HASCAP) != 0 ||
+		    (backing_object->flags & OBJ_HASCAP) == 0,
+		    ("vm_object_collapse: shadow does not bear capabilities"));
 
 		/*
 		 * We know that we can either collapse the backing object if

@@ -98,6 +98,8 @@ struct in6_addr;
 
 #include <ddb/ddb.h>			/* db_expr_t */
 
+int	copyin_mac(const void *mac_p, struct mac *mac);
+
 /*
  * Entry points to the TrustedBSD MAC Framework from the remainder of the
  * kernel: entry points are named based on a principle object type and an

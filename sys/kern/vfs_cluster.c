@@ -387,7 +387,7 @@ cluster_rbuild(struct vnode *vp, u_quad_t filesize, daddr_t lbn,
 	if ((gbflags & GB_UNMAPPED) != 0) {
 		bp->b_data = unmapped_buf;
 	} else {
-		bp->b_data = (char *)((vm_offset_t)bp->b_data |
+		bp->b_data = (char *)((uintptr_t)bp->b_data |
 		    ((vm_offset_t)tbp->b_data & PAGE_MASK));
 	}
 	bp->b_iocmd = BIO_READ;
@@ -892,7 +892,7 @@ cluster_wbuild(struct vnode *vp, long size, daddr_t start_lbn, int len,
 		 */
 		if ((gbflags & GB_UNMAPPED) == 0 ||
 		    (tbp->b_flags & B_VMIO) == 0) {
-			bp->b_data = (char *)((vm_offset_t)bp->b_data |
+			bp->b_data = (char *)((uintptr_t)bp->b_data |
 			    ((vm_offset_t)tbp->b_data & PAGE_MASK));
 		} else {
 			bp->b_data = unmapped_buf;

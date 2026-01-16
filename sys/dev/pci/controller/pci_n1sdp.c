@@ -83,7 +83,7 @@ static int
 n1sdp_init(struct generic_pcie_n1sdp_softc *sc)
 {
 	struct pcie_discovery_data *shared_data;
-	vm_offset_t vaddr;
+	vm_pointer_t vaddr;
 	vm_paddr_t paddr_rc;
 	vm_paddr_t paddr;
 	vm_page_t m[BDF_TABLE_SIZE / PAGE_SIZE];

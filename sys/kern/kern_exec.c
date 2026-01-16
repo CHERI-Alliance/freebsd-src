@@ -35,6 +35,7 @@
 
 #include <sys/param.h>
 #include <sys/systm.h>
+#include <sys/abi_compat.h>
 #include <sys/acct.h>
 #include <sys/asan.h>
 #include <sys/capsicum.h>
@@ -104,6 +105,10 @@
 dtrace_execexit_func_t	dtrace_fasttrap_exec;
 #endif
 
+#ifdef __CHERI__
+#include <cheri/cheri.h>
+#endif
+
 SDT_PROVIDER_DECLARE(proc);
 SDT_PROBE_DEFINE1(proc, , , exec, "char *");
 SDT_PROBE_DEFINE1(proc, , , exec__failure, "int");
@@ -125,7 +130,7 @@ static int sysctl_kern_ps_strings(SYSCTL_HANDLER_ARGS);
 static int sysctl_kern_usrstack(SYSCTL_HANDLER_ARGS);
 static int sysctl_kern_stackprot(SYSCTL_HANDLER_ARGS);
 static int do_execve(struct thread *td, struct image_args *args,
-    struct mac *mac_p, struct vmspace *oldvmspace);
+    void *umac, struct vmspace *oldvmspace);
 
 /* XXX This should be vm_size_t. */
 SYSCTL_PROC(_kern, KERN_PS_STRINGS, ps_strings, CTLTYPE_ULONG|CTLFLAG_RD|
@@ -201,10 +206,11 @@ static int
 sysctl_kern_stackprot(SYSCTL_HANDLER_ARGS)
 {
 	struct proc *p;
+	int stackprot;
 
 	p = curproc;
-	return (SYSCTL_OUT(req, &p->p_sysent->sv_stackprot,
-	    sizeof(p->p_sysent->sv_stackprot)));
+	stackprot = p->p_sysent->sv_stackprot & VM_PROT_RWX;
+	return (SYSCTL_OUT(req, &stackprot, sizeof(stackprot)));
 }
 
 /*
@@ -348,7 +354,7 @@ post_execve(struct thread *td, int error, struct vmspace *oldvmspace)
  * memory).
  */
 int
-kern_execve(struct thread *td, struct image_args *args, struct mac *mac_p,
+kern_execve(struct thread *td, struct image_args *args, void *mac_p,
     struct vmspace *oldvmspace)
 {
 
@@ -390,7 +396,7 @@ execve_nosetid(struct image_params *imgp)
  * userspace pointers from the passed thread.
  */
 static int
-do_execve(struct thread *td, struct image_args *args, struct mac *mac_p,
+do_execve(struct thread *td, struct image_args *args, void *umac,
     struct vmspace *oldvmspace)
 {
 	struct proc *p = td->td_proc;
@@ -410,6 +416,8 @@ do_execve(struct thread *td, struct image_args *args, struct mac *mac_p,
 	char *oldbinname, *newbinname;
 	bool credential_changing;
 #ifdef MAC
+	struct mac extmac;
+	struct mac *mac_p;
 	struct label *interpvplabel = NULL;
 	bool will_transition;
 #endif
@@ -456,6 +464,13 @@ do_execve(struct thread *td, struct image_args *args, struct mac *mac_p,
 	orig_brandinfo = p->p_elf_brandinfo;
 
 #ifdef MAC
+	if (umac != NULL) {
+		error = copyin_mac(umac, &extmac);
+		if (error)
+			goto exec_fail;
+		mac_p = &extmac;
+	} else
+		mac_p = NULL;
 	error = mac_execve_enter(imgp, mac_p);
 	if (error)
 		goto exec_fail;
@@ -1185,7 +1200,7 @@ exec_new_vmspace(struct image_params *imgp, struct sysentvec *sv)
 		exec_free_abi_mappings(p);
 		shmexit(vmspace);
 		pmap_remove_pages(vmspace_pmap(vmspace));
-		vm_map_remove(map, vm_map_min(map), vm_map_max(map));
+		vm_map_clear(map);
 		/*
 		 * An exec terminates mlockall(MCL_FUTURE).
 		 * ASLR and W^X states must be re-evaluated.
@@ -1202,6 +1217,10 @@ exec_new_vmspace(struct image_params *imgp, struct sysentvec *sv)
 		map = &vmspace->vm_map;
 	}
 	map->flags |= imgp->map_flags;
+	if (sv->sv_flags & SV_CHERI)
+		map->flags |= MAP_RESERVATIONS;
+	else
+		map->flags &= ~MAP_RESERVATIONS;
 
 	return (sv->sv_onexec != NULL ? sv->sv_onexec(p, imgp) : 0);
 }
@@ -1218,8 +1237,13 @@ exec_map_stack(struct image_params *imgp)
 	struct proc *p;
 	vm_map_t map;
 	struct vmspace *vmspace;
-	vm_offset_t stack_addr, stack_top;
-	vm_offset_t sharedpage_addr;
+	vm_pointer_t stack_addr, stack_top;
+#ifdef __CHERI__
+	vm_pointer_t strings_addr;
+	size_t strings_size;
+	register_t perms;
+#endif
+	vm_pointer_t sharedpage_addr;
 	u_long ssiz;
 	int error, find_space, stack_off;
 	vm_prot_t stack_prot;
@@ -1244,6 +1268,15 @@ exec_map_stack(struct image_params *imgp)
 	} else {
 		ssiz = maxssiz;
 	}
+#ifdef __CHERI__
+	if (sv->sv_flags & SV_CHERI) {
+		/*
+		 * NB: This may cause the stack to exceed the
+		 * administrator-configured stack size limit.
+		 */
+		ssiz = CHERI_REPRESENTABLE_LENGTH(ssiz);
+	}
+#endif
 
 	vmspace = p->p_vmspace;
 	map = &vmspace->vm_map;
@@ -1251,15 +1284,23 @@ exec_map_stack(struct image_params *imgp)
 	stack_prot = sv->sv_shared_page_obj != NULL && imgp->stack_prot != 0 ?
 	    imgp->stack_prot : sv->sv_stackprot;
 	if ((map->flags & MAP_ASLR_STACK) != 0) {
+		KASSERT((sv->sv_flags & SV_CHERI) == 0,
+		    ("MAP_ASLR_STACK with SV_CHERI"));
 		stack_addr = round_page((vm_offset_t)p->p_vmspace->vm_daddr +
 		    lim_max(curthread, RLIMIT_DATA));
 		find_space = VMFS_ANY_SPACE;
 	} else {
-		stack_addr = sv->sv_usrstack - ssiz;
+		stack_top = sv->sv_usrstack;
+#ifdef __CHERI__
+		if (sv->sv_flags & SV_CHERI)
+			stack_top = CHERI_REPRESENTABLE_ALIGN_DOWN(stack_top,
+			    ssiz);
+#endif
+		stack_addr = stack_top - ssiz;
 		find_space = VMFS_NO_SPACE;
 	}
 	error = vm_map_find(map, NULL, 0, &stack_addr, (vm_size_t)ssiz,
-	    sv->sv_usrstack, find_space, stack_prot, VM_PROT_ALL,
+	    sv->sv_usrstack, find_space, stack_prot, stack_prot,
 	    MAP_STACK_AREA);
 	if (error != KERN_SUCCESS) {
 		uprintf("exec_new_vmspace: mapping stack size %#jx prot %#x "
@@ -1268,6 +1309,7 @@ exec_map_stack(struct image_params *imgp)
 		return (vm_mmap_to_errno(error));
 	}
 
+	imgp->stack_sz = ssiz;
 	stack_top = stack_addr + ssiz;
 	if ((map->flags & MAP_ASLR_STACK) != 0) {
 		/* Randomize within the first page of the stack. */
@@ -1275,7 +1317,47 @@ exec_map_stack(struct image_params *imgp)
 		stack_top -= rounddown2(stack_off & PAGE_MASK, sizeof(void *));
 	}
 
-	p->p_psstrings = stack_top - sv->sv_psstringssz;
+#ifdef __CHERI__
+	perms = vm_prot2perms(CHERI_CAP_USER_DATA_PERMS, stack_prot);
+	imgp->stack = (void *)cheri_perms_and(stack_top, perms);
+	if (sv->sv_flags & SV_CHERI)
+		imgp->stack = cheri_capability_build_user_data(perms,
+		    stack_addr, ssiz, ssiz);
+	else
+		imgp->stack =
+			cheri_capability_build_inexact_user_data(perms,
+			    stack_addr, ssiz, stack_top - stack_addr);
+
+	if (sv->sv_flags & SV_CHERI) {
+		/*
+		 * Map a seperate space for strings outside the stack.
+		 * We currently place it just just below the stack as
+		 * this avoides collisions with init which is linked
+		 * near the bottom of the address space.
+		 *
+		 * The extra page beyond ARG_MAX accounts for space
+		 * needed for the ELF auxiliary, argument, and
+		 * environment vectors and other data stored in this
+		 * space other than argument and environment strings.
+		 */
+		strings_size = CHERI_REPRESENTABLE_LENGTH(ARG_MAX + PAGE_SIZE);
+		strings_addr = CHERI_REPRESENTABLE_ALIGN_DOWN(
+		    stack_addr - strings_size, strings_size);
+		error = vm_mmap_object(map, &strings_addr, 0, strings_size,
+		    VM_PROT_RW_CAP, VM_PROT_RW_CAP, MAP_ANON | MAP_FIXED |
+		    MAP_RESERVATION_CREATE, NULL, 0, FALSE, curthread);
+		if (error != KERN_SUCCESS)
+			return (vm_mmap_to_errno(error));
+		imgp->strings = (void *)strings_addr;
+	} else
+		imgp->strings = imgp->stack;
+
+	if (sv->sv_flags & SV_CHERI)
+		p->p_psstrings = strings_addr + strings_size -
+		    sv->sv_psstringssz;
+		else
+#endif
+		p->p_psstrings = stack_top - sv->sv_psstringssz;
 
 	/* Map a shared page */
 	obj = sv->sv_shared_page_obj;
@@ -1298,7 +1380,7 @@ exec_map_stack(struct image_params *imgp)
 		    lim_max(curthread, RLIMIT_DATA));
 
 		error = vm_map_fixed(map, NULL, 0,
-		    sv->sv_maxuser - PAGE_SIZE, PAGE_SIZE,
+		    sv->sv_maxuser - PAGE_SIZE, NULL, PAGE_SIZE,
 		    VM_PROT_NONE, VM_PROT_NONE, MAP_CREATE_GUARD);
 		if (error != KERN_SUCCESS) {
 			/*
@@ -1317,9 +1399,8 @@ exec_map_stack(struct image_params *imgp)
 		    VM_PROT_READ | VM_PROT_EXECUTE,
 		    MAP_INHERIT_SHARE | MAP_ACC_NO_CHARGE);
 	} else {
-		sharedpage_addr = sv->sv_shared_page_base;
-		error = vm_map_fixed(map, obj, 0,
-		    sharedpage_addr, sv->sv_shared_page_len,
+		error = vm_map_fixed(map, obj, 0, sv->sv_shared_page_base,
+		    &sharedpage_addr, sv->sv_shared_page_len,
 		    VM_PROT_READ | VM_PROT_EXECUTE,
 		    VM_PROT_READ | VM_PROT_EXECUTE,
 		    MAP_INHERIT_SHARE | MAP_ACC_NO_CHARGE);
@@ -1336,11 +1417,54 @@ out:
 	 * vm_ssize and vm_maxsaddr are somewhat antiquated concepts, but they
 	 * are still used to enforce the stack rlimit on the process stack.
 	 */
-	vmspace->vm_maxsaddr = (char *)stack_addr;
+	vmspace->vm_maxsaddr = stack_addr;
 	vmspace->vm_stacktop = stack_top;
 	vmspace->vm_ssize = sgrowsiz >> PAGE_SHIFT;
 	vmspace->vm_shp_base = sharedpage_addr;
 
+	return (0);
+}
+
+/*
+ * Takes a pointer to a pointer an array of pointers in userspace, loads
+ * the loads the current value and updates the array pointer.
+ */
+static int
+get_argenv_ptr(void **arrayp, void **ptrp)
+{
+	uintptr_t ptr;
+	char *array;
+#ifdef COMPAT_FREEBSD32
+	uint32_t ptr32;
+#endif
+#ifdef COMPAT_FREEBSD64
+	uint64_t ptr64;
+#endif
+
+	array = *arrayp;
+#ifdef COMPAT_FREEBSD32
+	if (SV_CURPROC_FLAG(SV_ILP32)) {
+		if (fueword32(array, &ptr32) == -1)
+			return (EFAULT);
+		array += sizeof(ptr32);
+		*ptrp = USER_PTR_STR((void *)(uintptr_t)ptr32);
+	} else
+#endif
+#ifdef COMPAT_FREEBSD64
+	if (SV_CURPROC_FLAG(SV_LP64 | SV_CHERI) == SV_LP64) {
+		if (fueword64(array, &ptr64) == -1)
+			return (EFAULT);
+		array += sizeof(ptr64);
+		*ptrp = USER_PTR_STR((void *)(uintptr_t)ptr64);
+	} else
+#endif
+	{
+		if (fueptr(array, &ptr) == -1)
+			return (EFAULT);
+		array += sizeof(ptr);
+		*ptrp = (void *)ptr;
+	}
+	*arrayp = array;
 	return (0);
 }
 
@@ -1350,9 +1474,9 @@ out:
  */
 int
 exec_copyin_args(struct image_args *args, const char *fname,
-    char **argv, char **envv)
+    void *argv, void *envv)
 {
-	u_long arg, env;
+	void *ptr;
 	int error;
 
 	bzero(args, sizeof(*args));
@@ -1378,15 +1502,12 @@ exec_copyin_args(struct image_args *args, const char *fname,
 	 * extract arguments first
 	 */
 	for (;;) {
-		error = fueword(argv++, &arg);
-		if (error == -1) {
-			error = EFAULT;
+		error = get_argenv_ptr(&argv, &ptr);
+		if (error != 0)
 			goto err_exit;
-		}
-		if (arg == 0)
+		if (ptr == NULL)
 			break;
-		error = exec_args_add_arg(args, (char *)(uintptr_t)arg,
-		    UIO_USERSPACE);
+		error = exec_args_add_arg(args, ptr, UIO_USERSPACE);
 		if (error != 0)
 			goto err_exit;
 	}
@@ -1396,15 +1517,12 @@ exec_copyin_args(struct image_args *args, const char *fname,
 	 */
 	if (envv) {
 		for (;;) {
-			error = fueword(envv++, &env);
-			if (error == -1) {
-				error = EFAULT;
+			error = get_argenv_ptr(&envv, &ptr);
+			if (error != 0)
 				goto err_exit;
-			}
-			if (env == 0)
+			if (envv == 0)
 				break;
-			error = exec_args_add_env(args,
-			    (char *)(uintptr_t)env, UIO_USERSPACE);
+			error = exec_args_add_env(args, ptr, UIO_USERSPACE);
 			if (error != 0)
 				goto err_exit;
 		}
@@ -1418,7 +1536,7 @@ err_exit:
 }
 
 struct exec_args_kva {
-	vm_offset_t addr;
+	vm_pointer_t addr;
 	u_int gen;
 	SLIST_ENTRY(exec_args_kva) next;
 };
@@ -1446,7 +1564,7 @@ exec_prealloc_args_kva(void *arg __unused)
 }
 SYSINIT(exec_args_kva, SI_SUB_EXEC, SI_ORDER_ANY, exec_prealloc_args_kva, NULL);
 
-static vm_offset_t
+static vm_pointer_t
 exec_alloc_args_kva(void **cookie)
 {
 	struct exec_args_kva *argkva;
@@ -1581,9 +1699,11 @@ exec_args_add_fname(struct image_args *args, const char *fname,
 
 	if (fname != NULL) {
 		args->fname = args->buf;
-		error = segflg == UIO_SYSSPACE ?
-		    copystr(fname, args->fname, PATH_MAX, &length) :
-		    copyinstr(fname, args->fname, PATH_MAX, &length);
+		if (segflg == UIO_SYSSPACE)
+			error = copystr(fname, args->fname, PATH_MAX, &length);
+		else
+			error = copyinstr(fname, args->fname, PATH_MAX,
+			    &length);
 		if (error != 0)
 			return (error == ENAMETOOLONG ? E2BIG : error);
 	} else
@@ -1690,15 +1810,27 @@ exec_copyout_strings(struct image_params *imgp, uintptr_t *stack_base)
 	struct ps_strings *arginfo;
 	struct proc *p;
 	struct sysentvec *sysent;
-	size_t execpath_len;
+	size_t execpath_len, len;
 	int error, szsigcode;
 	char canary[sizeof(long) * 8];
+	bool strings_on_stack;
 
 	p = imgp->proc;
 	sysent = p->p_sysent;
 
-	destp =	PROC_PS_STRINGS(p);
-	arginfo = imgp->ps_strings = (void *)destp;
+	strings_on_stack = true;
+#ifdef __CHERI__
+	if (imgp->stack != imgp->strings)
+		strings_on_stack = false;
+	destp = (uintptr_t)imgp->strings;
+	destp = cheri_address_set(destp, PROC_PS_STRINGS(p));
+	arginfo = (struct ps_strings *)cheri_bounds_set_exact(destp,
+	    sizeof(*arginfo));
+#else
+	destp =	(uintptr_t)PROC_PS_STRINGS(p);
+	arginfo = (struct ps_strings *)destp;
+#endif
+	imgp->ps_strings = arginfo;
 
 	/*
 	 * Install sigcode.
@@ -1719,7 +1851,8 @@ exec_copyout_strings(struct image_params *imgp, uintptr_t *stack_base)
 		execpath_len = strlen(imgp->execpath) + 1;
 		destp -= execpath_len;
 		destp = rounddown2(destp, sizeof(void *));
-		imgp->execpathp = (void *)destp;
+		imgp->execpathp =
+		    (void *)cheri_kern_bounds_set_exact(destp, execpath_len);
 		error = copyout(imgp->execpath, imgp->execpathp, execpath_len);
 		if (error != 0)
 			return (error);
@@ -1730,7 +1863,8 @@ exec_copyout_strings(struct image_params *imgp, uintptr_t *stack_base)
 	 */
 	arc4rand(canary, sizeof(canary), 0);
 	destp -= sizeof(canary);
-	imgp->canary = (void *)destp;
+	imgp->canary =
+	    (void *)cheri_kern_bounds_set_exact(destp, sizeof(canary));
 	error = copyout(canary, imgp->canary, sizeof(canary));
 	if (error != 0)
 		return (error);
@@ -1742,7 +1876,8 @@ exec_copyout_strings(struct image_params *imgp, uintptr_t *stack_base)
 	imgp->pagesizeslen = sizeof(pagesizes[0]) * MAXPAGESIZES;
 	destp -= imgp->pagesizeslen;
 	destp = rounddown2(destp, sizeof(void *));
-	imgp->pagesizes = (void *)destp;
+	imgp->pagesizes =
+	    (void *)cheri_kern_bounds_set_exact(destp, imgp->pagesizeslen);
 	error = copyout(pagesizes, imgp->pagesizes, imgp->pagesizeslen);
 	if (error != 0)
 		return (error);
@@ -1752,7 +1887,8 @@ exec_copyout_strings(struct image_params *imgp, uintptr_t *stack_base)
 	 */
 	destp -= ARG_MAX - imgp->args->stringspace;
 	destp = rounddown2(destp, sizeof(void *));
-	ustringp = destp;
+	ustringp =
+	    cheri_kern_bounds_set(destp, ARG_MAX - imgp->args->stringspace);
 
 	if (imgp->auxargs) {
 		/*
@@ -1771,10 +1907,14 @@ exec_copyout_strings(struct image_params *imgp, uintptr_t *stack_base)
 	 */
 	vectp -= imgp->args->argc + 1 + imgp->args->envc + 1;
 
-	/*
-	 * vectp also becomes our initial stack base
-	 */
-	*stack_base = (uintptr_t)vectp;
+	if (!strings_on_stack)
+		*stack_base = (uintptr_t)imgp->stack;
+	else {
+		/*
+		 * vectp also becomes our initial stack base
+		 */
+		*stack_base = (uintptr_t)vectp;
+	}
 
 	stringp = imgp->args->begin_argv;
 	argc = imgp->args->argc;
@@ -1791,8 +1931,8 @@ exec_copyout_strings(struct image_params *imgp, uintptr_t *stack_base)
 	/*
 	 * Fill in "ps_strings" struct for ps, w, etc.
 	 */
-	imgp->argv = vectp;
-	if (suword(&arginfo->ps_argvstr, (long)(intptr_t)vectp) != 0 ||
+	imgp->argv = cheri_kern_bounds_set(vectp, (argc + 1) * sizeof(*vectp));
+	if (suptr(&arginfo->ps_argvstr, (intptr_t)vectp) != 0 ||
 	    suword32(&arginfo->ps_nargvstr, argc) != 0)
 		return (EFAULT);
 
@@ -1800,19 +1940,19 @@ exec_copyout_strings(struct image_params *imgp, uintptr_t *stack_base)
 	 * Fill in argument portion of vector table.
 	 */
 	for (; argc > 0; --argc) {
-		if (suword(vectp++, ustringp) != 0)
+		len = strlen(stringp) + 1;
+		if (suptr(vectp++, cheri_kern_bounds_set(ustringp, len)) != 0)
 			return (EFAULT);
-		while (*stringp++ != 0)
-			ustringp++;
-		ustringp++;
+		stringp += len;
+		ustringp += len;
 	}
 
 	/* a null vector table pointer separates the argp's from the envp's */
 	if (suword(vectp++, 0) != 0)
 		return (EFAULT);
 
-	imgp->envv = vectp;
-	if (suword(&arginfo->ps_envstr, (long)(intptr_t)vectp) != 0 ||
+	imgp->envv = cheri_kern_bounds_set(vectp, (envc + 1) * sizeof(*vectp));
+	if (suptr(&arginfo->ps_envstr, (intptr_t)vectp) != 0 ||
 	    suword32(&arginfo->ps_nenvstr, envc) != 0)
 		return (EFAULT);
 
@@ -1820,11 +1960,11 @@ exec_copyout_strings(struct image_params *imgp, uintptr_t *stack_base)
 	 * Fill in environment portion of vector table.
 	 */
 	for (; envc > 0; --envc) {
-		if (suword(vectp++, ustringp) != 0)
+		len = strlen(stringp) + 1;
+		if (suptr(vectp++, cheri_kern_bounds_set(ustringp, len)) != 0)
 			return (EFAULT);
-		while (*stringp++ != 0)
-			ustringp++;
-		ustringp++;
+		stringp += len;
+		ustringp += len;
 	}
 
 	/* end of vector table is a null pointer */
@@ -1833,8 +1973,10 @@ exec_copyout_strings(struct image_params *imgp, uintptr_t *stack_base)
 
 	if (imgp->auxargs) {
 		vectp++;
+		imgp->auxv = cheri_kern_bounds_set(vectp,
+		    AT_COUNT * sizeof(Elf_Auxinfo));
 		error = imgp->sysent->sv_copyout_auxargs(imgp,
-		    (uintptr_t)vectp);
+		    (uintptr_t)imgp->auxv);
 		if (error != 0)
 			return (error);
 	}
@@ -2026,7 +2168,7 @@ core_output(char *base, size_t len, off_t offset, struct coredump_params *cp,
 	int error;
 	bool success;
 
-	KASSERT((uintptr_t)base % PAGE_SIZE == 0,
+	KASSERT(__is_aligned(base, PAGE_SIZE),
 	    ("%s: user address %p is not page-aligned", __func__, base));
 
 	if (cp->comp != NULL)
@@ -2044,7 +2186,8 @@ core_output(char *base, size_t len, off_t offset, struct coredump_params *cp,
 		for (runlen = 0; runlen < len; runlen += PAGE_SIZE) {
 			if (core_dump_can_intr && curproc_sigkilled())
 				return (EINTR);
-			error = vm_fault(map, (uintptr_t)base + runlen,
+			error = vm_fault(map,
+			    (ptraddr_t)(uintptr_t)base + runlen,
 			    VM_PROT_READ, VM_FAULT_NOFILL, NULL);
 			if (runlen == 0)
 				success = error == KERN_SUCCESS;

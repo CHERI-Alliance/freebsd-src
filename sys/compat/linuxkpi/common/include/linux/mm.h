@@ -356,7 +356,7 @@ pin_user_pages_fast(void *start, int nr_pages, unsigned int gup_flags,
 
 extern long
 get_user_pages_remote(struct task_struct *, struct mm_struct *,
-    void * start, unsigned long nr_pages,
+    void *start, unsigned long nr_pages,
     unsigned int gup_flags, struct page **,
     struct vm_area_struct **);
 

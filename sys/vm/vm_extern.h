@@ -46,12 +46,12 @@ struct cdevsw;
 struct domainset;
 
 /* These operate on kernel virtual addresses only. */
-vm_offset_t kva_alloc(vm_size_t);
-vm_offset_t kva_alloc_aligned(vm_size_t, vm_size_t);
-void kva_free(vm_offset_t, vm_size_t);
+vm_pointer_t kva_alloc(vm_size_t);
+vm_pointer_t kva_alloc_aligned(vm_size_t, vm_size_t);
+void kva_free(vm_pointer_t, vm_size_t);
 
 /* These operate on pageable virtual addresses. */
-vm_offset_t kmap_alloc_wait(vm_map_t, vm_size_t);
+vm_pointer_t kmap_alloc_wait(vm_map_t, vm_size_t);
 void kmap_free_wakeup(vm_map_t, vm_offset_t, vm_size_t);
 
 /* These operate on virtual addresses backed by memory. */
@@ -71,20 +71,23 @@ void *kmem_malloc_domainset(struct domainset *ds, vm_size_t size,
 void kmem_free(void *addr, vm_size_t size);
 
 /* This provides memory for previously allocated address space. */
-int kmem_back(vm_object_t, vm_offset_t, vm_size_t, int);
-int kmem_back_domain(int, vm_object_t, vm_offset_t, vm_size_t, int);
+int kmem_back(vm_object_t, vm_pointer_t, vm_size_t, int);
+int kmem_back_domain(int, vm_object_t, vm_pointer_t, vm_size_t, int);
 void kmem_unback(vm_object_t, vm_offset_t, vm_size_t);
 
 /* Bootstrapping. */
 void kmem_bootstrap_free(vm_offset_t, vm_size_t);
-void kmem_subinit(vm_map_t, vm_map_t, vm_offset_t *, vm_offset_t *, vm_size_t,
-    bool);
-void kmem_init(vm_offset_t, vm_offset_t);
+void kmem_subinit(vm_map_t, vm_map_t, vm_pointer_t *, vm_pointer_t *,
+    vm_size_t, bool);
+void kmem_init(vm_pointer_t, vm_pointer_t);
 void kmem_init_zero_region(void);
 void kmeminit(void);
 
 bool kernacc(void *, int, int);
 bool useracc(void *, int, int);
+#ifdef __CHERI__
+bool vm_cap_allows_prot(const void *, vm_prot_t);
+#endif
 int vm_fault(vm_map_t map, vm_offset_t vaddr, vm_prot_t fault_type,
     int fault_flags, vm_page_t *m_hold);
 void vm_fault_copy_entry(vm_map_t, vm_map_t, vm_map_entry_t, vm_map_entry_t,
@@ -105,7 +108,7 @@ int vm_mmap(vm_map_t, vm_pointer_t *, vm_size_t, vm_prot_t, vm_prot_t, int,
 int vm_mmap_object(vm_map_t, vm_pointer_t *, vm_offset_t, vm_size_t, vm_prot_t,
     vm_prot_t, int, vm_object_t, vm_ooffset_t, boolean_t, struct thread *);
 int vm_mmap_to_errno(int rv);
-int vm_mmap_cdev(struct thread *, vm_size_t, vm_prot_t, vm_prot_t *,
+int vm_mmap_cdev(struct thread *, vm_size_t, vm_prot_t *, vm_prot_t *,
     int *, struct cdev *, struct cdevsw *, vm_ooffset_t *, vm_object_t *);
 int vm_mmap_vnode(struct thread *, vm_size_t, vm_prot_t, vm_prot_t *, int *,
     struct vnode *, vm_ooffset_t *, vm_object_t *, boolean_t *);

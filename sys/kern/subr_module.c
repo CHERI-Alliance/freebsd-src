@@ -40,7 +40,7 @@
 #include <vm/vm_extern.h>
 
 #ifdef __CHERI__
-#include <cheri/cheric.h
+#include <cheri/cheri.h>
 #endif
 #include <cheri/cheric.h>
 
@@ -471,7 +471,7 @@ preload_modinfo_type(struct sbuf *sbp, int type)
 static void
 preload_modinfo_value(struct sbuf *sbp, uint32_t *bptr, int type, int len)
 {
-#ifdef __LP64__
+#if __SIZEOF_LONG__ > __SIZEOF_INT__
 #define sbuf_print_vmoffset(sb, o)	sbuf_printf(sb, "0x%016lx", o);
 #else
 #define sbuf_print_vmoffset(sb, o)	sbuf_printf(sb, "0x%08x", o);

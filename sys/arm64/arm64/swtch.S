@@ -290,6 +290,7 @@ ENTRY(fork_trampoline)
 	 */
 	msr	daifset, #(DAIF_D | DAIF_INTR)
 
+#ifdef TBI
 	ldr	x0, [x18, #PC_CURTHREAD]
 
 	/* Set the per-process tcr_el1 fields */
@@ -300,8 +301,10 @@ ENTRY(fork_trampoline)
 	orr	x11, x11, x10
 	msr	tcr_el1, x11
 	/* No isb as the eret below is the context-synchronising event */
+#endif
 
 #ifdef PAC
+	ldr	x0, [x18, #PC_CURTHREAD]
 	bl	ptrauth_enter_el0
 #endif
 

@@ -22,7 +22,7 @@ typedef u_long bus_size_t;
 /*
  * Access methods for bus space.
  */
-typedef u_long bus_space_handle_t;
+typedef uintptr_t bus_space_handle_t;
 typedef struct bus_space *bus_space_tag_t;
 
 #endif /* !_MACHINE__BUS_H_ */

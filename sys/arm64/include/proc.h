@@ -74,6 +74,9 @@ struct mdthread {
 };
 
 struct mdproc {
+#ifdef __CHERI__
+	void *md_sigcode;
+#endif
 	uint64_t md_tcr;		/* TCR_EL1 fields to update */
 	uint64_t md_reserved[2];
 };
@@ -82,7 +85,12 @@ struct mdproc {
 /* Fields that can be set in md_tcr */
 #define	MD_TCR_FIELDS			TCR_TBI0
 
+#ifdef __CHERI__
+#define	KINFO_PROC_SIZE		1248
+#define	KINFO_PROC64_SIZE	1088
+#else
 #define	KINFO_PROC_SIZE	1088
+#endif
 #define	KINFO_PROC32_SIZE 816
 
 #endif /* !_MACHINE_PROC_H_ */

@@ -188,7 +188,11 @@
  * MCLBYTES must be no larger than PAGE_SIZE.
  */
 #ifndef	MSIZE
+#ifdef __CHERI__
+#define	MSIZE		512		/* size of an mbuf */
+#else
 #define	MSIZE		256		/* size of an mbuf */
+#endif
 #endif
 
 #ifndef	MCLSHIFT

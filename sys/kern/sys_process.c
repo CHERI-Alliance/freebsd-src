@@ -1169,7 +1169,9 @@ kern_ptrace(struct thread *td, int req, pid_t pid, void *addr, int data)
 		break;
 
 	case PT_GET_SC_ARGS:
-	case PTLINUX_GET_SC_ARGS:
+	case PTLINUX_GET_SC_ARGS: {
+		syscallarg_t *args = addr;
+
 		CTR2(KTR_PTRACE, "%s: pid %d", req == PT_GET_SC_ARGS ?
 		    "PT_GET_SC_ARGS" : "PT_LINUX_GET_SC_ARGS", p->p_pid);
 		if (((td2->td_dbgflags & (TDB_SCE | TDB_SCX)) == 0 &&
@@ -1183,7 +1185,7 @@ kern_ptrace(struct thread *td, int req, pid_t pid, void *addr, int data)
 		}
 		if (req == PT_GET_SC_ARGS) {
 			bzero(addr, sizeof(td2->td_sa.args));
-			bcopy(td2->td_sa.args, addr, td2->td_sa.callp->sy_narg *
+			bcopy(td2->td_sa.args, args, td2->td_sa.callp->sy_narg *
 			    sizeof(syscallarg_t));
 		} else {
 			/*
@@ -1194,9 +1196,10 @@ kern_ptrace(struct thread *td, int req, pid_t pid, void *addr, int data)
 			 * whether it can fetch them all using this API;
 			 * otherwise it bails out.
 			 */
-			bcopy(td2->td_sa.args, addr, 6 * sizeof(syscallarg_t));
+			bcopy(td2->td_sa.args, args, 6 * sizeof(syscallarg_t));
 		}
 		break;
+	}
 
 	case PT_GET_SC_RET:
 		if ((td2->td_dbgflags & (TDB_SCX)) == 0

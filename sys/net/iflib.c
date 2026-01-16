@@ -3486,7 +3486,7 @@ iflib_encap(iflib_txq_t txq, struct mbuf **m_headp)
 	struct mbuf		*m_head, **ifsd_m;
 	bus_dmamap_t		map;
 	struct if_pkt_info	pi;
-	uintptr_t		flags;
+	ptraddr_t		flags;
 	int remap = 0;
 	int err, nsegs, ndesc, max_segs, pidx;
 

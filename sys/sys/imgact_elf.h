@@ -37,9 +37,10 @@
 
 #define	AUXARGS_ENTRY(pos, id, val) \
     {(pos)->a_type = (id); (pos)->a_un.a_val = (val); (pos)++;}
-#if (defined(__LP64__) && __ELF_WORD_SIZE == 32)
+#if (defined(__CHERI__) && !defined(__ELF_CHERI)) || \
+    (defined(__LP64__) && __ELF_WORD_SIZE == 32)
 #define	AUXARGS_ENTRY_PTR(pos, id, ptr) \
-    {(pos)->a_type = (id); (pos)->a_un.a_val = (uintptr_t)(ptr); (pos)++;}
+    {(pos)->a_type = (id); (pos)->a_un.a_val = (ptraddr_t)(ptr); (pos)++;}
 #else
 #define	AUXARGS_ENTRY_PTR(pos, id, ptr) \
     {(pos)->a_type = (id); (pos)->a_un.a_ptr = (ptr); (pos)++;}
@@ -66,6 +67,7 @@ typedef struct {
 	Elf_Size	flags;
 	Elf_Size	entry;
 	Elf_Word	hdr_eflags;		/* e_flags field from ehdr */
+	Elf_Word	hdr_etype;		/* e_type field from ehdr */
 } __ElfN(Auxargs);
 
 typedef struct {

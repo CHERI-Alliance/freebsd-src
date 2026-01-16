@@ -52,6 +52,16 @@
 #define	WRITE_SPECIALREG(reg, _val)					\
 	__asm __volatile("msr	" __STRING(reg) ", %0" : : "r"((uint64_t)_val))
 
+#ifdef __CHERI__
+#define	READ_SPECIALREG_CAP(reg)					\
+({	uintptr_t _val;							\
+	__asm __volatile("mrs   %0, " __STRING(reg) : "=&C" (_val));	\
+	_val;								\
+})
+#define	WRITE_SPECIALREG_CAP(reg, _val)					\
+	__asm __volatile("msr   " __STRING(reg) ", %0" : : "C"((uintptr_t)_val))
+#endif
+
 #define	UL(x)	UINT64_C(x)
 
 #endif /* !_MACHINE__ARMREG_H_ */

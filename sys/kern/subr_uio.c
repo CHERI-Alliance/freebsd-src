@@ -552,7 +552,7 @@ cloneuio(struct uio *uiop)
  * boundary.
  */
 int
-copyout_map(struct thread *td, vm_offset_t *addr, size_t sz)
+copyout_map(struct thread *td, vm_pointer_t *addr, size_t sz)
 {
 	struct vmspace *vms;
 	int error;
@@ -563,7 +563,7 @@ copyout_map(struct thread *td, vm_offset_t *addr, size_t sz)
 	/*
 	 * Map somewhere after heap in process memory.
 	 */
-	*addr = round_page((vm_offset_t)vms->vm_daddr +
+	*addr = round_page((vm_pointer_t)vms->vm_daddr +
 	    lim_max(td, RLIMIT_DATA));
 
 	/* round size up to page boundary */
@@ -580,7 +580,7 @@ copyout_map(struct thread *td, vm_offset_t *addr, size_t sz)
  * Unmap memory in user space.
  */
 int
-copyout_unmap(struct thread *td, vm_offset_t addr, size_t sz)
+copyout_unmap(struct thread *td, vm_pointer_t addr, size_t sz)
 {
 	vm_map_t map;
 	vm_size_t size;
@@ -607,7 +607,7 @@ fuword32(volatile const void *addr)
 	return (rv == -1 ? -1 : val);
 }
 
-#ifdef _LP64
+#if __SIZEOF_SIZE_T__ == 8
 int64_t
 fuword64(volatile const void *addr)
 {
@@ -617,7 +617,7 @@ fuword64(volatile const void *addr)
 	rv = fueword64(addr, &val);
 	return (rv == -1 ? -1 : val);
 }
-#endif /* _LP64 */
+#endif /* __SIZEOF_SIZE_T__ == 8 */
 
 long
 fuword(volatile const void *addr)

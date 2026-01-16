@@ -36,6 +36,7 @@
 #include <sys/param.h>
 #include <sys/capsicum.h>
 #include <sys/compressor.h>
+#include <sys/elf.h>
 #include <sys/exec.h>
 #include <sys/fcntl.h>
 #include <sys/imgact.h>
@@ -69,6 +70,9 @@
 #include <sys/syslog.h>
 #include <sys/eventhandler.h>
 #include <sys/user.h>
+#ifdef __ELF_CHERI
+#include <sys/vdso.h>
+#endif
 
 #include <vm/vm.h>
 #include <vm/vm_kern.h>
@@ -78,7 +82,11 @@
 #include <vm/vm_object.h>
 #include <vm/vm_extern.h>
 
-#include <machine/elf.h>
+#ifdef __CHERI__
+#include <cheri/cheri.h>
+#endif
+#include <cheri/cheric.h>
+
 #include <machine/md_var.h>
 
 #define ELF_NOTE_ROUNDSIZE	4
@@ -88,17 +96,22 @@
  * ELF_ABI_NAME is a string name of the ELF ABI.  ELF_ABI_ID is used
  * to build variable names.
  */
+#ifdef __ELF_CHERI
+#define	ELF_ABI_NAME	__XSTRING(__CONCAT(ELF, __CONCAT(__ELF_WORD_SIZE, C)))
+#define	ELF_ABI_ID	__CONCAT(elf, __CONCAT(__ELF_WORD_SIZE, c))
+#else
 #define	ELF_ABI_NAME	__XSTRING(__CONCAT(ELF, __ELF_WORD_SIZE))
 #define	ELF_ABI_ID	__CONCAT(elf, __ELF_WORD_SIZE)
+#endif
 
 static int __elfN(check_header)(const Elf_Ehdr *hdr);
 static const Elf_Brandinfo *__elfN(get_brandinfo)(struct image_params *imgp,
     const Elf_Ehdr *hdr, const Elf_Phdr *phdr, const char *interp,
     int32_t *osrel, uint32_t *fctl0);
 static int __elfN(load_file)(struct proc *p, const char *file, u_long *addr,
-    u_long *entry);
+    u_long *end_addr, u_long *entry);
 static int __elfN(load_section)(const struct image_params *imgp,
-    vm_ooffset_t offset, caddr_t vmaddr, size_t memsz, size_t filsz,
+    vm_ooffset_t offset, uintptr_t vmaddr, size_t memsz, size_t filsz,
     vm_prot_t prot);
 static int __CONCAT(exec_, __elfN(imgact))(struct image_params *imgp);
 static bool __elfN(freebsd_trans_osrel)(const Elf_Note *note,
@@ -127,6 +140,7 @@ SYSCTL_INT(_debug, OID_AUTO, __elfN(legacy_coredump), CTLFLAG_RW,
     &elf_legacy_coredump, 0,
     "include all and only RW pages in core dumps");
 
+#ifndef __ELF_CHERI
 int __elfN(nxstack) =
 #if defined(__amd64__) || defined(__powerpc64__) /* both 64 and 32 bit */ || \
     defined(__arm__) || defined(__aarch64__) || \
@@ -138,6 +152,7 @@ int __elfN(nxstack) =
 SYSCTL_INT(ELF_NODE_OID, OID_AUTO,
     nxstack, CTLFLAG_RW, &__elfN(nxstack), 0,
     ELF_ABI_NAME ": support PT_GNU_STACK for non-executable stack control");
+#endif
 
 #if defined(__amd64__)
 static int __elfN(vdso) = 1;
@@ -556,6 +571,11 @@ __elfN(check_header)(const Elf_Ehdr *hdr)
 	    hdr->e_ident[EI_DATA] != ELF_TARG_DATA ||
 	    hdr->e_ident[EI_VERSION] != EV_CURRENT ||
 	    hdr->e_phentsize != sizeof(Elf_Phdr) ||
+#ifdef __ELF_CHERI
+	    !ELF_IS_CHERI(hdr) ||
+#else
+	    ELF_IS_CHERI(hdr) ||
+#endif
 	    hdr->e_version != ELF_TARG_VER)
 		return (ENOEXEC);
 
@@ -574,9 +594,81 @@ __elfN(check_header)(const Elf_Ehdr *hdr)
 	return (0);
 }
 
+#ifdef __CHERI__
+/*
+ * Create a reservation for the image activator to map the executable
+ * image into.
+ */
+static int
+__elfN(build_imgact_capability)(struct image_params *imgp,
+    void **imgact_cap, const Elf_Ehdr *hdr, const Elf_Phdr *phdr,
+    Elf_Addr *preferred_rbase)
+{
+	u_long perm = CHERI_PERM_STORE | CHERI_PERM_GLOBAL |
+	    CHERI_PERM_STORE_CAP;
+	vm_offset_t start = (vm_offset_t)-1;
+	vm_offset_t end = 0;
+	vm_offset_t seg_addr;
+	vm_size_t seg_size;
+	int i, result;
+	vm_pointer_t reservation;
+	void *reservation_cap;
+	vm_map_t map;
+	Elf_Addr rbase = *preferred_rbase;
+
+	map = &imgp->proc->p_vmspace->vm_map;
+
+	for (i = 0; i < hdr->e_phnum; i++) {
+		if (phdr[i].p_type != PT_LOAD || phdr[i].p_memsz == 0)
+			continue;
+
+		seg_addr = trunc_page(phdr[i].p_vaddr);
+		seg_size = round_page(phdr[i].p_memsz + phdr[i].p_vaddr -
+		    seg_addr);
+		start = MIN(start, seg_addr);
+		end = MAX(end, seg_addr + seg_size);
+	}
+
+	reservation = start + rbase;
+#ifdef __ELF_CHERI
+	if (hdr->e_type == ET_EXEC && !__is_aligned(reservation,
+	    CHERI_REPRESENTABLE_ALIGNMENT(end - start))) {
+		/*
+		 * We can't change the load address for position
+		 * dependent executables, so we have to give up and
+		 * report an error.
+		 */
+		uprintf("Warning: Attempted to load position-dependent "
+		    "executable with non-representable base: %s\n",
+		    imgp->execpath);
+		return (EINVAL); /* XXX: EPRECISION or similar? */
+	}
+
+	/*
+	 * Note: vm_map_reservation_create aligns down, but we have to
+	 * align upwards here to avoid rounding down to zero for the main
+	 * executable. For RTLD we also align upwards to avoid aligning
+	 * down into the memory region for the main binary.
+	 */
+	reservation = CHERI_REPRESENTABLE_ALIGN_UP(reservation, end - start);
+#endif
+	result = vm_map_reservation_create(map, &reservation, end - start,
+	    PAGE_SIZE, VM_PROT_ALL);
+	if (result != KERN_SUCCESS)
+		return (vm_mmap_to_errno(result));
+
+	*preferred_rbase = reservation - start;
+
+	reservation_cap = (void *)reservation;
+	*imgact_cap = cheri_perms_and(reservation_cap, perm);
+
+	return (0);
+}
+#endif
+
 static int
 __elfN(map_partial)(vm_map_t map, vm_object_t object, vm_ooffset_t offset,
-    vm_offset_t start, vm_offset_t end, vm_prot_t prot)
+    uintptr_t start, uintptr_t end, vm_prot_t prot)
 {
 	struct sf_buf *sf;
 	int error;
@@ -585,8 +677,9 @@ __elfN(map_partial)(vm_map_t map, vm_object_t object, vm_ooffset_t offset,
 	/*
 	 * Create the page if it doesn't exist yet. Ignore errors.
 	 */
-	vm_map_fixed(map, NULL, 0, trunc_page(start), round_page(end) -
-	    trunc_page(start), VM_PROT_ALL, VM_PROT_ALL, MAP_CHECK_EXCL);
+	vm_map_fixed(map, NULL, 0, trunc_page(start), NULL,
+	    (ptraddr_t)round_page(end) - (ptraddr_t)trunc_page(start),
+	    prot, prot /* XXX: or VM_PROT_ALL? */, MAP_CHECK_EXCL);
 
 	/*
 	 * Find the page from the underlying object.
@@ -596,8 +689,8 @@ __elfN(map_partial)(vm_map_t map, vm_object_t object, vm_ooffset_t offset,
 		if (sf == NULL)
 			return (KERN_FAILURE);
 		off = offset - trunc_page(offset);
-		error = copyout((caddr_t)sf_buf_kva(sf) + off, (caddr_t)start,
-		    end - start);
+		error = copyout((void *)(sf_buf_kva(sf) + off), (void *)start,
+		    (ptraddr_t)end - (ptraddr_t)start);
 		vm_imgact_unmap_page(sf);
 		if (error != 0)
 			return (KERN_FAILURE);
@@ -608,7 +701,7 @@ __elfN(map_partial)(vm_map_t map, vm_object_t object, vm_ooffset_t offset,
 
 static int
 __elfN(map_insert)(const struct image_params *imgp, vm_map_t map,
-    vm_object_t object, vm_ooffset_t offset, vm_offset_t start, vm_offset_t end,
+    vm_object_t object, vm_ooffset_t offset, uintptr_t start, uintptr_t end,
     vm_prot_t prot, int cow)
 {
 	struct sf_buf *sf;
@@ -621,12 +714,13 @@ __elfN(map_insert)(const struct image_params *imgp, vm_map_t map,
 		    round_page(start), prot);
 		if (rv != KERN_SUCCESS)
 			return (rv);
-		offset += round_page(start) - start;
+		offset += (ptraddr_t)round_page(start) - (ptraddr_t)start;
 		start = round_page(start);
 	}
 	if (end != round_page(end)) {
 		rv = __elfN(map_partial)(map, object, offset +
-		    trunc_page(end) - start, trunc_page(end), end, prot);
+		    (ptraddr_t)trunc_page(end) - (ptraddr_t)start,
+		    trunc_page(end), end, prot);
 		if (rv != KERN_SUCCESS)
 			return (rv);
 		end = trunc_page(end);
@@ -638,7 +732,8 @@ __elfN(map_insert)(const struct image_params *imgp, vm_map_t map,
 		 * The mapping is not page aligned.  This means that we have
 		 * to copy the data.
 		 */
-		rv = vm_map_fixed(map, NULL, 0, start, end - start,
+		rv = vm_map_fixed(map, NULL, 0, start, NULL,
+		    (ptraddr_t)end - (ptraddr_t)start,
 		    prot | VM_PROT_WRITE, VM_PROT_ALL, MAP_CHECK_EXCL);
 		if (rv != KERN_SUCCESS)
 			return (rv);
@@ -649,11 +744,12 @@ __elfN(map_insert)(const struct image_params *imgp, vm_map_t map,
 			if (sf == NULL)
 				return (KERN_FAILURE);
 			off = offset - trunc_page(offset);
-			sz = end - start;
+			sz = (ptraddr_t)end - (ptraddr_t)start;
 			if (sz > PAGE_SIZE - off)
 				sz = PAGE_SIZE - off;
-			error = copyout((caddr_t)sf_buf_kva(sf) + off,
-			    (caddr_t)start, sz);
+			error = copyout((void *)(sf_buf_kva(sf) + off),
+			    (void *)start,
+			    (ptraddr_t)end - (ptraddr_t)start);
 			vm_imgact_unmap_page(sf);
 			if (error != 0)
 				return (KERN_FAILURE);
@@ -661,7 +757,8 @@ __elfN(map_insert)(const struct image_params *imgp, vm_map_t map,
 		}
 	} else {
 		vm_object_reference(object);
-		rv = vm_map_fixed(map, object, offset, start, end - start,
+		rv = vm_map_fixed(map, object, offset, start, NULL,
+		    (ptraddr_t)end - (ptraddr_t)start,
 		    prot, VM_PROT_ALL, cow | MAP_CHECK_EXCL |
 		    (object != NULL ? MAP_VN_EXEC : 0));
 		if (rv != KERN_SUCCESS) {
@@ -680,13 +777,13 @@ __elfN(map_insert)(const struct image_params *imgp, vm_map_t map,
 
 static int
 __elfN(load_section)(const struct image_params *imgp, vm_ooffset_t offset,
-    caddr_t vmaddr, size_t memsz, size_t filsz, vm_prot_t prot)
+    uintptr_t vmaddr, size_t memsz, size_t filsz, vm_prot_t prot)
 {
 	struct sf_buf *sf;
 	size_t map_len;
 	vm_map_t map;
 	vm_object_t object;
-	vm_offset_t map_addr;
+	uintptr_t map_addr;
 	int error, rv, cow;
 	size_t copy_len;
 	vm_ooffset_t file_addr;
@@ -708,7 +805,7 @@ __elfN(load_section)(const struct image_params *imgp, vm_ooffset_t offset,
 
 	object = imgp->object;
 	map = &imgp->proc->p_vmspace->vm_map;
-	map_addr = trunc_page((vm_offset_t)vmaddr);
+	map_addr = trunc_page(vmaddr);
 	file_addr = trunc_page(offset);
 
 	/*
@@ -723,6 +820,7 @@ __elfN(load_section)(const struct image_params *imgp, vm_ooffset_t offset,
 		map_len = trunc_page(offset + filsz) - file_addr;
 	else
 		map_len = round_page(offset + filsz) - file_addr;
+	map_addr = cheri_kern_bounds_set(map_addr, map_len);
 
 	if (map_len != 0) {
 		/* cow flags: don't dump readonly sections in core */
@@ -747,8 +845,9 @@ __elfN(load_section)(const struct image_params *imgp, vm_ooffset_t offset,
 	 */
 	copy_len = filsz == 0 ? 0 : (offset + filsz) - trunc_page(offset +
 	    filsz);
-	map_addr = trunc_page((vm_offset_t)vmaddr + filsz);
-	map_len = round_page((vm_offset_t)vmaddr + memsz) - map_addr;
+	map_addr = trunc_page(vmaddr + filsz);
+	map_len = (ptraddr_t)round_page(vmaddr + memsz) - (ptraddr_t)map_addr;
+	map_addr = cheri_kern_bounds_set(map_addr, map_len);
 
 	/* This had damn well better be true! */
 	if (map_len != 0) {
@@ -764,7 +863,7 @@ __elfN(load_section)(const struct image_params *imgp, vm_ooffset_t offset,
 			return (EIO);
 
 		/* send the page fragment to user space */
-		error = copyout((caddr_t)sf_buf_kva(sf), (caddr_t)map_addr,
+		error = copyout((void *)sf_buf_kva(sf), (void *)map_addr,
 		    copy_len);
 		vm_imgact_unmap_page(sf);
 		if (error != 0)
@@ -784,16 +883,18 @@ __elfN(load_section)(const struct image_params *imgp, vm_ooffset_t offset,
 
 static int
 __elfN(load_sections)(const struct image_params *imgp, const Elf_Ehdr *hdr,
-    const Elf_Phdr *phdr, u_long rbase, u_long *base_addrp)
+    const Elf_Phdr *phdr, u_long rbase, u_long *base_addrp, u_long *max_addrp)
 {
 	vm_prot_t prot;
-	u_long base_addr;
+	u_long base_vaddr, max_vaddr;
 	bool first;
 	int error, i;
+	uintptr_t section_addr;
 
 	ASSERT_VOP_LOCKED(imgp->vp, __func__);
 
-	base_addr = 0;
+	base_vaddr = 0;
+	max_vaddr = 0;
 	first = true;
 
 	for (i = 0; i < hdr->e_phnum; i++) {
@@ -801,10 +902,15 @@ __elfN(load_sections)(const struct image_params *imgp, const Elf_Ehdr *hdr,
 			continue;
 
 		/* Loadable segment */
+#ifdef __CHERI__
+		section_addr = (uintptr_t)cheri_address_set(
+		    imgp->imgact_capability, phdr[i].p_vaddr + rbase);
+#else
+		section_addr = phdr[i].p_vaddr + rbase;
+#endif
 		prot = __elfN(trans_prot)(phdr[i].p_flags);
 		error = __elfN(load_section)(imgp, phdr[i].p_offset,
-		    (caddr_t)(uintptr_t)phdr[i].p_vaddr + rbase,
-		    phdr[i].p_memsz, phdr[i].p_filesz, prot);
+		    section_addr, phdr[i].p_memsz, phdr[i].p_filesz, prot);
 		if (error != 0)
 			return (error);
 
@@ -812,13 +918,16 @@ __elfN(load_sections)(const struct image_params *imgp, const Elf_Ehdr *hdr,
 		 * Establish the base address if this is the first segment.
 		 */
 		if (first) {
-  			base_addr = trunc_page(phdr[i].p_vaddr + rbase);
+			base_vaddr = trunc_page(phdr[i].p_vaddr);
 			first = false;
 		}
+		max_vaddr = MAX(max_vaddr, phdr[i].p_vaddr + phdr[i].p_memsz);
 	}
 
 	if (base_addrp != NULL)
-		*base_addrp = base_addr;
+		*base_addrp = rbase + base_vaddr;
+	if (max_addrp != NULL)
+		*max_addrp = rbase + max_vaddr;
 
 	return (0);
 }
@@ -832,12 +941,15 @@ __elfN(load_sections)(const struct image_params *imgp, const Elf_Ehdr *hdr,
  * an executable, this value is ignored.  On exit, "addr" specifies
  * where the file was actually loaded.
  *
+ * The "end_addr" reference parameter is out only.  On exit, it specifies
+ * the end address of the loaded file.
+ *
  * The "entry" reference parameter is out only.  On exit, it specifies
  * the entry point for the loaded file.
  */
 static int
 __elfN(load_file)(struct proc *p, const char *file, u_long *addr,
-	u_long *entry)
+    u_long *end_addr, u_long *entry)
 {
 	struct {
 		struct nameidata nd;
@@ -851,6 +963,7 @@ __elfN(load_file)(struct proc *p, const char *file, u_long *addr,
 	struct image_params *imgp;
 	u_long rbase;
 	u_long base_addr = 0;
+	u_long max_addr = 0;
 	int error;
 
 #ifdef CAPABILITY_MODE
@@ -918,7 +1031,14 @@ __elfN(load_file)(struct proc *p, const char *file, u_long *addr,
 		goto fail;
 	}
 
-	error = __elfN(load_sections)(imgp, hdr, phdr, rbase, &base_addr);
+#ifdef __CHERI__
+	error = __elfN(build_imgact_capability)(imgp, &imgp->imgact_capability,
+	    hdr, phdr, &rbase);
+	if (error != 0)
+		goto fail;
+#endif
+	error = __elfN(load_sections)(imgp, hdr, phdr, rbase, &base_addr,
+	    &max_addr);
 	if (error != 0)
 		goto fail;
 
@@ -926,6 +1046,7 @@ __elfN(load_file)(struct proc *p, const char *file, u_long *addr,
 		p->p_sysent->sv_protect(imgp, SVP_INTERP);
 
 	*addr = base_addr;
+	*end_addr = max_addr;
 	*entry = (unsigned long)hdr->e_entry + rbase;
 
 fail:
@@ -986,7 +1107,7 @@ __CONCAT(rnd_, __elfN(base))(vm_map_t map, u_long minv, u_long maxv,
 }
 
 static int
-__elfN(enforce_limits)(struct image_params *imgp, const Elf_Ehdr *hdr,
+__elfN(enforce_limits)(const struct image_params *imgp, const Elf_Ehdr *hdr,
     const Elf_Phdr *phdr)
 {
 	struct vmspace *vmspace;
@@ -1030,6 +1151,21 @@ __elfN(enforce_limits)(struct image_params *imgp, const Elf_Ehdr *hdr,
 		data_addr = text_addr;
 		data_size = text_size;
 	}
+
+#ifdef __ELF_CHERI
+	/*
+	 * Sanity check that the base address was aligned correctly so that we
+	 * can represent a capability spanning the entire executable.
+	 */
+	 KASSERT(imgp->start_addr ==
+	     CHERI_REPRESENTABLE_ALIGN_DOWN(imgp->start_addr,
+	     imgp->end_addr - imgp->start_addr) && imgp->end_addr ==
+	     imgp->start_addr + CHERI_REPRESENTABLE_LENGTH(imgp->end_addr -
+	     imgp->start_addr), ("Image range [%#jx-%#jx] is not representable "
+	     "with mapping base %#jx", (uintmax_t)imgp->start_addr,
+	     (uintmax_t)imgp->end_addr, (uintmax_t)imgp->et_dyn_addr));
+#endif
+	MPASS(imgp->end_addr > imgp->start_addr);
 
 	/*
 	 * Check limits.  It should be safe to check the
@@ -1133,19 +1269,26 @@ __elfN(load_interp)(struct image_params *imgp, const Elf_Brandinfo *brand_info,
     const char *interp, u_long *addr, u_long *entry)
 {
 	int error;
+	u_long end_addr;
 
 	if (brand_info->interp_newpath != NULL &&
 	    (brand_info->interp_path == NULL ||
 	    strcmp(interp, brand_info->interp_path) == 0)) {
 		error = __elfN(load_file)(imgp->proc,
-		    brand_info->interp_newpath, addr, entry);
+		    brand_info->interp_newpath, addr, &end_addr, entry);
 		if (error == 0)
-			return (0);
+			goto done;
 	}
 
-	error = __elfN(load_file)(imgp->proc, interp, addr, entry);
-	if (error == 0)
+	error = __elfN(load_file)(imgp->proc, interp, addr, &end_addr, entry);
+done:
+	if (error == 0) {
+		imgp->interp_start = CHERI_REPRESENTABLE_ALIGN_DOWN(*addr,
+		    end_addr - *addr);
+		imgp->interp_end = imgp->interp_start +
+		    CHERI_REPRESENTABLE_LENGTH(end_addr - *addr);
 		return (0);
+	}
 
 	uprintf("ELF interpreter %s not found, error %d\n", interp, error);
 	return (error);
@@ -1171,6 +1314,7 @@ __CONCAT(exec_, __elfN(imgact))(struct image_params *imgp)
 	struct sysentvec *sv;
 	u_long addr, baddr, entry, proghdr;
 	u_long maxalign, maxsalign, mapsz, maxv, maxv1, anon_loc;
+	u_long representable_start, representable_end;
 	uint32_t fctl0;
 	int32_t osrel;
 	bool free_interp;
@@ -1194,9 +1338,8 @@ __CONCAT(exec_, __elfN(imgact))(struct image_params *imgp)
 	 */
 
 	phdr = __elfN(map_phdr)(imgp, hdr, true);
-	if (phdr == NULL) {
+	if (phdr == NULL)
 		return (ENOEXEC);
-	}
 
 	interp = NULL;
 	free_interp = false;
@@ -1276,6 +1419,20 @@ __CONCAT(exec_, __elfN(imgact))(struct image_params *imgp)
 				goto ret;
 			break;
 		case PT_GNU_STACK:
+#ifdef __ELF_CHERI
+			/*
+			 * For CheriABI we don't set stack_prot and rely
+			 * on sv_stackprot being correct (VM_PROT_RW_CAP).
+			 *
+			 * Executable stacks are not allowed so refuse
+			 * to run such programs entierly.
+			 */
+			if (phdr[i].p_flags & PF_X) {
+				uprintf("CheriABI forbids executable stacks\n");
+				error = ENOEXEC;
+				goto ret;
+			}
+#else
 			if (__elfN(nxstack)) {
 				imgp->stack_prot =
 				    __elfN(trans_prot)(phdr[i].p_flags);
@@ -1286,6 +1443,7 @@ __CONCAT(exec_, __elfN(imgact))(struct image_params *imgp)
 					goto ret;
 				}
 			}
+#endif
 			imgp->stack_sz = phdr[i].p_memsz;
 			break;
 		case PT_PHDR: 	/* Program header table info */
@@ -1303,6 +1461,17 @@ __CONCAT(exec_, __elfN(imgact))(struct image_params *imgp)
 		goto ret;
 	}
 	sv = brand_info->sysvec;
+#ifdef __ELF_CHERI
+	/*
+	 * CHERI binaries with a hope of working are all modern. If
+	 * the OS release note is missing just assume they are in sync
+	 * with the current tree.
+	 */
+	if (osrel == 0 && SV_PROC_FLAG(imgp->proc, SV_ABI_FREEBSD) &&
+	    SV_PROC_FLAG(imgp->proc, SV_CHERI))
+		osrel = __FreeBSD_version;
+#endif
+
 	if (hdr->e_type == ET_DYN) {
 		if ((brand_info->flags & BI_CAN_EXEC_DYN) == 0) {
 			uprintf("Cannot execute shared object\n");
@@ -1408,9 +1577,22 @@ __CONCAT(exec_, __elfN(imgact))(struct image_params *imgp)
 	if (error != 0)
 		goto ret;
 
-	error = __elfN(load_sections)(imgp, hdr, phdr, imgp->et_dyn_addr, NULL);
+#ifdef __CHERI__
+	error = __elfN(build_imgact_capability)(imgp, &imgp->imgact_capability,
+	    hdr, phdr, &imgp->et_dyn_addr);
 	if (error != 0)
 		goto ret;
+#endif
+	error = __elfN(load_sections)(imgp, hdr, phdr, imgp->et_dyn_addr,
+	    &representable_start, &representable_end);
+	if (error != 0)
+		goto ret;
+
+	/* Round start/end addresses to representability */
+	imgp->start_addr = CHERI_REPRESENTABLE_ALIGN_DOWN(representable_start,
+	    representable_end - representable_start);
+	imgp->end_addr = imgp->start_addr +
+	    CHERI_REPRESENTABLE_LENGTH(representable_end - representable_start);
 
 	error = __elfN(enforce_limits)(imgp, hdr, phdr);
 	if (error != 0)
@@ -1442,6 +1624,9 @@ __CONCAT(exec_, __elfN(imgact))(struct image_params *imgp)
 
 	entry = (u_long)hdr->e_entry + imgp->et_dyn_addr;
 	imgp->entry_addr = entry;
+	/* If needed, these will be set to valid values inside load_interp(). */
+	imgp->interp_start = 0;
+	imgp->interp_end = 0;
 
 	if (sv->sv_protect != NULL)
 		sv->sv_protect(imgp, SVP_IMAGE);
@@ -1486,6 +1671,7 @@ __CONCAT(exec_, __elfN(imgact))(struct image_params *imgp)
 	elf_auxargs->flags = 0;
 	elf_auxargs->entry = entry;
 	elf_auxargs->hdr_eflags = hdr->e_flags;
+	elf_auxargs->hdr_etype = hdr->e_type;
 
 	imgp->auxargs = elf_auxargs;
 	imgp->interpreted = 0;
@@ -1506,12 +1692,91 @@ ret:
 
 #define	elf_suword __CONCAT(suword, __ELF_WORD_SIZE)
 
+#ifdef __ELF_CHERI
+static void *
+prog_cap(struct image_params *imgp, uint64_t perms)
+{
+	Elf_Addr prog_base;
+	size_t prog_len;
+
+	prog_base = imgp->start_addr;
+	prog_len = imgp->end_addr - imgp->start_addr;
+
+	/*
+	 * Ensure that a capability spanning the program is representable.
+	 * We don't round here since the mapping code is responsible for
+	 * choosing a sensible start address and length.
+	 */
+	KASSERT(prog_len == CHERI_REPRESENTABLE_LENGTH(prog_len) &&
+	    prog_base == CHERI_REPRESENTABLE_ALIGN_DOWN(prog_base, prog_len),
+	    ("program capability [%#jx-%#jx] not representable (length=%#zx)",
+	    (uintmax_t)prog_base, (uintmax_t)imgp->end_addr, prog_len));
+
+	return (cheri_capability_build_user_rwx(perms, prog_base, prog_len,
+	    imgp->start_addr - prog_base));
+}
+
+static void *
+interp_cap(struct image_params *imgp, Elf_Auxargs *args, uint64_t perms)
+{
+	Elf_Addr interp_base;
+	size_t interp_len;
+
+	interp_base = imgp->interp_start;
+	interp_len = imgp->interp_end - imgp->interp_start;
+
+	/*
+	 * Ensure that a capability spanning RTLD is representable.
+	 * We don't round here since the mapping code is responsible for
+	 * choosing a sensible start address.
+	 */
+	KASSERT(interp_len == CHERI_REPRESENTABLE_LENGTH(interp_len) &&
+	    interp_base ==
+	    CHERI_REPRESENTABLE_ALIGN_DOWN(interp_base, interp_len),
+	    ("interp capability [%#jx-%#jx] not representable (length=%#zx)",
+	    (uintmax_t)interp_base, (uintmax_t)imgp->interp_end, interp_len));
+	MPASS(args->base >= interp_base);
+
+	return (cheri_capability_build_user_rwx(perms, interp_base, interp_len,
+	    args->base - interp_base));
+}
+
+static void *
+timekeep_cap(struct image_params *imgp)
+{
+	void *tmpcap;
+	struct vmspace *vmspace = imgp->proc->p_vmspace;
+	uintptr_t timekeep_base;
+	size_t timekeep_len;
+
+	timekeep_base = vmspace->vm_shp_base + imgp->sysent->sv_timekeep_offset;
+	timekeep_len = sizeof(struct vdso_timekeep) +
+	    sizeof(struct vdso_timehands) * VDSO_TH_NUM;
+
+	/* These are sub-page so should be representable as-is. */
+	KASSERT(timekeep_base == CHERI_REPRESENTABLE_ALIGN_DOWN(timekeep_base,
+	    timekeep_len), ("timekeep_base needs rounding"));
+	KASSERT(timekeep_len == CHERI_REPRESENTABLE_LENGTH(timekeep_len),
+	    ("timekeep_len needs rounding"));
+
+	tmpcap = (void *)cheri_bounds_set_exact(
+	    cheri_perms_and(timekeep_base, CHERI_PERMS_USERSPACE_RODATA),
+	    timekeep_len);
+
+	return (tmpcap);
+}
+#endif
+
 int
 __elfN(freebsd_copyout_auxargs)(struct image_params *imgp, uintptr_t base)
 {
 	Elf_Auxargs *args = (Elf_Auxargs *)imgp->auxargs;
 	Elf_Auxinfo *argarray, *pos;
 	struct vmspace *vmspace;
+#ifdef __ELF_CHERI
+	void *exec_base;
+	void *entry;
+#endif
 	rlim_t stacksz;
 	int error, oc;
 	uint32_t bsdflags;
@@ -1523,13 +1788,68 @@ __elfN(freebsd_copyout_auxargs)(struct image_params *imgp, uintptr_t base)
 
 	if (args->execfd != -1)
 		AUXARGS_ENTRY(pos, AT_EXECFD, args->execfd);
+#ifdef __ELF_CHERI
+	/*
+	 * AT_ENTRY gives an executable capability for the whole
+	 * program and AT_PHDR a writable one.  RTLD is responsible for
+	 * setting bounds.  Needs SW_VMEM so relro pages can be made RO.
+	 */
+	AUXARGS_ENTRY_PTR(pos, AT_PHDR, cheri_address_set(prog_cap(imgp,
+	    CHERI_CAP_USER_DATA_PERMS | CHERI_PERM_SW_VMEM),
+	    args->phdr));
+#else
 	AUXARGS_ENTRY(pos, AT_PHDR, args->phdr);
+#endif
 	AUXARGS_ENTRY(pos, AT_PHENT, args->phent);
 	AUXARGS_ENTRY(pos, AT_PHNUM, args->phnum);
 	AUXARGS_ENTRY(pos, AT_PAGESZ, args->pagesz);
 	AUXARGS_ENTRY(pos, AT_FLAGS, args->flags);
+#ifdef __ELF_CHERI
+	entry = cheri_address_set(prog_cap(imgp, CHERI_CAP_USER_CODE_PERMS),
+	    args->entry);
+#ifdef CHERI_FLAGS_CAP_MODE
+	/*
+	 * On architectures with a mode flag bit, we must ensure the flag is set in
+	 * AT_ENTRY for RTLD to be able to jump to it.
+	 */
+	entry = cheri_flags_set(entry, CHERI_FLAGS_CAP_MODE);
+#endif
+	AUXARGS_ENTRY_PTR(pos, AT_ENTRY, entry);
+
+	if (imgp->interp_end == 0) {
+		if (args->hdr_etype != ET_DYN) {
+			/*
+			 * For statically linked (but not static-PIE, i.e.
+			 * currently only RTLD direct exec), AT_BASE should be
+			 * untagged args->base (zero) rather than a massively
+			 * out-of-bounds capability with address zero that may
+			 * or may not be tagged.
+			 */
+			exec_base = (void *)(uintptr_t)args->base;
+		} else {
+			/*
+			 * For static-PIE we need AT_BASE for relocations and
+			 * therefore needs to be RWX.
+			 * TODO: should probably use AT_ENTRY/AT_PHDR instead.
+			 */
+			exec_base = prog_cap(imgp, CHERI_CAP_USER_DATA_PERMS |
+			    CHERI_CAP_USER_CODE_PERMS);
+		}
+	} else {
+		/*
+		 * XXX: AT_BASE is both writable and executable to permit
+		 * textrel fixups.
+		 * TODO: should probably use AT_ENTRY/AT_PHDR instead.
+		 */
+		exec_base = interp_cap(imgp, args,
+		    CHERI_CAP_USER_DATA_PERMS | CHERI_CAP_USER_CODE_PERMS);
+	}
+	AUXARGS_ENTRY_PTR(pos, AT_BASE, cheri_address_set(exec_base,
+	    args->base));
+#else
 	AUXARGS_ENTRY(pos, AT_ENTRY, args->entry);
 	AUXARGS_ENTRY(pos, AT_BASE, args->base);
+#endif
 	AUXARGS_ENTRY(pos, AT_EHDRFLAGS, args->hdr_eflags);
 	if (imgp->execpathp != 0)
 		AUXARGS_ENTRY_PTR(pos, AT_EXECPATH, imgp->execpathp);
@@ -1545,12 +1865,16 @@ __elfN(freebsd_copyout_auxargs)(struct image_params *imgp, uintptr_t base)
 		AUXARGS_ENTRY(pos, AT_PAGESIZESLEN, imgp->pagesizeslen);
 	}
 	if ((imgp->sysent->sv_flags & SV_TIMEKEEP) != 0) {
+#ifdef __ELF_CHERI
+		AUXARGS_ENTRY_PTR(pos, AT_TIMEKEEP, timekeep_cap(imgp));
+#else
 		AUXARGS_ENTRY(pos, AT_TIMEKEEP,
 		    vmspace->vm_shp_base + imgp->sysent->sv_timekeep_offset);
+#endif
 	}
-	AUXARGS_ENTRY(pos, AT_STACKPROT, imgp->sysent->sv_shared_page_obj
+	AUXARGS_ENTRY(pos, AT_STACKPROT, (imgp->sysent->sv_shared_page_obj
 	    != NULL && imgp->stack_prot != 0 ? imgp->stack_prot :
-	    imgp->sysent->sv_stackprot);
+	    imgp->sysent->sv_stackprot) & VM_PROT_RWX);
 	if (imgp->sysent->sv_hwcap != NULL)
 		AUXARGS_ENTRY(pos, AT_HWCAP, *imgp->sysent->sv_hwcap);
 	if (imgp->sysent->sv_hwcap2 != NULL)
@@ -1589,7 +1913,8 @@ __elfN(freebsd_copyout_auxargs)(struct image_params *imgp, uintptr_t base)
 	imgp->auxargs = NULL;
 	KASSERT(pos - argarray <= AT_COUNT, ("Too many auxargs"));
 
-	error = copyout(argarray, (void *)base, sizeof(*argarray) * AT_COUNT);
+	error = copyoutptr(argarray, (void *)base,
+	    sizeof(*argarray) * AT_COUNT);
 	free(argarray, M_TEMP);
 	return (error);
 }
@@ -1597,6 +1922,7 @@ __elfN(freebsd_copyout_auxargs)(struct image_params *imgp, uintptr_t base)
 int
 __elfN(freebsd_fixup)(uintptr_t *stack_base, struct image_params *imgp)
 {
+#ifndef __ELF_CHERI
 	Elf_Addr *base;
 
 	base = (Elf_Addr *)*stack_base;
@@ -1604,6 +1930,10 @@ __elfN(freebsd_fixup)(uintptr_t *stack_base, struct image_params *imgp)
 	if (elf_suword(base, imgp->args->argc) == -1)
 		return (EFAULT);
 	*stack_base = (uintptr_t)base;
+#else
+	KASSERT(__is_aligned(*stack_base, sizeof(void *)),
+	    ("CheriABI stack pointer not properly aligned"));
+#endif
 	return (0);
 }
 
@@ -2475,7 +2805,13 @@ __elfN(get_lwpinfo)(struct regset *rs, struct thread *td, void *buf,
 		}
 		strcpy(pl.pl_tdname, td->td_name);
 		/* XXX TODO: supply more information in struct ptrace_lwpinfo*/
-		memcpy((int *)buf + 1, &pl, sizeof(pl));
+		/*
+		 * NB: elf_lwpinfo_t contains a struct __siginfo which contains
+		 * pointers which we're now misaligning by 32-bits on 64-bit
+		 * architectures.  On CHERI they lose provenace.  Copy them as
+		 * data to slience an otherwise correct alignment warning.
+		 */
+		memcpy_data((int *)buf + 1, &pl, sizeof(pl));
 	}
 	*sizep = size;
 	return (true);

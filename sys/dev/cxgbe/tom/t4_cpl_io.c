@@ -2456,7 +2456,7 @@ alloc_aiotx_mbuf(struct kaiocb *job, int len)
 	vm_page_t pgs[MBUF_PEXT_MAX_PGS];
 	struct mbuf *m, *top, *last;
 	vm_map_t map;
-	vm_offset_t start;
+	vm_pointer_t start;
 	int i, mlen, npages, pgoff;
 
 	KASSERT(job->aio_sent + len <= job->uaiocb.aio_nbytes,

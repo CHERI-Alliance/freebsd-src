@@ -952,7 +952,7 @@ pci_bar_mmap(device_t pcidev, struct pci_bar_mmap *pbm)
 	rman_res_t membase;
 	vm_paddr_t pbase;
 	vm_size_t plen;
-	vm_offset_t addr;
+	vm_pointer_t addr;
 	vm_prot_t prot;
 	int error, flags;
 

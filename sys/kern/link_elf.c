@@ -66,6 +66,11 @@
 
 #include <sys/link_elf.h>
 
+#ifdef __CHERI__
+#include <cheri/cheri.h>
+#endif
+#include <cheri/cheric.h>
+
 #include "linker_if.h"
 
 #ifdef DDB_CTF
@@ -78,6 +83,9 @@ typedef struct elf_file {
 	struct linker_file lf;		/* Common fields */
 	int		preloaded;	/* Was file pre-loaded */
 	caddr_t		address;	/* Relocation address */
+#ifdef __CHERI__
+	caddr_t		mapbase;	/* Capability for derived pointers */
+#endif
 #ifdef SPARSE_MAPPING
 	vm_object_t	object;		/* VM object to hold file pages */
 #endif
@@ -95,6 +103,10 @@ typedef struct elf_file {
 	int		pltrelsize;	/* DT_PLTRELSZ */
 	const Elf_Rela	*pltrela;	/* DT_JMPREL */
 	int		pltrelasize;	/* DT_PLTRELSZ */
+#if defined(__CHERI__) && defined(DT_CHERI___CAPRELOCS)
+	void		*caprelocs;	/* DT_CHERI___CAPRELOCS */
+	int		caprelocssize;	/* DT_CHERI___CAPRELOCSSZ */
+#endif
 	const Elf_Rel	*rel;		/* DT_REL */
 	int		relsize;	/* DT_RELSZ */
 	const Elf_Rela	*rela;		/* DT_RELA */
@@ -111,13 +123,13 @@ typedef struct elf_file {
 	caddr_t		ctfoff;		/* CTF offset table */
 	caddr_t		typoff;		/* Type offset table */
 	long		typlen;		/* Number of type entries. */
-	Elf_Addr	pcpu_start;	/* Pre-relocation pcpu set start. */
-	Elf_Addr	pcpu_stop;	/* Pre-relocation pcpu set stop. */
-	Elf_Addr	pcpu_base;	/* Relocated pcpu set address. */
+	caddr_t		pcpu_start;	/* Pre-relocation pcpu set start. */
+	caddr_t		pcpu_stop;	/* Pre-relocation pcpu set stop. */
+	caddr_t		pcpu_base;	/* Relocated pcpu set address. */
 #ifdef VIMAGE
-	Elf_Addr	vnet_start;	/* Pre-relocation vnet set start. */
-	Elf_Addr	vnet_stop;	/* Pre-relocation vnet set stop. */
-	Elf_Addr	vnet_base;	/* Relocated vnet set address. */
+	caddr_t		vnet_start;	/* Pre-relocation vnet set start. */
+	caddr_t		vnet_stop;	/* Pre-relocation vnet set stop. */
+	caddr_t		vnet_base;	/* Relocated vnet set address. */
 #endif
 #ifdef GDB
 	struct link_map	gdb;		/* hooks for gdb */
@@ -125,9 +137,9 @@ typedef struct elf_file {
 } *elf_file_t;
 
 struct elf_set {
-	Elf_Addr	es_start;
-	Elf_Addr	es_stop;
-	Elf_Addr	es_base;
+	caddr_t		es_start;
+	caddr_t		es_stop;
+	caddr_t		es_base;
 	TAILQ_ENTRY(elf_set)	es_link;
 };
 
@@ -162,7 +174,7 @@ static int	link_elf_each_function_name(linker_file_t,
 		    int (*)(const char *, void *), void *);
 static int	link_elf_each_function_nameval(linker_file_t,
 		    linker_function_nameval_callback_t, void *);
-static void	link_elf_reloc_local(linker_file_t);
+static int	link_elf_reloc_local(linker_file_t);
 static long	link_elf_symtab_get(linker_file_t, const Elf_Sym **);
 static long	link_elf_strtab_get(linker_file_t, caddr_t *);
 #ifdef VIMAGE
@@ -223,7 +235,7 @@ static struct elf_set_head set_vnet_list;
 #endif
 
 static void
-elf_set_add(struct elf_set_head *list, Elf_Addr start, Elf_Addr stop, Elf_Addr base)
+elf_set_add(struct elf_set_head *list, caddr_t start, caddr_t stop, caddr_t base)
 {
 	struct elf_set *set, *iter;
 
@@ -235,9 +247,8 @@ elf_set_add(struct elf_set_head *list, Elf_Addr start, Elf_Addr stop, Elf_Addr b
 	TAILQ_FOREACH(iter, list, es_link) {
 		KASSERT((set->es_start < iter->es_start && set->es_stop < iter->es_stop) ||
 		    (set->es_start > iter->es_start && set->es_stop > iter->es_stop),
-		    ("linker sets intersection: to insert: 0x%jx-0x%jx; inserted: 0x%jx-0x%jx",
-		    (uintmax_t)set->es_start, (uintmax_t)set->es_stop,
-		    (uintmax_t)iter->es_start, (uintmax_t)iter->es_stop));
+		    ("linker sets intersection: to insert: %p-%p; inserted: %p-%p",
+		    set->es_start, set->es_stop, iter->es_start, iter->es_stop));
 
 		if (iter->es_start > set->es_start) {
 			TAILQ_INSERT_BEFORE(iter, set, es_link);
@@ -250,7 +261,7 @@ elf_set_add(struct elf_set_head *list, Elf_Addr start, Elf_Addr stop, Elf_Addr b
 }
 
 static int
-elf_set_find(struct elf_set_head *list, Elf_Addr addr, Elf_Addr *start, Elf_Addr *base)
+elf_set_find(struct elf_set_head *list, caddr_t addr, caddr_t *start, caddr_t *base)
 {
 	struct elf_set *set;
 
@@ -268,7 +279,7 @@ elf_set_find(struct elf_set_head *list, Elf_Addr addr, Elf_Addr *start, Elf_Addr
 }
 
 static void
-elf_set_delete(struct elf_set_head *list, Elf_Addr start)
+elf_set_delete(struct elf_set_head *list, caddr_t start)
 {
 	struct elf_set *set;
 
@@ -384,6 +395,16 @@ link_elf_invoke_ctors(linker_file_t lf)
 	lf->ctors_invoked = LF_CTORS;
 }
 
+static caddr_t
+ef_address(elf_file_t ef, ptraddr_t offset)
+{
+#ifdef __CHERI_PURE_CAPABILITY__
+	return (cheri_address_set(ef->mapbase, (ptraddr_t)ef->address + offset));
+#else
+	return (ef->address + offset);
+#endif
+}
+
 /*
  * Actions performed after linking/loading both the preloaded kernel and any
  * modules; whether preloaded or dynamicly loaded.
@@ -435,6 +456,8 @@ link_elf_link_common_finish(linker_file_t lf)
  *    differentiate between hypervisor, host, guest, and problem state.
  */
 extern vm_offset_t __startkernel, __endkernel;
+#elif defined(__CHERI__)
+extern char _end[];
 #endif
 
 static unsigned long kern_relbase = KERNBASE;
@@ -470,6 +493,14 @@ link_elf_init(void* arg)
 #ifdef RELOCATABLE_KERNEL
 	/* Compute relative displacement */
 	ef->address = (caddr_t) (__startkernel - KERNBASE);
+#elif defined(__CHERI__)
+	/*
+	 * This has to have very broad bounds for the kernel so that
+	 * relocbase passed to elf_reloc works.
+	 */
+	ef->address = cheri_address_set(kernel_root_cap, 0);
+	ef->mapbase = cheri_bounds_set(ef->address + KERNBASE,
+	    (ptraddr_t)_end - KERNBASE);
 #else
 	ef->address = 0;
 #endif
@@ -485,15 +516,26 @@ link_elf_init(void* arg)
 	linker_kernel_file->size = (intptr_t)(__endkernel - __startkernel);
 	kern_relbase = (unsigned long)__startkernel;
 #else
-	linker_kernel_file->address += KERNBASE;
+	linker_kernel_file->address = ef->address + KERNBASE;
 	linker_kernel_file->size = -(intptr_t)linker_kernel_file->address;
 #endif
 
 	if (preload_kmdp != NULL) {
 		ef->modptr = preload_kmdp;
 		baseptr = preload_search_info(preload_kmdp, MODINFO_ADDR);
-		if (baseptr != NULL)
+		if (baseptr != NULL) {
+#ifdef __CHERI__
+			/*
+			 * MODINFO_ADDR is really a virtual address,
+			 * not a pointer.
+			 */
+			linker_kernel_file->address = cheri_address_set(
+			    linker_kernel_file->address,
+			    *(vm_offset_t *)baseptr);
+#else
 			linker_kernel_file->address = *(caddr_t *)baseptr;
+#endif
+		}
 		sizeptr = preload_search_info(preload_kmdp, MODINFO_SIZE);
 		if (sizeptr != NULL)
 			linker_kernel_file->size = *(size_t *)sizeptr;
@@ -502,11 +544,19 @@ link_elf_init(void* arg)
 		ctors_sizep = (Elf_Size *)preload_search_info(preload_kmdp,
 			MODINFO_METADATA | MODINFOMD_CTORS_SIZE);
 		if (ctors_addrp != NULL && ctors_sizep != NULL) {
-			linker_kernel_file->ctors_addr = ef->address +
-			    *ctors_addrp;
+			linker_kernel_file->ctors_addr = cheri_kern_bounds_set(
+			    ef->address + *ctors_addrp, *ctors_sizep);
 			linker_kernel_file->ctors_size = *ctors_sizep;
 		}
 	}
+
+	/* Set bounds on the load address */
+	linker_kernel_file->address = cheri_kern_bounds_set(
+	    linker_kernel_file->address, linker_kernel_file->size);
+#ifdef __CHERI__
+	ef->mapbase = linker_kernel_file->address;
+#endif
+
 	(void)link_elf_preload_parse_symbols(ef);
 
 #ifdef GDB
@@ -518,15 +568,15 @@ link_elf_init(void* arg)
 	(void)link_elf_link_common_finish(linker_kernel_file);
 	linker_kernel_file->flags |= LINKER_FILE_LINKED;
 	TAILQ_INIT(&set_pcpu_list);
-	ef->pcpu_start = DPCPU_START;
-	ef->pcpu_stop = DPCPU_STOP;
-	ef->pcpu_base = DPCPU_START;
+	ef->pcpu_start = (caddr_t)DPCPU_START;
+	ef->pcpu_stop = (caddr_t)DPCPU_STOP;
+	ef->pcpu_base = (caddr_t)DPCPU_START;
 #ifdef VIMAGE
 	TAILQ_INIT(&set_vnet_list);
 	vnet_save_init((void *)VNET_START, VNET_STOP - VNET_START);
-	ef->vnet_start = VNET_START;
-	ef->vnet_stop = VNET_STOP;
-	ef->vnet_base = VNET_START;
+	ef->vnet_start = (caddr_t)VNET_START;
+	ef->vnet_stop = (caddr_t)VNET_STOP;
+	ef->vnet_base = (caddr_t)VNET_START;
 #endif
 }
 
@@ -536,8 +586,10 @@ static int
 link_elf_preload_parse_symbols(elf_file_t ef)
 {
 	caddr_t pointer;
-	caddr_t ssym, esym, base;
+	vm_offset_t ssym, esym;
+	caddr_t base;
 	caddr_t strtab;
+	size_t size;
 	int strcnt;
 	Elf_Sym *symtab;
 	int symcnt;
@@ -548,31 +600,34 @@ link_elf_preload_parse_symbols(elf_file_t ef)
 	    MODINFO_METADATA | MODINFOMD_SSYM);
 	if (pointer == NULL)
 		return (0);
-	ssym = *(caddr_t *)pointer;
+	ssym = *(vm_offset_t *)pointer;
 	pointer = preload_search_info(ef->modptr,
 	    MODINFO_METADATA | MODINFOMD_ESYM);
 	if (pointer == NULL)
 		return (0);
-	esym = *(caddr_t *)pointer;
+	esym = *(vm_offset_t *)pointer;
 
-	base = ssym;
+	base = cheri_kern_bounds_set(cheri_kern_address_set(ef->address, ssym),
+	    esym - ssym);
 
 	symcnt = *(long *)base;
 	base += sizeof(long);
-	symtab = (Elf_Sym *)base;
-	base += roundup(symcnt, sizeof(long));
+	size = roundup(symcnt, sizeof(long));
+	symtab = (Elf_Sym *)cheri_kern_bounds_set(base, size);
+	base += size;
 
-	if (base > esym || base < ssym) {
+	if ((ptraddr_t)base > esym || (ptraddr_t)base < ssym) {
 		printf("Symbols are corrupt!\n");
 		return (EINVAL);
 	}
 
 	strcnt = *(long *)base;
 	base += sizeof(long);
-	strtab = base;
-	base += roundup(strcnt, sizeof(long));
+	size = roundup(strcnt, sizeof(long));
+	strtab = cheri_kern_bounds_set(base, size);
+	base += size;
 
-	if (base > esym || base < ssym) {
+	if ((ptraddr_t)base > esym || (ptraddr_t)base < ssym) {
 		printf("Symbols are corrupt!\n");
 		return (EINVAL);
 	}
@@ -597,31 +652,33 @@ parse_dynamic(elf_file_t ef)
 		{
 			/* From src/libexec/rtld-elf/rtld.c */
 			const Elf_Hashelt *hashtab = (const Elf_Hashelt *)
-			    (ef->address + dp->d_un.d_ptr);
+			    ef_address(ef, dp->d_un.d_ptr);
 			ef->nbuckets = hashtab[0];
 			ef->nchains = hashtab[1];
-			ef->buckets = hashtab + 2;
-			ef->chains = ef->buckets + ef->nbuckets;
+			ef->buckets = cheri_kern_bounds_set(hashtab + 2,
+			    ef->nbuckets * sizeof(Elf_Hashelt));
+			ef->chains = cheri_kern_bounds_set(hashtab + 2 + ef->nbuckets,
+			    ef->nchains * sizeof(Elf_Hashelt));
 			break;
 		}
 		case DT_STRTAB:
-			ef->strtab = (caddr_t) (ef->address + dp->d_un.d_ptr);
+			ef->strtab = (caddr_t) ef_address(ef, dp->d_un.d_ptr);
 			break;
 		case DT_STRSZ:
 			ef->strsz = dp->d_un.d_val;
 			break;
 		case DT_SYMTAB:
-			ef->symtab = (Elf_Sym*) (ef->address + dp->d_un.d_ptr);
+			ef->symtab = (Elf_Sym*) ef_address(ef, dp->d_un.d_ptr);
 			break;
 		case DT_SYMENT:
 			if (dp->d_un.d_val != sizeof(Elf_Sym))
 				return (ENOEXEC);
 			break;
 		case DT_PLTGOT:
-			ef->got = (Elf_Addr *) (ef->address + dp->d_un.d_ptr);
+			ef->got = (Elf_Addr *) ef_address(ef, dp->d_un.d_ptr);
 			break;
 		case DT_REL:
-			ef->rel = (const Elf_Rel *) (ef->address + dp->d_un.d_ptr);
+			ef->rel = (const Elf_Rel *) ef_address(ef, dp->d_un.d_ptr);
 			break;
 		case DT_RELSZ:
 			ef->relsize = dp->d_un.d_val;
@@ -631,13 +688,13 @@ parse_dynamic(elf_file_t ef)
 				return (ENOEXEC);
 			break;
 		case DT_JMPREL:
-			ef->pltrel = (const Elf_Rel *) (ef->address + dp->d_un.d_ptr);
+			ef->pltrel = (const Elf_Rel *) ef_address(ef, dp->d_un.d_ptr);
 			break;
 		case DT_PLTRELSZ:
 			ef->pltrelsize = dp->d_un.d_val;
 			break;
 		case DT_RELA:
-			ef->rela = (const Elf_Rela *) (ef->address + dp->d_un.d_ptr);
+			ef->rela = (const Elf_Rela *) ef_address(ef, dp->d_un.d_ptr);
 			break;
 		case DT_RELASZ:
 			ef->relasize = dp->d_un.d_val;
@@ -651,13 +708,44 @@ parse_dynamic(elf_file_t ef)
 			if (plttype != DT_REL && plttype != DT_RELA)
 				return (ENOEXEC);
 			break;
+#if defined(__CHERI__) && defined(DT_CHERI___CAPRELOCS)
+		case DT_CHERI___CAPRELOCS:
+			ef->caprelocs = ef_address(ef, dp->d_un.d_ptr);
+			break;
+		case DT_CHERI___CAPRELOCSSZ:
+			ef->caprelocssize = dp->d_un.d_val;
+			break;
+#endif
+#ifndef __CHERI__
 #ifdef GDB
 		case DT_DEBUG:
 			dp->d_un.d_ptr = (Elf_Addr)&r_debug;
 			break;
 #endif
+#endif
 		}
 	}
+
+	/*
+	 * Set bounds on all section pointers for which we know the size
+	 * If we are not a cheri kernel these are no-ops.
+	 */
+	if (ef->strtab != NULL)
+		ef->strtab = cheri_kern_bounds_set(ef->strtab, ef->strsz);
+	if (ef->rel != NULL)
+		ef->rel = cheri_kern_bounds_set(ef->rel, ef->relsize);
+	if (ef->pltrel != NULL)
+		ef->pltrel = cheri_kern_bounds_set(ef->pltrel, ef->pltrelsize);
+	if (ef->rela != NULL)
+		ef->rela = cheri_kern_bounds_set(ef->rela, ef->relasize);
+	if (ef->symtab != NULL)
+		ef->symtab = cheri_kern_bounds_set(ef->symtab,
+		    ef->nchains * sizeof(Elf_Sym));
+#if defined(__CHERI__) && defined(DT_CHERI___CAPRELOCS)
+	if (ef->caprelocs != NULL)
+		ef->caprelocs = cheri_kern_bounds_set(ef->caprelocs,
+		    ef->caprelocssize);
+#endif
 
 	if (plttype == DT_RELA) {
 		ef->pltrela = (const Elf_Rela *)ef->pltrel;
@@ -678,19 +766,20 @@ parse_dynamic(elf_file_t ef)
 static int
 parse_dpcpu(elf_file_t ef)
 {
-	int error, size;
+	ptrdiff_t size;
+	int error;
 #if defined(__i386__)
 	uint32_t pad;
 #endif
 
-	ef->pcpu_start = 0;
-	ef->pcpu_stop = 0;
+	ef->pcpu_start = NULL;
+	ef->pcpu_stop = NULL;
 	error = link_elf_lookup_set(&ef->lf, "pcpu", (void ***)&ef->pcpu_start,
 	    (void ***)&ef->pcpu_stop, NULL);
 	/* Error just means there is no pcpu set to relocate. */
 	if (error != 0)
 		return (0);
-	size = (uintptr_t)ef->pcpu_stop - (uintptr_t)ef->pcpu_start;
+	size = ef->pcpu_stop - ef->pcpu_start;
 	/* Empty set? */
 	if (size < 1)
 		return (0);
@@ -703,7 +792,7 @@ parse_dpcpu(elf_file_t ef)
 	}
 
 	/* Padding from linker-script correct? */
-	pad = *(uint32_t *)((uintptr_t)ef->pcpu_stop - sizeof(pad));
+	pad = *(uint32_t *)(ef->pcpu_stop - sizeof(pad));
 	if (pad != LS_PADDING) {
 		uprintf("Kernel module '%s' must be recompiled with "
 		    "linker script, invalid padding %#04x (%#04x)\n",
@@ -719,15 +808,15 @@ parse_dpcpu(elf_file_t ef)
 	 * initialization from the data section and then initialize
 	 * all per-cpu storage from that.
 	 */
-	ef->pcpu_base = (Elf_Addr)(uintptr_t)dpcpu_alloc(size);
-	if (ef->pcpu_base == 0) {
+	ef->pcpu_base = dpcpu_alloc(size);
+	if (ef->pcpu_base == NULL) {
 		printf("%s: pcpu module space is out of space; "
-		    "cannot allocate %d for %s\n",
+		    "cannot allocate %td for %s\n",
 		    __func__, size, ef->lf.pathname);
 		return (ENOSPC);
 	}
-	memcpy((void *)ef->pcpu_base, (void *)ef->pcpu_start, size);
-	dpcpu_copy((void *)ef->pcpu_base, size);
+	memcpy(ef->pcpu_base, ef->pcpu_start, size);
+	dpcpu_copy(ef->pcpu_base, size);
 	elf_set_add(&set_pcpu_list, ef->pcpu_start, ef->pcpu_stop,
 	    ef->pcpu_base);
 
@@ -738,20 +827,21 @@ parse_dpcpu(elf_file_t ef)
 static int
 parse_vnet(elf_file_t ef)
 {
-	int error, size;
+	ptrdiff_t size;
+	int error;
 #if defined(__i386__)
 	uint32_t pad;
 #endif
 
-	ef->vnet_start = 0;
-	ef->vnet_stop = 0;
-	ef->vnet_base = 0;
+	ef->vnet_start = NULL;
+	ef->vnet_stop = NULL;
+	ef->vnet_base = NULL;
 	error = link_elf_lookup_set(&ef->lf, "vnet", (void ***)&ef->vnet_start,
 	    (void ***)&ef->vnet_stop, NULL);
 	/* Error just means there is no vnet data set to relocate. */
 	if (error != 0)
 		return (0);
-	size = (uintptr_t)ef->vnet_stop - (uintptr_t)ef->vnet_start;
+	size = ef->vnet_stop - ef->vnet_start;
 	/* Empty set? */
 	if (size < 1)
 		return (0);
@@ -764,7 +854,7 @@ parse_vnet(elf_file_t ef)
 	}
 
 	/* Padding from linker-script correct? */
-	pad = *(uint32_t *)((uintptr_t)ef->vnet_stop - sizeof(pad));
+	pad = *(uint32_t *)(ef->vnet_stop - sizeof(pad));
 	if (pad != LS_PADDING) {
 		uprintf("Kernel module '%s' must be recompiled with "
 		    "linker script, invalid padding %#04x (%#04x)\n",
@@ -780,15 +870,15 @@ parse_vnet(elf_file_t ef)
 	 * initialization from the data section and then initialize
 	 * all per-vnet storage from that.
 	 */
-	ef->vnet_base = (Elf_Addr)(uintptr_t)vnet_data_alloc(size);
-	if (ef->vnet_base == 0) {
+	ef->vnet_base = vnet_data_alloc(size);
+	if (ef->vnet_base == NULL) {
 		printf("%s: vnet module space is out of space; "
-		    "cannot allocate %d for %s\n",
+		    "cannot allocate %td for %s\n",
 		    __func__, size, ef->lf.pathname);
 		return (ENOSPC);
 	}
-	memcpy((void *)ef->vnet_base, (void *)ef->vnet_start, size);
-	vnet_save_init((void *)ef->vnet_base, size);
+	memcpy(ef->vnet_base, ef->vnet_start, size);
+	vnet_save_init(ef->vnet_base, size);
 	elf_set_add(&set_vnet_list, ef->vnet_start, ef->vnet_stop,
 	    ef->vnet_base);
 
@@ -811,8 +901,8 @@ preload_protect1(elf_file_t ef, vm_prot_t prot, bool reset)
 	int error;
 
 	error = 0;
-	hdr = (Elf_Ehdr *)ef->address;
-	phdr = (Elf_Phdr *)(ef->address + hdr->e_phoff);
+	hdr = (Elf_Ehdr *)ef_address(ef, 0);
+	phdr = (Elf_Phdr *)ef_address(ef, hdr->e_phoff);
 	phlimit = phdr + hdr->e_phnum;
 	for (; phdr < phlimit; phdr++) {
 		if (phdr->p_type != PT_LOAD)
@@ -826,8 +916,9 @@ preload_protect1(elf_file_t ef, vm_prot_t prot, bool reset)
 			if ((phdr->p_flags & PF_X) != 0)
 				nprot |= VM_PROT_EXECUTE;
 		}
-		error = pmap_change_prot((vm_offset_t)ef->address +
-		    phdr->p_vaddr, round_page(phdr->p_memsz), prot | nprot);
+		error = pmap_change_prot(
+		    (vm_pointer_t)ef_address(ef, phdr->p_vaddr),
+		    round_page(phdr->p_memsz), prot | nprot);
 		if (error != 0)
 			break;
 	}
@@ -904,7 +995,7 @@ link_elf_link_preload(linker_class_t cls, const char *filename,
 	elf_file_t ef;
 	linker_file_t lf;
 	int error;
-	vm_offset_t dp;
+	void *dp;
 
 	/* Look to see if we have the file preloaded */
 	modptr = preload_search_by_name(filename);
@@ -928,11 +1019,20 @@ link_elf_link_preload(linker_class_t cls, const char *filename,
 	ef = (elf_file_t) lf;
 	ef->preloaded = 1;
 	ef->modptr = modptr;
+#ifdef __CHERI__
+	ef->address = cheri_address_set(kernel_root_cap,
+	    *(ptraddr_t *)baseptr);
+	ef->address = cheri_bounds_set(ef->address, *(size_t *)sizeptr);
+	ef->address = cheri_perms_and(ef->address, CHERI_PERMS_KERNEL_CODE |
+	    CHERI_PERMS_KERNEL_DATA);
+	ef->mapbase = ef->address;
+#else
 	ef->address = *(caddr_t *)baseptr;
+#endif
 #ifdef SPARSE_MAPPING
 	ef->object = NULL;
 #endif
-	dp = (vm_offset_t)ef->address + *(vm_offset_t *)dynptr;
+	dp = ef_address(ef, *(vm_offset_t *)dynptr);
 	ef->dynamic = (Elf_Dyn *)dp;
 	lf->address = ef->address;
 	lf->size = *(size_t *)sizeptr;
@@ -942,8 +1042,10 @@ link_elf_link_preload(linker_class_t cls, const char *filename,
 	ctors_sizep = (Elf_Size *)preload_search_info(modptr,
 	    MODINFO_METADATA | MODINFOMD_CTORS_SIZE);
 	if (ctors_addrp != NULL && ctors_sizep != NULL) {
-		lf->ctors_addr = ef->address + *ctors_addrp;
+		lf->ctors_addr = ef_address(ef, *ctors_addrp);
 		lf->ctors_size = *ctors_sizep;
+		lf->ctors_addr = cheri_kern_bounds_set(lf->ctors_addr,
+		    lf->ctors_size);
 	}
 
 #ifdef __arm__
@@ -963,7 +1065,11 @@ link_elf_link_preload(linker_class_t cls, const char *filename,
 		linker_file_unload(lf, LINKER_UNLOAD_FORCE);
 		return (error);
 	}
-	link_elf_reloc_local(lf);
+	error = link_elf_reloc_local(lf);
+	if (error != 0) {
+		linker_file_unload(lf, LINKER_UNLOAD_FORCE);
+		return (error);
+	}
 	*result = lf;
 	return (0);
 }
@@ -1077,6 +1183,13 @@ link_elf_load_file(linker_class_t cls, const char* filename,
 		error = ENOEXEC;
 		goto out;
 	}
+#ifdef __CHERI__
+	if (!ELF_IS_CHERI(hdr)) {
+		link_elf_error(filename, "Traditional ABI");
+		error = ENOEXEC;
+		goto out;
+	}
+#endif
 
 	/*
 	 * We rely on the program header being in the first page.
@@ -1180,6 +1293,9 @@ link_elf_load_file(linker_class_t cls, const char* filename,
 	mapbase = malloc_exec(mapsize, M_LINKER, M_WAITOK);
 #endif
 	ef->address = mapbase;
+#ifdef __CHERI__
+	ef->mapbase = mapbase;
+#endif
 
 	/*
 	 * Read the text and data sections and zero the bss.
@@ -1233,7 +1349,9 @@ link_elf_load_file(linker_class_t cls, const char* filename,
 	if (error != 0)
 		goto out;
 #endif
-	link_elf_reloc_local(lf);
+	error = link_elf_reloc_local(lf);
+	if (error != 0)
+		goto out;
 
 	VOP_UNLOCK(nd.ni_vp);
 	error = linker_load_dependencies(lf);
@@ -1311,6 +1429,8 @@ link_elf_load_file(linker_class_t cls, const char* filename,
 			/* Record relocated address and size of .ctors. */
 			lf->ctors_addr = mapbase + shdr[i].sh_addr - base_vaddr;
 			lf->ctors_size = shdr[i].sh_size;
+			lf->ctors_addr = cheri_kern_bounds_set(lf->ctors_addr,
+			    lf->ctors_size);
 		}
 	}
 	if (symtabindex < 0 || symstrindex < 0)
@@ -1372,11 +1492,11 @@ elf_relocaddr(linker_file_t lf, Elf_Addr x)
 	    ("elf_relocaddr: unexpected linker file %p", lf));
 
 	ef = (elf_file_t)lf;
-	if (x >= ef->pcpu_start && x < ef->pcpu_stop)
-		return ((x - ef->pcpu_start) + ef->pcpu_base);
+	if (x >= (Elf_Addr)ef->pcpu_start && x < (Elf_Addr)ef->pcpu_stop)
+		return ((x - (Elf_Addr)ef->pcpu_start) + (Elf_Addr)ef->pcpu_base);
 #ifdef VIMAGE
-	if (x >= ef->vnet_start && x < ef->vnet_stop)
-		return ((x - ef->vnet_start) + ef->vnet_base);
+	if (x >= (Elf_Addr)ef->vnet_start && x < (Elf_Addr)ef->vnet_stop)
+		return ((x - (Elf_Addr)ef->vnet_start) + (Elf_Addr)ef->vnet_base);
 #endif
 	return (x);
 }
@@ -1654,6 +1774,33 @@ link_elf_lookup_debug_symbol_ctf(linker_file_t lf, const char *name,
 	return (i < ef->ddbsymcnt ? link_elf_ctf_get_ddb(lf, lc) : ENOENT);
 }
 
+#ifdef __CHERI__
+/*
+ * Given a pointer into a linker file derived from ef->mapbase, narrow
+ * its permissions and bounds.
+ */
+static caddr_t
+make_capability(const Elf_Sym *sym, caddr_t val)
+{
+
+	switch (ELF_ST_TYPE(sym->st_info)) {
+	case STT_FUNC:
+	case STT_GNU_IFUNC:
+		val = cheri_perms_and(val, CHERI_PERMS_KERNEL_CODE);
+#ifdef CHERI_FLAGS_CAP_MODE
+		val = cheri_flags_set(val, CHERI_FLAGS_CAP_MODE);
+#endif
+		val = cheri_sentry_create(val);
+		break;
+	default:
+	val = cheri_bounds_set(val, sym->st_size);
+	val = cheri_perms_and(val, CHERI_PERMS_KERNEL_DATA);
+	break;
+	}
+	return (val);
+}
+#endif
+
 static void
 link_elf_ifunc_symbol_value(linker_file_t lf, caddr_t *valp, size_t *sizep)
 {
@@ -1671,7 +1818,12 @@ link_elf_ifunc_symbol_value(linker_file_t lf, caddr_t *valp, size_t *sizep)
 	if (link_elf_search_symbol(lf, (ptraddr_t)val, &sym, &off) == 0 &&
 	    off == 0) {
 		es = (const Elf_Sym *)sym;
+#ifdef __CHERI__
+		(void)ef;
+		*valp = val;
+#else
 		*valp = (caddr_t)ef->address + es->st_value;
+#endif
 		*sizep = es->st_size;
 	} else {
 		*valp = val;
@@ -1694,7 +1846,10 @@ link_elf_symbol_values1(linker_file_t lf, c_linker_sym_t sym,
 		if (!see_local && ELF_ST_BIND(es->st_info) == STB_LOCAL)
 			return (ENOENT);
 		symval->name = ef->strtab + es->st_name;
-		val = (caddr_t)ef->address + es->st_value;
+		val = ef_address(ef, es->st_value);
+#ifdef __CHERI__
+		val = make_capability(es, val);
+#endif
 		if (ELF_ST_TYPE(es->st_info) == STT_GNU_IFUNC)
 			link_elf_ifunc_symbol_value(lf, &val, &size);
 		else
@@ -1731,7 +1886,10 @@ link_elf_debug_symbol_values(linker_file_t lf, c_linker_sym_t sym,
 
 	if (es >= ef->ddbsymtab && es < (ef->ddbsymtab + ef->ddbsymcnt)) {
 		symval->name = ef->ddbstrtab + es->st_name;
-		val = (caddr_t)ef->address + es->st_value;
+		val = ef_address(ef, es->st_value);
+#ifdef __CHERI__
+		val = make_capability(es, val);
+#endif
 		if (ELF_ST_TYPE(es->st_info) == STT_GNU_IFUNC)
 			link_elf_ifunc_symbol_value(lf, &val, &size);
 		else
@@ -1911,12 +2069,12 @@ elf_get_symname(linker_file_t lf, Elf_Size symidx)
  * the case that the symbol can be found through the hash table.
  */
 static int
-elf_lookup(linker_file_t lf, Elf_Size symidx, int deps, Elf_Addr *res)
+elf_lookup(linker_file_t lf, Elf_Size symidx, int deps, uintptr_t *res)
 {
 	elf_file_t ef = (elf_file_t)lf;
 	const Elf_Sym *sym;
 	const char *symbol;
-	Elf_Addr addr, start, base;
+	caddr_t addr, start, base;
 
 	/* Don't even try to lookup the symbol if the index is bogus. */
 	if (symidx >= ef->nchains) {
@@ -1936,7 +2094,11 @@ elf_lookup(linker_file_t lf, Elf_Size symidx, int deps, Elf_Addr *res)
 			*res = 0;
 			return (EINVAL);
 		}
-		*res = ((Elf_Addr)ef->address + sym->st_value);
+		addr = ef_address(ef, sym->st_value);
+#ifdef __CHERI__
+		addr = make_capability(sym, addr);
+#endif
+		*res = (uintptr_t)addr;
 		return (0);
 	}
 
@@ -1955,23 +2117,62 @@ elf_lookup(linker_file_t lf, Elf_Size symidx, int deps, Elf_Addr *res)
 		return (EINVAL);
 	}
 
-	addr = ((Elf_Addr)linker_file_lookup_symbol(lf, symbol, deps));
-	if (addr == 0 && ELF_ST_BIND(sym->st_info) != STB_WEAK) {
+	addr = linker_file_lookup_symbol(lf, symbol, deps);
+	if (addr == NULL && ELF_ST_BIND(sym->st_info) != STB_WEAK) {
 		*res = 0;
 		return (EINVAL);
 	}
 
-	if (elf_set_find(&set_pcpu_list, addr, &start, &base))
-		addr = addr - start + base;
-#ifdef VIMAGE
-	else if (elf_set_find(&set_vnet_list, addr, &start, &base))
-		addr = addr - start + base;
+	if (elf_set_find(&set_pcpu_list, addr, &start, &base)) {
+		addr = (ptraddr_t)addr - (ptraddr_t)start + base;
+#ifdef __CHERI__
+		addr = make_capability(sym, addr);
 #endif
-	*res = addr;
+	}
+#ifdef VIMAGE
+	else if (elf_set_find(&set_vnet_list, addr, &start, &base)) {
+		addr = addr - start + base;
+#ifdef __CHERI__
+		addr = make_capability(sym, addr);
+#endif
+	}
+#endif
+	*res = (uintptr_t)addr;
 	return (0);
 }
 
+#if defined (__CHERI__) && defined(DT_CHERI___CAPRELOCS)
 static void
+resolve_cap_reloc(void *arg, bool function, bool constant,
+    ptraddr_t object, void **src)
+{
+	elf_file_t ef = arg;
+	caddr_t addr, start, base;
+
+	addr = ef_address(ef, object);
+	if (elf_set_find(&set_pcpu_list, addr, &start, &base)) {
+		addr = (ptraddr_t)addr - (ptraddr_t)start + base;
+	}
+#ifdef VIMAGE
+	else if (elf_set_find(&set_vnet_list, addr, &start, &base)) {
+		addr = (ptraddr_t)addr - (ptraddr_t)start + base;
+	}
+#endif
+	if (function) {
+		addr = cheri_perms_and(addr, CHERI_PERMS_KERNEL_CODE);
+#ifdef CHERI_FLAGS_CAP_MODE
+		addr = cheri_flags_set(addr, CHERI_FLAGS_CAP_MODE);
+#endif
+	} else if (constant) {
+		addr = cheri_perms_and(addr, CHERI_PERMS_KERNEL_RODATA);
+	} else {
+		addr = cheri_perms_and(addr, CHERI_PERMS_KERNEL_DATA);
+	}
+	*src = addr;
+}
+#endif
+
+static int
 link_elf_reloc_local(linker_file_t lf)
 {
 	const Elf_Rel *rellim;
@@ -1979,6 +2180,25 @@ link_elf_reloc_local(linker_file_t lf)
 	const Elf_Rela *relalim;
 	const Elf_Rela *rela;
 	elf_file_t ef = (elf_file_t)lf;
+
+#if defined(__CHERI__) && defined(DT_CHERI___CAPRELOCS)
+	/*
+	 * Perform __cap_relocs relocations if there are any:
+	 *
+	 * NB: Must come first as each CHERI-RISC-V's R_RISCV_JUMP_SLOT has a
+	 * corresponding relocation here for .plt[0] and we don't want that to
+	 * overwrite the eagerly-bound target.
+	 */
+	if (ef->caprelocs != NULL) {
+		void *data_cap;
+
+		data_cap = cheri_perms_and(ef->mapbase, CHERI_PERMS_KERNEL_DATA);
+		if (init_linker_file_cap_relocs(ef->caprelocs,
+		    (char *)ef->caprelocs + ef->caprelocssize, data_cap,
+		    (ptraddr_t)ef->address, resolve_cap_reloc, ef) != 0)
+		return (ENOEXEC);
+	}
+#endif
 
 	/* Perform relocations without addend if there are any: */
 	if ((rel = ef->rel) != NULL) {
@@ -2000,6 +2220,8 @@ link_elf_reloc_local(linker_file_t lf)
 			rela++;
 		}
 	}
+
+	return (0);
 }
 
 static long
@@ -2058,7 +2280,10 @@ elf_lookup_ifunc(linker_file_t lf, Elf_Size symidx, int deps __unused,
 	ef = (elf_file_t)lf;
 	symp = ef->symtab + symidx;
 	if (ELF_ST_TYPE(symp->st_info) == STT_GNU_IFUNC) {
-		val = (caddr_t)ef->address + symp->st_value;
+		val = ef_address(ef, symp->st_value);
+#ifdef __CHERI__
+		val = make_capability(symp, val);
+#endif
 		*res = ((uintptr_t (*)(void))val)();
 		return (0);
 	}
@@ -2081,6 +2306,14 @@ link_elf_ireloc(void)
 
 #ifdef RELOCATABLE_KERNEL
 	ef->address = (caddr_t) (__startkernel - KERNBASE);
+#elif defined(__CHERI__)
+	/*
+	 * It is sad that this needs to be a root capability,
+	 * as in link_elf_init().
+	 */
+	ef->address = cheri_address_set(kernel_root_cap, 0);
+	ef->mapbase = cheri_bounds_set(ef->address + KERNBASE,
+	    (ptraddr_t)_end - KERNBASE);
 #else
 	ef->address = 0;
 #endif

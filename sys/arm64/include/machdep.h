@@ -30,8 +30,8 @@
 #ifdef _KERNEL
 
 struct arm64_bootparams {
-	vm_offset_t	modulep;
-	vm_offset_t	kern_stack;
+	vm_pointer_t	modulep;
+	vm_pointer_t	kern_stack;
 	vm_paddr_t	kern_ttbr0;
 	int		boot_el;	/* EL the kernel booted from */
 	int		pad;

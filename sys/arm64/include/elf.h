@@ -40,6 +40,9 @@
 
 #ifndef __ELF_WORD_SIZE
 #define	__ELF_WORD_SIZE	64	/* Used by <sys/elf_generic.h> */
+#ifdef __CHERI__
+#define	__ELF_CHERI
+#endif
 #endif
 
 #include <sys/elf_generic.h>
@@ -59,12 +62,29 @@ typedef struct {	/* Auxiliary vector entry on initial stack */
 	long	a_type;			/* Entry type. */
 	union {
 		long	a_val;		/* Integer value. */
+#if __ELF_WORD_SIZE == 64 && !defined(__CHERI__)
 		void	*a_ptr;		/* Address. */
 		void	(*a_fcn)(void);	/* Function pointer (not used). */
+#endif
 	} a_un;
 } Elf64_Auxinfo;
 
+#ifdef __CHERI__
+typedef struct {	/* Auxiliary vector entry on initial stack */
+	int64_t	a_type;			/* Entry type. */
+	union {
+		int64_t	a_val;		/* Integer value. */
+		void *a_ptr; /* Address. */
+		void	(*a_fcn)(void); /* Function pointer (not used). */
+	} a_un;
+} Elf64C_Auxinfo;
+#endif
+
+#ifdef __ELF_CHERI
+typedef Elf64C_Auxinfo Elf_Auxinfo;
+#else
 __ElfType(Auxinfo);
+#endif
 
 #ifdef _MACHINE_ELF_WANT_32BIT
 #define	ELF_ARCH	EM_ARM
@@ -73,6 +93,10 @@ __ElfType(Auxinfo);
 #endif
 
 #define	ELF_MACHINE_OK(x) ((x) == (ELF_ARCH))
+
+#define	ELF_IS_CHERI(hdr) (((hdr)->e_flags & EF_AARCH64_CHERI_PURECAP) != 0)
+
+#define	PT_MEMTAG_CHERI	PT_AARCH64_MEMTAG_CHERI
 
 /* Define "machine" characteristics */
 #if __ELF_WORD_SIZE == 64
@@ -250,6 +274,10 @@ __ElfType(Auxinfo);
 #define	HWCAP32_2_SHA1		0x00000004
 #define	HWCAP32_2_SHA2		0x00000008
 #define	HWCAP32_2_CRC32		0x00000010
+#endif
+
+#ifdef __CHERI__
+void elf_reloc_self(const Elf_Dyn *dynp, void *data_cap, const void *code_cap);
 #endif
 
 #endif /* !_MACHINE_ELF_H_ */

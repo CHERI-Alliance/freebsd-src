@@ -90,6 +90,8 @@
 #include <vm/vm_pager.h>
 #include <vm/vm_extern.h>
 
+#include <cheri/cheric.h>
+
 extern void	uma_startup1(vm_offset_t);
 
 long physmem;
@@ -178,8 +180,8 @@ vm_ksubmap_init(struct kva_md_info *kmi)
 	caddr_t firstaddr, v;
 	vm_size_t size = 0;
 	long physmem_est;
-	vm_offset_t minaddr;
-	vm_offset_t maxaddr;
+	vm_pointer_t minaddr;
+	vm_pointer_t maxaddr;
 
 	TSENTER();
 	/*
@@ -235,31 +237,31 @@ again:
 		panic("startup: table size inconsistency");
 
 	/*
-	 * Allocate the clean map to hold all of I/O virtual memory.
-	 */
-	size = (long)nbuf * BKVASIZE + (long)bio_transient_maxcnt * maxphys;
-	kmi->clean_sva = kva_alloc(size);
-	kmi->clean_eva = kmi->clean_sva + size;
-
-	/*
 	 * Allocate the buffer arena.
 	 *
 	 * Enable the quantum cache if we have more than 4 cpus.  This
 	 * avoids lock contention at the expense of some fragmentation.
 	 */
-	size = (long)nbuf * BKVASIZE;
-	kmi->buffer_sva = kmi->clean_sva;
+	size = CHERI_REPRESENTABLE_LENGTH((long)nbuf * BKVASIZE);
+	firstaddr = (caddr_t)kva_alloc(size);
+	kmi->buffer_sva = (vm_pointer_t)firstaddr;
 	kmi->buffer_eva = kmi->buffer_sva + size;
-	vmem_init(buffer_arena, "buffer arena", kmi->buffer_sva, size,
-	    PAGE_SIZE, (mp_ncpus > 4) ? BKVASIZE * 8 : 0, M_WAITOK);
+	vmem_init_flags(buffer_arena, "buffer arena", (vm_pointer_t)firstaddr,
+	    size, PAGE_SIZE, (mp_ncpus > 4) ? BKVASIZE * 8 : 0, M_WAITOK,
+	    VMEM_CAPABILITY_ARENA);
 
 	/*
 	 * And optionally transient bio space.
 	 */
 	if (bio_transient_maxcnt != 0) {
-		size = (long)bio_transient_maxcnt * maxphys;
-		vmem_init(transient_arena, "transient arena",
-		    kmi->buffer_eva, size, PAGE_SIZE, 0, M_WAITOK);
+		size = CHERI_REPRESENTABLE_LENGTH(
+		    (long)bio_transient_maxcnt * maxphys);
+		firstaddr = (caddr_t)kva_alloc(size);
+		kmi->transient_sva = (vm_pointer_t)firstaddr;
+		kmi->transient_eva = kmi->transient_sva + size;
+		vmem_init_flags(transient_arena, "transient arena",
+		    (vm_pointer_t)firstaddr, size, PAGE_SIZE, 0, M_WAITOK,
+		    VMEM_CAPABILITY_ARENA);
 	}
 
 	/*

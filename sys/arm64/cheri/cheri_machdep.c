@@ -35,6 +35,8 @@
 #include <sys/devmap.h>
 #include <sys/proc.h>
 
+#include <vm/vm.h>
+
 #include <cheri/cheri.h>
 #include <cheri/cheric.h>
 
@@ -161,10 +163,5 @@ vm_prot2perms(int base, vm_prot_t prot)
 		perms |= CHERI_PERM_EXECUTE | CHERI_PERM_EXECUTIVE |
 		    CHERI_PERM_LOAD;
 
-	base &= ~(CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP |
-	    CHERI_PERM_MUTABLE_LOAD | CHERI_PERM_STORE | CHERI_PERM_STORE_CAP |
-	    CHERI_PERM_STORE_LOCAL_CAP | CHERI_PERM_EXECUTE |
-	     CHERI_PERM_EXECUTIVE);
-
-	return (base | perms);
+	return ((base & ~CHERI_PERMS_RWX_MASK) | perms);
 }

@@ -256,7 +256,7 @@ bnxt_mgmt_process_hwrm(struct cdev *dev, u_long cmd, caddr_t data,
 				goto end;
 			}
 		}
-		dma_ptr = (void *) ((uint64_t) req + msg->dma[0].offset);
+		dma_ptr = (char *)req + msg->dma[0].offset;
 		dmap = dma_ptr;
 		*dmap = htole64(dma_data.idi_paddr);
 	}

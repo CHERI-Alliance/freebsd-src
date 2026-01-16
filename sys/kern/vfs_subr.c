@@ -510,7 +510,11 @@ SYSCTL_PROC(_debug, OID_AUTO, ftry_reclaim_vnode,
     "Try to reclaim a vnode by its file descriptor");
 
 /* Shift count for (uintptr_t)vp to initialize vp->v_hash. */
+#ifdef __CHERI__
+#define vnsz2log 9
+#else
 #define vnsz2log 8
+#endif
 #ifndef DEBUG_LOCKS
 _Static_assert(sizeof(struct vnode) >= 1UL << vnsz2log &&
     sizeof(struct vnode) < 1UL << (vnsz2log + 1),
@@ -2153,7 +2157,7 @@ getnewvnode(const char *tag, struct mount *mp, struct vop_vector *vops,
 	 * E.g., nullfs uses vfs_hash_index() on the lower vnode for
 	 * its own hashing.
 	 */
-	vp->v_hash = (uintptr_t)vp >> vnsz2log;
+	vp->v_hash = (ptraddr_t)vp >> vnsz2log;
 
 	*vpp = vp;
 	return (0);

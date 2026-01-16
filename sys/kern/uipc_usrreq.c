@@ -2055,7 +2055,10 @@ uipc_sosend_dgram(struct socket *so, struct sockaddr *addr, struct uio *uio,
 	else
 		from = &sun_noname;
 	f->m_len = from->sa_len;
+#ifndef __CHERI__
+	/* Always true on CHERI */
 	MPASS(from->sa_len <= MLEN);
+#endif
 	bcopy(from, mtod(f, void *), from->sa_len);
 
 	/*

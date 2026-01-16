@@ -169,8 +169,8 @@ typedef struct vm_reserv *vm_reserv_t;
 struct kva_md_info {
 	vm_offset_t	buffer_sva;
 	vm_offset_t	buffer_eva;
-	vm_offset_t	clean_sva;
-	vm_offset_t	clean_eva;
+	vm_offset_t	transient_sva;
+	vm_offset_t	transient_eva;
 };
 
 /* bits from overcommit */
@@ -197,7 +197,8 @@ void swap_release_by_cred(vm_ooffset_t decr, struct ucred *cred);
 
 extern struct kva_md_info	kmi;
 #define VA_IS_CLEANMAP(va)					\
-	((va) >= kmi.clean_sva && (va) < kmi.clean_eva)
+    (((va) >= kmi.buffer_sva && ((va) < kmi.buffer_eva)) ||	\
+     ((va) >= kmi.transient_sva && ((va) < kmi.transient_eva)))
 
 extern int old_mlock;
 extern int vm_ndomains;

@@ -45,13 +45,13 @@
 #include <sys/signalvar.h>
 #include <sys/vnode.h>
 
+#include <machine/elf.h>
+#include <machine/md_var.h>
+
 #include <vm/vm.h>
 #include <vm/pmap.h>
 #include <vm/vm_param.h>
 #include <vm/vm_map.h>
-
-#include <machine/elf.h>
-#include <machine/md_var.h>
 
 #include "linker_if.h"
 
@@ -82,7 +82,11 @@ static struct sysentvec elf64_freebsd_sysvec = {
 	.sv_sendsig	= sendsig,
 	.sv_sigcode	= sigcode,
 	.sv_szsigcode	= &szsigcode,
+#ifdef __CHERI__
+	.sv_name	= "FreeBSD ELF64C",	/* CheriABI */
+#else
 	.sv_name	= "FreeBSD ELF64",
+#endif
 	.sv_coredump	= __elfN(coredump),
 	.sv_elf_core_osabi = ELFOSABI_FREEBSD,
 	.sv_elf_core_abi_vendor = FREEBSD_ABI_VENDOR,
@@ -92,14 +96,19 @@ static struct sysentvec elf64_freebsd_sysvec = {
 	.sv_maxuser	= VM_MAXUSER_ADDRESS,
 	.sv_usrstack	= USRSTACK,
 	.sv_psstringssz	= sizeof(struct ps_strings),
-	.sv_stackprot	= VM_PROT_READ | VM_PROT_WRITE,
+	.sv_stackprot	= VM_PROT_RW_CAP,
 	.sv_copyout_auxargs = __elfN(freebsd_copyout_auxargs),
 	.sv_copyout_strings = exec_copyout_strings,
 	.sv_setregs	= exec_setregs,
 	.sv_fixlimit	= NULL,
 	.sv_maxssiz	= NULL,
 	.sv_flags	= SV_SHP | SV_TIMEKEEP | SV_ABI_FREEBSD | SV_LP64 |
-	    SV_ASLR | SV_RNG_SEED_VER | SV_SIGSYS,
+	    SV_RNG_SEED_VER | SV_SIGSYS |
+#ifdef __CHERI__
+	    SV_CHERI,
+#else
+	    SV_ASLR,
+#endif
 	.sv_set_syscall_retval = cpu_set_syscall_retval,
 	.sv_fetch_syscall_args = cpu_fetch_syscall_args,
 	.sv_syscallnames = syscallnames,
@@ -126,9 +135,13 @@ static const __ElfN(Brandinfo) freebsd_brand_info = {
 	.compat_3_brand	= "FreeBSD",
 	.interp_path	= "/libexec/ld-elf.so.1",
 	.sysvec		= &elf64_freebsd_sysvec,
+#ifdef __CHERI__
+	.interp_newpath	= "/libexec/ld-elf64c.so.1",
+#else
 	.interp_newpath	= NULL,
+#endif
 	.brand_note	= &__elfN(freebsd_brandnote),
-	.flags		= BI_CAN_EXEC_DYN | BI_BRAND_NOTE
+	.flags		= BI_CAN_EXEC_DYN | BI_BRAND_NOTE,
 };
 C_SYSINIT(elf64, SI_SUB_EXEC, SI_ORDER_FIRST,
     (sysinit_cfunc_t)__elfN(insert_brand_entry), &freebsd_brand_info);
@@ -154,7 +167,7 @@ get_arm64_addr_mask(struct regset *rs, struct thread *td, void *buf,
 	return (true);
 }
 
-static struct regset regset_arm64_addr_mask = {
+struct regset regset_arm64_addr_mask = {
 	.note = NT_ARM_ADDR_MASK,
 	.size = sizeof(struct arm64_addr_mask),
 	.get = get_arm64_addr_mask,
@@ -171,7 +184,8 @@ bool
 elf_is_ifunc_reloc(Elf_Size r_info __unused)
 {
 
-	return (ELF_R_TYPE(r_info) == R_AARCH64_IRELATIVE);
+	return (ELF_R_TYPE(r_info) == R_AARCH64_IRELATIVE ||
+	    ELF_R_TYPE(r_info) == R_MORELLO_IRELATIVE);
 }
 
 static int
@@ -187,6 +201,60 @@ reloc_instr_imm(Elf32_Addr *where, Elf_Addr val, u_int msb, u_int lsb)
 	return (0);
 }
 
+#ifdef __CHERI__
+static void __nosanitizecoverage
+decode_fragment(Elf_Addr *fragment, Elf_Addr relocbase, Elf_Addr *addrp,
+    Elf_Addr *sizep, uint8_t *permsp)
+{
+	*addrp = relocbase + fragment[0];
+	*sizep = fragment[1] & ((1UL << (8 * sizeof(Elf_Addr) - 8)) - 1);
+	*permsp = fragment[1] >> (8 * sizeof(Elf_Addr) - 8);
+}
+
+static uintptr_t __nosanitizecoverage
+build_reloc_cap(Elf_Addr addr, Elf_Addr size, uint8_t perms, Elf_Addr offset,
+    void *data_cap, const void *code_cap)
+{
+	uintptr_t cap;
+
+	cap = perms == MORELLO_FRAG_EXECUTABLE ?
+	    (uintptr_t)code_cap : (uintptr_t)data_cap;
+	cap = cheri_address_set(cap, addr);
+
+	if (perms == MORELLO_FRAG_EXECUTABLE ||
+	    perms == MORELLO_FRAG_RODATA) {
+		cap = cheri_perms_clear(cap, CHERI_PERM_SEAL |
+		    CHERI_PERM_STORE | CHERI_PERM_STORE_CAP |
+		    CHERI_PERM_STORE_LOCAL_CAP);
+	}
+	if (perms == MORELLO_FRAG_RWDATA ||
+	    perms == MORELLO_FRAG_RODATA) {
+		cap = cheri_perms_clear(cap, CHERI_PERM_SEAL |
+		    CHERI_PERM_EXECUTE);
+		cap = cheri_bounds_set(cap, size);
+	}
+	cap += offset;
+	if (perms == MORELLO_FRAG_EXECUTABLE) {
+		cap = cheri_sentry_create(cap);
+	}
+	KASSERT(cheri_tag_get(cap) != 0,
+	    ("Relocation produce invalid capability %#lp",
+	    (void *)cap));
+	return (cap);
+}
+
+static uintptr_t __nosanitizecoverage
+build_cap_from_fragment(Elf_Addr *fragment, Elf_Addr relocbase, Elf_Addr offset,
+    void *data_cap, const void *code_cap)
+{
+	Elf_Addr addr, size;
+	uint8_t perms;
+
+	decode_fragment(fragment, relocbase, &addr, &size, &perms);
+	return (build_reloc_cap(addr, size, perms, offset, data_cap, code_cap));
+}
+#endif
+
 /*
  * Process a relocation.  Support for some static relocations is required
  * in order for the -zifunc-noplt optimization to work.
@@ -197,7 +265,9 @@ elf_reloc_internal(linker_file_t lf, char *relocbase, const void *data,
 {
 #define	ARM64_ELF_RELOC_LOCAL		(1 << 0)
 #define	ARM64_ELF_RELOC_LATE_IFUNC	(1 << 1)
-	Elf_Addr *where, addr, addend, val;
+	Elf_Addr *where, addend;
+	uintptr_t addr;
+	Elf_Addr val;
 	Elf_Word rtype, symidx;
 	const Elf_Rel *rel;
 	const Elf_Rela *rela;
@@ -225,13 +295,45 @@ elf_reloc_internal(linker_file_t lf, char *relocbase, const void *data,
 	if ((flags & ARM64_ELF_RELOC_LATE_IFUNC) != 0) {
 		KASSERT(type == ELF_RELOC_RELA,
 		    ("Only RELA ifunc relocations are supported"));
+		/*
+		 * NB: We do *not* re-process R_MORELLO_IRELATIVE since the
+		 * normal pass has already trashed the fragment and so we no
+		 * longer know what the resolver is, just like architectures
+		 * that use REL instead of RELA.
+		 */
 		if (rtype != R_AARCH64_IRELATIVE)
 			return (0);
 	}
 
 	if ((flags & ARM64_ELF_RELOC_LOCAL) != 0) {
-		if (rtype == R_AARCH64_RELATIVE)
+		if (rtype == R_AARCH64_RELATIVE ||
+		    rtype == R_AARCH64_FUNC_RELATIVE)
 			*where = elf_relocaddr(lf, (Elf_Addr)relocbase + addend);
+#ifdef __CHERI__
+		else if (rtype == R_MORELLO_RELATIVE ||
+		    rtype == R_MORELLO_FUNC_RELATIVE) {
+			void *base;
+			Elf_Addr addr1, size;
+			uint8_t perms;
+
+			decode_fragment(where, (Elf_Addr)relocbase, &val,
+			    &size, &perms);
+
+			/*
+			 * Handle relocations against magic DPCPU and VNET
+			 * symbols: the address is transformed to refer to a
+			 * segment in the base kernel's DPCPU/VNET segments.
+			 * In this case we must use the kernel's base
+			 * capability.
+			 */
+			addr1 = elf_relocaddr(lf, val + addend) - addend;
+			base = (void *)
+			    (val == addr1 ? relocbase :
+			    linker_kernel_file->address);
+			*(uintptr_t *)(void *)where = build_reloc_cap(addr1,
+			    size, perms, addend, base, base);
+		}
+#endif
 		return (0);
 	}
 
@@ -239,6 +341,7 @@ elf_reloc_internal(linker_file_t lf, char *relocbase, const void *data,
 	switch (rtype) {
 	case R_AARCH64_NONE:
 	case R_AARCH64_RELATIVE:
+	case R_AARCH64_FUNC_RELATIVE:
 		break;
 	case R_AARCH64_TSTBR14:
 		error = lookup(lf, symidx, 1, &addr);
@@ -271,11 +374,69 @@ elf_reloc_internal(linker_file_t lf, char *relocbase, const void *data,
 		*where = addr + addend;
 		break;
 	case R_AARCH64_IRELATIVE:
+#ifdef __CHERI__
+		printf("kldload: AARCH64_IRELATIVE relocation should not "
+		    "exist in purecap CHERI kernel modules\n");
+		return (-1);
+#else
 		addr = (Elf_Addr)relocbase + addend;
 		val = ((Elf64_Addr (*)(void))addr)();
 		if (*where != val)
 			*where = val;
+#endif
 		break;
+#ifdef __CHERI__
+	case R_MORELLO_RELATIVE:
+	case R_MORELLO_FUNC_RELATIVE:
+		break;
+	case R_MORELLO_CAPINIT:
+	case R_MORELLO_GLOB_DAT:
+		error = lookup(lf, symidx, 1, &addr);
+		if (error != 0)
+			return (-1);
+
+		/*
+		 * XXX: This is conditional to avoid invalidating
+		 * sentries.  The addend should probably be passed to
+		 * the lookup function instead.
+		 */
+		if (addend != 0) {
+			KASSERT(!cheri_is_sealed(addr),
+			    ("%s: sentry %#p with non-zero addend %#lx",
+			    __func__, (void *)addr, addend));
+
+			/*
+			 * XXX: Prevent the add below from being
+			 * hoisted out of the condition.
+			 */
+			__asm__("" : "+r" (addend));
+			addr += addend;
+		}
+		*(uintptr_t *)where = addr;
+		break;
+	case R_MORELLO_JUMP_SLOT:
+		error = lookup(lf, symidx, 1, &addr);
+		if (error != 0)
+			return (-1);
+		*(uintptr_t *)where = addr;
+		break;
+	case R_MORELLO_IRELATIVE:
+		/* XXX: See libexec/rtld-elf/aarch64/reloc.c. */
+		if ((where[0] == 0 && where[1] == 0) ||
+		    (Elf_Ssize)where[0] == rela->r_addend) {
+			addr = (uintptr_t)(relocbase + rela->r_addend);
+			addr = cheri_perms_clear(addr, CHERI_PERM_SEAL |
+			    CHERI_PERM_STORE | CHERI_PERM_STORE_CAP |
+			    CHERI_PERM_STORE_LOCAL_CAP);
+			addr = cheri_sentry_create(addr);
+		} else
+			addr = build_cap_from_fragment(where,
+			    (Elf_Addr)relocbase, rela->r_addend,
+			    relocbase, relocbase);
+		addr = ((uintptr_t (*)(void))addr)();
+		*(uintptr_t *)where = addr;
+		break;
+#endif
 	default:
 		printf("kldload: unexpected relocation type %d, "
 		    "symbol index %d\n", rtype, symidx);
@@ -401,3 +562,46 @@ arm64_exec_protect(struct image_params *imgp, int flags __unused)
 		pmap_bti_set(vmspace_pmap(imgp->proc->p_vmspace), sva, eva);
 	}
 }
+
+#ifdef __CHERI__
+/*
+ * Handle boot-time kernel relocations, this is called by locore.
+ */
+void __nosanitizecoverage
+elf_reloc_self(const Elf_Dyn *dynp, void *data_cap, const void *code_cap)
+{
+	const Elf_Rela *rela = NULL, *rela_end;
+	Elf_Addr *fragment;
+	uintptr_t cap;
+	size_t rela_size = 0;
+
+	for (; dynp->d_tag != DT_NULL; dynp++) {
+		switch (dynp->d_tag) {
+		case DT_RELA:
+			rela = (const Elf_Rela *)cheri_address_set(data_cap,
+			    dynp->d_un.d_ptr);
+			break;
+		case DT_RELASZ:
+			rela_size = dynp->d_un.d_val;
+			break;
+		}
+	}
+
+	rela = cheri_bounds_set(rela, rela_size);
+	rela_end = (const Elf_Rela *)((const char *)rela + rela_size);
+
+	for (; rela < rela_end; rela++) {
+		/* Can not panic yet */
+		switch (ELF_R_TYPE(rela->r_info)) {
+		case R_MORELLO_RELATIVE:
+		case R_MORELLO_FUNC_RELATIVE:
+			fragment = (Elf_Addr *)cheri_address_set(data_cap,
+			    rela->r_offset);
+			cap = build_cap_from_fragment(fragment, 0,
+			    rela->r_addend, data_cap, code_cap);
+			*((uintptr_t *)fragment) = cap;
+			break;
+		}
+	}
+}
+#endif

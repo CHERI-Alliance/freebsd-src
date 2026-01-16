@@ -3,7 +3,7 @@
 #
 machine		arm64	aarch64c
 makeoptions	CPUTYPE=morello
-#options		CPU_CHERI
+options		CPU_CHERI
 
 # Some devices, notably the GPU on the Morello SoC, aren't described in
 # ACPI tables.  Prefer the FDT if one is availble.

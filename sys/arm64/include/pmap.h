@@ -127,8 +127,8 @@ extern bool		pmap_lpa_enabled;
 
 #define	PMAP_WANT_ACTIVE_CPUS_NAIVE
 
-extern vm_offset_t virtual_avail;
-extern vm_offset_t virtual_end;
+extern vm_pointer_t virtual_avail;
+extern vm_pointer_t virtual_end;
 
 extern pt_entry_t pmap_sh_attr;
 
@@ -144,8 +144,8 @@ extern pt_entry_t pmap_sh_attr;
 void	pmap_activate_vm(pmap_t);
 void	pmap_bootstrap_dmap(vm_size_t);
 void	pmap_bootstrap(void);
-int	pmap_change_attr(vm_offset_t va, vm_size_t size, int mode);
-int	pmap_change_prot(vm_offset_t va, vm_size_t size, vm_prot_t prot);
+int	pmap_change_attr(vm_pointer_t va, vm_size_t size, int mode);
+int	pmap_change_prot(vm_pointer_t va, vm_size_t size, vm_prot_t prot);
 void	pmap_kenter(vm_offset_t sva, vm_size_t size, vm_paddr_t pa, int mode);
 void	pmap_kenter_device(vm_offset_t, vm_size_t, vm_paddr_t);
 bool	pmap_klookup(vm_offset_t va, vm_paddr_t *pa);
@@ -165,8 +165,8 @@ void	*pmap_mapbios(vm_paddr_t, vm_size_t);
 void	pmap_unmapdev(void *, vm_size_t);
 void	pmap_unmapbios(void *, vm_size_t);
 
-bool	pmap_map_io_transient(vm_page_t *, vm_offset_t *, int, bool);
-void	pmap_unmap_io_transient(vm_page_t *, vm_offset_t *, int, bool);
+bool	pmap_map_io_transient(vm_page_t *, vm_pointer_t *, int, bool);
+void	pmap_unmap_io_transient(vm_page_t *, vm_pointer_t *, int, bool);
 
 bool	pmap_get_tables(pmap_t, vm_offset_t, pd_entry_t **, pd_entry_t **,
     pd_entry_t **, pt_entry_t **);

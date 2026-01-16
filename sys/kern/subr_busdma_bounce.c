@@ -49,9 +49,9 @@
 #include <sys/sched.h>
 
 struct bounce_page {
-	vm_offset_t	vaddr;		/* kva of bounce buffer */
+	vm_pointer_t	vaddr;		/* kva of bounce buffer */
 	bus_addr_t	busaddr;	/* Physical address */
-	vm_offset_t	datavaddr;	/* kva of client data */
+	vm_pointer_t	datavaddr;	/* kva of client data */
 #if defined(__amd64__) || defined(__i386__)
 	vm_page_t	datapage[2];	/* physical page(s) of client data */
 #else
@@ -282,11 +282,11 @@ alloc_bounce_pages(bus_dma_tag_t dmat, u_int numpages)
 		if (bpage == NULL)
 			break;
 #ifdef dmat_domain
-		bpage->vaddr = (vm_offset_t)contigmalloc_domainset(PAGE_SIZE,
+		bpage->vaddr = (vm_pointer_t)contigmalloc_domainset(PAGE_SIZE,
 		    M_BOUNCE, DOMAINSET_PREF(bz->domain), M_NOWAIT,
 		    0ul, bz->lowaddr, PAGE_SIZE, 0);
 #else
-		bpage->vaddr = (vm_offset_t)contigmalloc(PAGE_SIZE, M_BOUNCE,
+		bpage->vaddr = (vm_pointer_t)contigmalloc(PAGE_SIZE, M_BOUNCE,
 		    M_NOWAIT, 0ul, bz->lowaddr, PAGE_SIZE, 0);
 #endif
 		if (bpage->vaddr == 0) {
@@ -327,11 +327,11 @@ reserve_bounce_pages(bus_dma_tag_t dmat, bus_dmamap_t map, int commit)
 
 #if defined(__amd64__) || defined(__i386__)
 static bus_addr_t
-add_bounce_page(bus_dma_tag_t dmat, bus_dmamap_t map, vm_offset_t vaddr,
+add_bounce_page(bus_dma_tag_t dmat, bus_dmamap_t map, vm_pointer_t vaddr,
     vm_paddr_t addr1, vm_paddr_t addr2, bus_size_t size)
 #else
 static bus_addr_t
-add_bounce_page(bus_dma_tag_t dmat, bus_dmamap_t map, vm_offset_t vaddr,
+add_bounce_page(bus_dma_tag_t dmat, bus_dmamap_t map, vm_pointer_t vaddr,
     bus_addr_t addr, bus_size_t size)
 #endif
 {

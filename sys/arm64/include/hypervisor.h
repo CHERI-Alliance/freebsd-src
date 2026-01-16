@@ -122,13 +122,21 @@
 /* Valid if HCR_EL2.E2H == 0 */
 #define	CPTR_TRAP_ALL		0xc01037ff /* Enable all traps */
 #define	CPTR_RES0		0x7fefc800
+#ifdef __CHERI__
+#define	CPTR_RES1		0x000030ff
+#define	CPTR_TC			0x00000200	/* Trap Capabilities */
+#else
 #define	CPTR_RES1		0x000032ff
+#endif
 #define	CPTR_TZ			0x00000100
 #define	CPTR_TFP		0x00000400
 #define	CPTR_TTA		0x00100000
 /* Valid if HCR_EL2.E2H == 1 */
 #define	CPTR_E2H_TRAP_ALL	0xd0000000
 #define	CPTR_E2H_ZPEN		0x00030000
+#ifdef __CHERI__
+#define	CPTR_E2H_CEN		0x000c0000
+#endif
 #define	CPTR_E2H_FPEN		0x00300000
 #define	CPTR_E2H_TTA		0x10000000
 /* Unconditionally valid */
@@ -2142,6 +2150,14 @@
 #define	 VTCR_EL2_PS_44BIT	(0x4UL << VTCR_EL2_PS_SHIFT)
 #define	 VTCR_EL2_PS_48BIT	(0x5UL << VTCR_EL2_PS_SHIFT)
 #define	 VTCR_EL2_PS_52BIT	(0x6UL << VTCR_EL2_PS_SHIFT)
+#define	VTCR_EL2_HWU59_SHIFT	25
+#define	VTCR_EL2_HWU59		(1UL << VTCR_EL2_HWU59_SHIFT)
+#define	VTCR_EL2_HWU60_SHIFT	26
+#define	VTCR_EL2_HWU60		(1UL << VTCR_EL2_HWU60_SHIFT)
+#define	VTCR_EL2_HWU61_SHIFT	27
+#define	VTCR_EL2_HWU61		(1UL << VTCR_EL2_HWU61_SHIFT)
+#define	VTCR_EL2_HWU62_SHIFT	28
+#define	VTCR_EL2_HWU62		(1UL << VTCR_EL2_HWU62_SHIFT)
 #define	VTCR_EL2_DS_SHIFT	32
 #define	VTCR_EL2_DS		(0x1UL << VTCR_EL2_DS_SHIFT)
 

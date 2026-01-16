@@ -286,7 +286,7 @@ struct md_s {
 		struct {
 			struct vnode *vnode;
 			char file[PATH_MAX];
-			vm_offset_t kva;
+			vm_pointer_t kva;
 		} s_vnode;
 
 		/* MD_SWAP related fields */

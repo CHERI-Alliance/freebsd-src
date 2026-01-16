@@ -321,11 +321,9 @@ if_simloop(struct ifnet *ifp, struct mbuf *m, int af, int hlen)
 		 * Some archs do not like unaligned data, so
 		 * we move data down in the first mbuf.
 		 */
-		if (mtod(m, vm_offset_t) & 3) {
+		if (!__is_aligned(mtod(m, char *), 4)) {
 			KASSERT(hlen >= 3, ("if_simloop: hlen too small"));
-			bcopy(m->m_data,
-			    (char *)(mtod(m, vm_offset_t)
-				- (mtod(m, vm_offset_t) & 3)),
+			bcopy(m->m_data, rounddown2(mtod(m, char *), 4),
 			    m->m_len);
 			m->m_data -= (mtod(m,vm_offset_t) & 3);
 		}

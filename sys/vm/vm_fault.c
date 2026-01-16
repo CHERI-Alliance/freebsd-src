@@ -439,9 +439,11 @@ vm_fault_soft_fast(struct faultstate *fs)
 		}
 	}
 #endif
-	if (pmap_enter(fs->map->pmap, vaddr, m_map, fs->prot, fs->fault_type |
-	    PMAP_ENTER_NOSLEEP | (fs->wired ? PMAP_ENTER_WIRED : 0), psind) !=
-	    KERN_SUCCESS)
+	VM_OBJECT_ASSERT_CAP(fs->first_object, fs->prot);
+	if (pmap_enter(fs->map->pmap, vaddr, m_map,
+	    VM_OBJECT_MASK_CAP_PROT(fs->first_object, fs->prot),
+	    fs->fault_type | PMAP_ENTER_NOSLEEP |
+	    (fs->wired ? PMAP_ENTER_WIRED : 0), psind) != KERN_SUCCESS)
 		goto fail_busy;
 	if (fs->m_hold != NULL) {
 		(*fs->m_hold) = m;
@@ -517,6 +519,7 @@ vm_fault_populate(struct faultstate *fs)
 {
 	vm_offset_t vaddr;
 	vm_page_t m;
+	vm_prot_t prot;
 	vm_pindex_t map_first, map_last, pager_first, pager_last, pidx;
 	int bdry_idx, i, npages, psind, rv;
 	enum fault_status res;
@@ -641,6 +644,7 @@ vm_fault_populate(struct faultstate *fs)
 		    pager_last);
 		pager_last = map_last;
 	}
+	VM_OBJECT_ASSERT_CAP(fs->first_object, fs->prot);
 	for (pidx = pager_first; pidx <= pager_last; pidx += npages) {
 		m = vm_page_lookup(fs->first_object, pidx);
 		vaddr = fs->entry->start + IDX_TO_OFF(pidx) - fs->entry->offset;
@@ -657,8 +661,9 @@ vm_fault_populate(struct faultstate *fs)
 			vm_fault_populate_check_page(&m[i]);
 			vm_fault_dirty(fs, &m[i]);
 		}
+		prot = VM_OBJECT_MASK_CAP_PROT(fs->first_object, fs->prot);
 		VM_OBJECT_WUNLOCK(fs->first_object);
-		rv = pmap_enter(fs->map->pmap, vaddr, m, fs->prot, fs->fault_type |
+		rv = pmap_enter(fs->map->pmap, vaddr, m, prot, fs->fault_type |
 		    (fs->wired ? PMAP_ENTER_WIRED : 0), psind);
 
 		/*
@@ -675,7 +680,7 @@ vm_fault_populate(struct faultstate *fs)
 			MPASS(!fs->wired);
 			for (i = 0; i < npages; i++) {
 				rv = pmap_enter(fs->map->pmap, vaddr + ptoa(i),
-				    &m[i], fs->prot, fs->fault_type, 0);
+				    &m[i], prot, fs->fault_type, 0);
 				MPASS(rv == KERN_SUCCESS);
 			}
 		}
@@ -729,7 +734,7 @@ int
 vm_fault_trap(vm_map_t map, vm_offset_t vaddr, vm_prot_t fault_type,
     int fault_flags, int *signo, int *ucode)
 {
-	int result;
+	int result, segv_ucode;
 
 	MPASS(signo == NULL || ucode != NULL);
 #ifdef KTRACE
@@ -764,6 +769,12 @@ vm_fault_trap(vm_map_t map, vm_offset_t vaddr, vm_prot_t fault_type,
 			*ucode = BUS_OBJERR;
 			break;
 		case KERN_PROTECTION_FAILURE:
+			if (VM_PROT_HAS_WRITE_CAP(fault_type))
+				segv_ucode = SEGV_STORETAG;
+			else if (VM_PROT_HAS_READ_CAP(fault_type))
+				segv_ucode = SEGV_LOADTAG;
+			else
+				segv_ucode = SEGV_ACCERR;
 			if (prot_fault_translation == 0) {
 				/*
 				 * Autodetect.  This check also covers
@@ -773,7 +784,7 @@ vm_fault_trap(vm_map_t map, vm_offset_t vaddr, vm_prot_t fault_type,
 				if (SV_CURPROC_ABI() == SV_ABI_FREEBSD &&
 				    curproc->p_osrel >= P_OSREL_SIGSEGV) {
 					*signo = SIGSEGV;
-					*ucode = SEGV_ACCERR;
+					*ucode = segv_ucode;
 				} else {
 					*signo = SIGBUS;
 					*ucode = UCODE_PAGEFLT;
@@ -785,7 +796,7 @@ vm_fault_trap(vm_map_t map, vm_offset_t vaddr, vm_prot_t fault_type,
 			} else {
 				/* Always SIGSEGV mode. */
 				*signo = SIGSEGV;
-				*ucode = SEGV_ACCERR;
+				*ucode = segv_ucode;
 			}
 			break;
 		default:
@@ -955,6 +966,7 @@ vm_fault_lookup(struct faultstate *fs)
 	}
 
 	MPASS((fs->entry->eflags & MAP_ENTRY_GUARD) == 0);
+	MPASS((fs->entry->eflags & MAP_ENTRY_UNMAPPED) == 0);
 
 	if (fs->wired)
 		fs->fault_type = fs->prot | (fs->fault_type & VM_PROT_COPY);
@@ -1094,7 +1106,20 @@ vm_fault_cow(struct faultstate *fs)
 		/*
 		 * Oh, well, lets copy it.
 		 */
-		pmap_copy_page(fs->m, fs->first_m);
+#ifdef __CHERI__
+		/*
+		 * Preserve tags if the source page contains tags.
+		 * The destination page will always belong to a
+		 * tag-bearing VM object.
+		 */
+		KASSERT(fs->first_object->flags & OBJ_HASCAP | OBJ_NOCAP,
+		    ("%s: destination object %p doesn't have OBJ_HASCAP",
+		    __func__, fs->first_object));
+		if (fs->object->flags & OBJ_HASCAP)
+			pmap_copy_page_tags(fs->m, fs->first_m);
+		else
+#endif
+			pmap_copy_page(fs->m, fs->first_m);
 		if (fs->wired && (fs->fault_flags & VM_FAULT_WIRE) == 0) {
 			vm_page_wire(fs->first_m);
 			vm_page_unwire(fs->m, PQ_INACTIVE);
@@ -1812,7 +1837,7 @@ RetryFault:
 			if (fs.first_object == fs.object)
 				vm_fault_page_free(&fs.first_m);
 			vm_fault_unlock_and_deallocate(&fs);
-			return (KERN_OUT_OF_BOUNDS);
+			return (KERN_PAGE_NOT_FILLED);
 		}
 		VM_OBJECT_UNLOCK(fs.object);
 		vm_fault_zerofill(&fs);
@@ -1912,7 +1937,9 @@ found:
 	 * back on the active queue until later so that the pageout daemon
 	 * won't find it (yet).
 	 */
-	pmap_enter(fs.map->pmap, vaddr, fs.m, fs.prot,
+	VM_OBJECT_ASSERT_CAP(fs.object, fs.prot);
+	pmap_enter(fs.map->pmap, vaddr, fs.m,
+	    VM_OBJECT_MASK_CAP_PROT(fs.object, fs.prot),
 	    fs.fault_type | (fs.wired ? PMAP_ENTER_WIRED : 0), 0);
 	if (faultcount != 1 && (fs.fault_flags & VM_FAULT_WIRE) == 0 &&
 	    fs.wired == 0)
@@ -2121,7 +2148,8 @@ vm_fault_prefault(const struct faultstate *fs, vm_offset_t addra,
 		}
 		if (vm_page_all_valid(m) &&
 		    (m->flags & PG_FICTITIOUS) == 0)
-			pmap_enter_quick(pmap, addr, m, prot);
+			pmap_enter_quick(pmap, addr, m,
+			    VM_OBJECT_MASK_CAP_PROT(lobject, prot));
 		if (!obj_locked || lobject != entry->object.vm_object)
 			VM_OBJECT_RUNLOCK(lobject);
 	}
@@ -2143,6 +2171,7 @@ vm_fault_prefault(const struct faultstate *fs, vm_offset_t addra,
  *   EAGAIN - a page was not mapped, and the thread is in nofaulting mode
  *   EFAULT - a page with requested permissions cannot be mapped
  *            (more detailed result from vm_fault() is lost)
+ *   EPROT  - the addr capabilty did not contain
  */
 int
 vm_fault_hold_pages(vm_map_t map, void *addr, vm_size_t len,
@@ -2157,6 +2186,10 @@ vm_fault_hold_pages(vm_map_t map, void *addr, vm_size_t len,
 		*ppages_count = 0;
 		return (0);
 	}
+#ifdef __CHERI__
+	if (!cheri_can_access(addr, vm_prot2perms(0, prot), len))
+		return (EPROT);
+#endif
 	end = round_page((vm_offset_t)addr + len);
 	start = trunc_page((vm_offset_t)addr);
 
@@ -2406,7 +2439,16 @@ again:
 			if (src_object == dst_object &&
 			    (object->flags & OBJ_ONEMAPPING) == 0)
 				pmap_remove_all(src_m);
-			pmap_copy_page(src_m, dst_m);
+#ifdef __CHERI__
+			/*
+			 * Preserve tags if the source page contains tags.
+			 * See longer discussion in vm_fault_cow.
+			 */
+			if (object->flags & OBJ_HASCAP)
+				pmap_copy_page_tags(src_m, dst_m);
+			else
+#endif
+				pmap_copy_page(src_m, dst_m);
 
 			/*
 			 * The object lock does not guarantee that "src_m" will
@@ -2448,7 +2490,9 @@ again:
 		 */
 		if (vm_page_all_valid(dst_m)) {
 			VM_OBJECT_WUNLOCK(dst_object);
-			pmap_enter(dst_map->pmap, vaddr, dst_m, prot,
+			VM_OBJECT_ASSERT_CAP(dst_object, prot);
+			pmap_enter(dst_map->pmap, vaddr, dst_m,
+			VM_OBJECT_MASK_CAP_PROT(dst_object, prot),
 			    access | (upgrade ? PMAP_ENTER_WIRED : 0), 0);
 			VM_OBJECT_WLOCK(dst_object);
 		}

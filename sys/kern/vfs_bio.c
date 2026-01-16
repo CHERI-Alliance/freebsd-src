@@ -93,6 +93,8 @@
 #include <vm/vm_map.h>
 #include <vm/swap_pager.h>
 
+#include <cheri/cheric.h>
+
 static MALLOC_DEFINE(M_BIOBUF, "biobuf", "BIO buffer");
 
 struct	bio_ops bioops;		/* I/O operation notification */
@@ -1137,6 +1139,11 @@ kern_vfs_bio_buffer_alloc(caddr_t v, long physmem_est)
 		nbuf = maxbuf;
 	}
 
+#ifdef __CHERI__
+	/* Account for CHERI rounding when estimating usage. */
+	nbuf = CHERI_REPRESENTABLE_LENGTH((long)nbuf * BKVASIZE) / BKVASIZE;
+#endif
+
 	/*
 	 * Ideal allocation size for the transient bio submap is 10%
 	 * of the maximal space buffer map.  This roughly corresponds
@@ -1537,9 +1544,9 @@ bpmap_qenter(struct buf *bp)
 	 * bp->b_data is relative to bp->b_offset, but
 	 * bp->b_offset may be offset into the first page.
 	 */
-	bp->b_data = (caddr_t)trunc_page((vm_offset_t)bp->b_data);
+	bp->b_data = (caddr_t)trunc_page((vm_pointer_t)bp->b_data);
 	pmap_qenter((vm_offset_t)bp->b_data, bp->b_pages, bp->b_npages);
-	bp->b_data = (caddr_t)((vm_offset_t)bp->b_data |
+	bp->b_data = (caddr_t)((vm_pointer_t)bp->b_data |
 	    (vm_offset_t)(bp->b_offset & PAGE_MASK));
 }
 
@@ -2095,7 +2102,7 @@ bufkva_free(struct buf *bp)
 	if (bp->b_kvasize == 0)
 		return;
 
-	vmem_free(buffer_arena, (vm_offset_t)bp->b_kvabase, bp->b_kvasize);
+	vmem_free(buffer_arena, (vmem_addr_t)bp->b_kvabase, bp->b_kvasize);
 	counter_u64_add(bufkvaspace, -bp->b_kvasize);
 	counter_u64_add(buffreekvacnt, 1);
 	bp->b_data = bp->b_kvabase = unmapped_buf;
@@ -2110,7 +2117,7 @@ bufkva_free(struct buf *bp)
 static int
 bufkva_alloc(struct buf *bp, int maxsize, int gbflags)
 {
-	vm_offset_t addr;
+	vmem_addr_t addr;
 	int error;
 
 	KASSERT((gbflags & GB_UNMAPPED) == 0 || (gbflags & GB_KVAALLOC) != 0,
@@ -4488,11 +4495,12 @@ biodone(struct bio *bp)
 	if ((bp->bio_flags & BIO_TRANSIENT_MAPPING) != 0) {
 		bp->bio_flags &= ~BIO_TRANSIENT_MAPPING;
 		bp->bio_flags |= BIO_UNMAPPED;
-		start = trunc_page((vm_offset_t)bp->bio_data);
-		end = round_page((vm_offset_t)bp->bio_data + bp->bio_length);
+		start = trunc_page((vm_pointer_t)bp->bio_data);
+		end = round_page((vm_pointer_t)bp->bio_data + bp->bio_length);
 		bp->bio_data = unmapped_buf;
-		pmap_qremove(start, atop(end - start));
-		vmem_free(transient_arena, start, end - start);
+		pmap_qremove(start, atop((ptraddr_t)end - (ptraddr_t)start));
+		vmem_free(transient_arena, start,
+		    (ptraddr_t)end - (ptraddr_t)start);
 		atomic_add_int(&inflight_transient_maps, -1);
 	}
 	done = bp->bio_done;

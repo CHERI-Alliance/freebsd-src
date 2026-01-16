@@ -341,7 +341,7 @@ kn_leave_flux(struct knote *kn)
 #define	KN_HASHSIZE		64		/* XXX should be tunable */
 #endif
 
-#define KN_HASH(val, mask)	(((val) ^ (val >> 8)) & (mask))
+#define KN_HASH(val, mask)	(((ptraddr_t)(val) ^ ((ptraddr_t)val >> 8)) & (mask))
 
 static int
 filt_nullattach(struct knote *kn)

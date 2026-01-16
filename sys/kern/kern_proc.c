@@ -1325,7 +1325,7 @@ fill_kinfo_thread(struct thread *td, struct kinfo_proc *kp, int preferthread)
 	kp->ki_tid = td->td_tid;
 	kp->ki_numthreads = p->p_numthreads;
 	kp->ki_pcb = td->td_pcb;
-	kp->ki_kstack = (void *)td->td_kstack;
+	kp->ki_kstack = (void *)(uintptr_t)td->td_kstack;
 	kp->ki_slptime = (ticks - td->td_slptick) / hz;
 	kp->ki_pri.pri_class = td->td_pri_class;
 	kp->ki_pri.pri_user = td->td_user_pri;
@@ -3180,9 +3180,9 @@ sysctl_kern_proc_sigtramp(SYSCTL_HANDLER_ARGS)
 		    ((sv->sv_flags & SV_DSO_SIG) == 0 ? *sv->sv_szsigcode :
 		    (uintptr_t)sv->sv_szsigcode);
 	} else {
-		kst.ksigtramp_start = (char *)PROC_PS_STRINGS(p) -
+		kst.ksigtramp_start = (char *)(uintptr_t)PROC_PS_STRINGS(p) -
 		    *sv->sv_szsigcode;
-		kst.ksigtramp_end = (char *)PROC_PS_STRINGS(p);
+		kst.ksigtramp_end = (char *)(uintptr_t)PROC_PS_STRINGS(p);
 	}
 	PROC_UNLOCK(p);
 	error = SYSCTL_OUT(req, &kst, sizeof(kst));

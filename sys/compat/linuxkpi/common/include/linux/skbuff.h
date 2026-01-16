@@ -173,7 +173,11 @@ struct sk_buff {
 
 	/* "Scratch" area for layers to store metadata. */
 	/* ??? I see sizeof() operations so probably an array. */
+#ifdef __CHERI__
+	uint8_t			cb[128] __aligned(CACHE_LINE_SIZE);
+#else
 	uint8_t			cb[64] __aligned(CACHE_LINE_SIZE);
+#endif
 
 	struct skb_shared_info	*shinfo	__aligned(CACHE_LINE_SIZE);
 
