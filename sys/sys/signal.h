@@ -130,6 +130,7 @@ typedef	__uid_t		uid_t;
 #define	SIGTHR		32	/* reserved by thread library. */
 #define	SIGLWP		SIGTHR
 #define	SIGLIBRT	33	/* reserved by real-time library. */
+#define	SIGPROT		34	/* in-address space security exception. */
 #endif
 
 #define	SIGRTMIN	65
@@ -222,6 +223,7 @@ typedef	struct __siginfo {
 	union	{
 		struct {
 			int	_trapno;/* machine specific trap code */
+			int	_capreg;/* only for SIGPROT */
 		} _fault;
 		struct {
 			int	_timerid;
@@ -251,6 +253,7 @@ typedef int (copyout_siginfo_t)(const siginfo_t *si, void *info);
 #endif
 
 #define si_trapno	_reason._fault._trapno
+#define si_capreg	_reason._fault._capreg
 #define si_timerid	_reason._timer._timerid
 #define si_overrun	_reason._timer._overrun
 #define si_mqd		_reason._mesgq._mqd
@@ -270,6 +273,7 @@ struct __siginfo32 {
 	union	{
 		struct {
 			int	_trapno;/* machine specific trap code */
+			int	_capreg;/* only for SIGPROT */
 		} _fault;
 		struct {
 			int	_timerid;
@@ -311,6 +315,7 @@ struct __siginfo32 {
 #define SEGV_ACCERR	2	/* Invalid permissions for mapped	*/
 				/* object.				*/
 #define	SEGV_PKUERR	100	/* x86: PKU violation			*/
+#define	SEGV_STORETAG	102	/* CHERI: Tag-store page fault.		*/
 #define	SEGV_MTEAERR	200	/* arm64: Asynchronous Arm MTE error	*/
 #define	SEGV_MTESERR	201	/* arm64: Synchronous Arm MTE error	*/
 
@@ -349,7 +354,20 @@ struct __siginfo32 {
 #define POLL_PRI	5	/* High priority input available	*/
 #define POLL_HUP	6	/* Device disconnected			*/
 
+#if __BSD_VISIBLE
+#define	PROT_CHERI_BOUNDS	1	/* Capability bounds fault	*/
+#define	PROT_CHERI_TAG		2	/* Capability tag fault		*/
+#define	PROT_CHERI_SEALED	3	/* Capability sealed fault	*/
+#define	PROT_CHERI_TYPE		4	/* Type mismatch fault		*/
+#define	PROT_CHERI_PERM		5	/* Capability permission fault	*/
+#define	PROT_CHERI_IMPRECISE	7	/* Imprecise bounds fault	*/
+#define	PROT_CHERI_STORELOCAL	8	/* Store-local fault		*/
+#define	PROT_CHERI_CINVOKE	9	/* CInvoke fault		*/
+#define	PROT_CHERI_SYSREG	11	/* Capability system register fault */
+#define	PROT_CHERI_UNALIGNED_BASE 12	/* Unaligned base address.      */
 #endif
+
+#endif /* __POSIX_VISIBLE >= 199309 || __XSI_VISIBLE */
 
 #if __POSIX_VISIBLE || __XSI_VISIBLE
 struct __siginfo;

@@ -70,16 +70,19 @@
 
 #include <sys/param.h>
 #include <sys/systm.h>
+#include <sys/abi_compat.h>
 #include <sys/condvar.h>
 #include <sys/jail.h>
 #include <sys/kernel.h>
 #include <sys/lock.h>
 #include <sys/mac.h>
 #include <sys/module.h>
+#include <sys/proc.h>
 #include <sys/rmlock.h>
 #include <sys/sdt.h>
 #include <sys/sx.h>
 #include <sys/sysctl.h>
+#include <sys/sysent.h>
 #include <sys/vnode.h>
 
 #include <security/mac/mac_framework.h>
@@ -739,6 +742,49 @@ mac_check_structmac_consistent(const struct mac *mac)
 		return (EINVAL);
 
 	return (0);
+}
+
+#ifdef COMPAT_FREEBSD32
+struct mac32 {
+	uint32_t	m_buflen;	/* size_t */
+	uint32_t	m_string;	/* char * */
+};
+#endif
+
+int
+copyin_mac(const void *mac_p, struct mac *mac)
+{
+	int error;
+
+	memset(mac, 0, sizeof(*mac));
+#ifdef COMPAT_FREEBSD32
+	if (SV_CURPROC_FLAG(SV_ILP32)) {
+		struct mac32 mac32;
+
+		error = copyin(mac_p, &mac32, sizeof(mac32));
+		if (error != 0)
+			return (error);
+
+		CP(mac32, *mac, m_buflen);
+		PTRIN_CP(mac32, *mac, m_string);
+		return (0);
+	}
+#endif
+#ifdef COMPAT_FREEBSD64
+	if (!SV_CURPROC_FLAG(SV_CHERI)) {
+		struct mac64 tmpmac;
+
+		error = copyin(mac_p, &tmpmac, sizeof(tmpmac));
+		if (error != 0)
+			return (error);
+
+		mac->m_buflen = tmpmac.m_buflen;
+		mac->m_string = USER_PTR(tmpmac.m_string, tmpmac.m_buflen);
+		return (0);
+	}
+#endif
+	error = copyinptr(mac_p, mac, sizeof(*mac));
+	return (error);
 }
 
 SYSINIT(mac, SI_SUB_MAC, SI_ORDER_FIRST, mac_init, NULL);

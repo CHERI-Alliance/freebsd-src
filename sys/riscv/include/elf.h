@@ -31,10 +31,15 @@
  * ELF definitions for the RISC-V architecture.
  */
 
+#ifndef __ELF_WORD_SIZE
+#define	__ELF_WORD_SIZE	64
+#if defined(__CHERI__)
+#define	__ELF_CHERI
+#endif
+#endif
+
 #include <sys/elf32.h>	/* Definitions common to all 32 bit architectures. */
 #include <sys/elf64.h>	/* Definitions common to all 64 bit architectures. */
-
-#define	__ELF_WORD_SIZE	64	/* Used by <sys/elf_generic.h> */
 #include <sys/elf_generic.h>
 
 /*
@@ -49,19 +54,40 @@ typedef struct {	/* Auxiliary vector entry on initial stack */
 } Elf32_Auxinfo;
 
 typedef struct {	/* Auxiliary vector entry on initial stack */
-	long	a_type;			/* Entry type. */
+	int64_t	a_type;			/* Entry type. */
 	union {
-		long	a_val;		/* Integer value. */
+		int64_t	a_val;		/* Integer value. */
+#if __ELF_WORD_SIZE == 64 && !defined(__CHERI__)
 		void	*a_ptr;		/* Address. */
 		void	(*a_fcn)(void);	/* Function pointer (not used). */
+#endif
 	} a_un;
 } Elf64_Auxinfo;
 
+#ifdef __CHERI__
+typedef struct {	/* Auxiliary vector entry on initial stack */
+	int64_t	a_type;			/* Entry type. */
+	union {
+		int64_t	a_val;		/* Integer value. */
+		void *a_ptr; /* Address. */
+		void	(*a_fcn)(void); /* Function pointer (not used). */
+	} a_un;
+} Elf64C_Auxinfo;
+#endif
+
+#ifdef __ELF_CHERI
+typedef Elf64C_Auxinfo Elf_Auxinfo;
+#else
 __ElfType(Auxinfo);
+#endif
 
 #define	ELF_ARCH	EM_RISCV
 
 #define	ELF_MACHINE_OK(x) ((x) == (ELF_ARCH))
+
+#define	ELF_IS_CHERI(hdr) (((hdr)->e_flags & EF_RISCV_CHERIABI) != 0)
+
+#define	PT_MEMTAG_CHERI	PT_RISCV_MEMTAG_CHERI
 
 /* Define "machine" characteristics */
 #define	ELF_TARG_CLASS	ELFCLASS64
@@ -71,6 +97,9 @@ __ElfType(Auxinfo);
 
 /* TODO: set correct value */
 #define	ET_DYN_LOAD_ADDR 0x100000
+
+#define	DT_CHERI___CAPRELOCS	DT_RISCV_CHERI___CAPRELOCS
+#define	DT_CHERI___CAPRELOCSSZ	DT_RISCV_CHERI___CAPRELOCSSZ
 
 /* Flags passed in AT_HWCAP */
 #define	HWCAP_ISA_BIT(c)	(1 << ((c) - 'a'))

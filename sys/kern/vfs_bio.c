@@ -93,6 +93,8 @@
 #include <vm/vm_map.h>
 #include <vm/swap_pager.h>
 
+#include <cheri/cheric.h>
+
 static MALLOC_DEFINE(M_BIOBUF, "biobuf", "BIO buffer");
 
 struct	bio_ops bioops;		/* I/O operation notification */
@@ -171,8 +173,7 @@ void *poisoned_buf = (void *)-1;
 struct proc *bufdaemonproc;
 
 static void vm_hold_free_pages(struct buf *bp, int newbsize);
-static void vm_hold_load_pages(struct buf *bp, vm_offset_t from,
-		vm_offset_t to);
+static void vm_hold_load_pages(struct buf *bp, char *from, char *to);
 static void vfs_page_set_valid(struct buf *bp, vm_ooffset_t off, vm_page_t m);
 static void vfs_page_set_validclean(struct buf *bp, vm_ooffset_t off,
 		vm_page_t m);
@@ -1138,6 +1139,11 @@ kern_vfs_bio_buffer_alloc(caddr_t v, long physmem_est)
 		nbuf = maxbuf;
 	}
 
+#ifdef __CHERI__
+	/* Account for CHERI rounding when estimating usage. */
+	nbuf = CHERI_REPRESENTABLE_LENGTH((long)nbuf * BKVASIZE) / BKVASIZE;
+#endif
+
 	/*
 	 * Ideal allocation size for the transient bio submap is 10%
 	 * of the maximal space buffer map.  This roughly corresponds
@@ -2099,7 +2105,7 @@ bufkva_free(struct buf *bp)
 	if (bp->b_kvasize == 0)
 		return;
 
-	vmem_free(buffer_arena, (vm_offset_t)bp->b_kvabase, bp->b_kvasize);
+	vmem_free(buffer_arena, (vmem_addr_t)bp->b_kvabase, bp->b_kvasize);
 	counter_u64_add(bufkvaspace, -bp->b_kvasize);
 	counter_u64_add(buffreekvacnt, 1);
 	bp->b_data = bp->b_kvabase = unmapped_buf;
@@ -2114,7 +2120,7 @@ bufkva_free(struct buf *bp)
 static int
 bufkva_alloc(struct buf *bp, int maxsize, int gbflags)
 {
-	vm_offset_t addr;
+	vmem_addr_t addr;
 	int error;
 
 	KASSERT((gbflags & GB_UNMAPPED) == 0 || (gbflags & GB_KVAALLOC) != 0,
@@ -4391,8 +4397,8 @@ vfs_nonvmio_extend(struct buf *bp, int newbsize)
 		bp->b_flags &= ~B_MALLOC;
 		newbsize = round_page(newbsize);
 	}
-	vm_hold_load_pages(bp, (vm_offset_t) bp->b_data + bp->b_bufsize,
-	    (vm_offset_t) bp->b_data + newbsize);
+	vm_hold_load_pages(bp, bp->b_data + bp->b_bufsize,
+	    bp->b_data + newbsize);
 	if (origbuf != NULL) {
 		bcopy(origbuf, bp->b_data, origbufsize);
 		free(origbuf, M_BIOBUF);
@@ -4474,7 +4480,7 @@ biodone(struct bio *bp)
 {
 	struct mtx *mtxp;
 	void (*done)(struct bio *);
-	vm_offset_t start, end;
+	void *start, *end;
 
 	biotrack(bp, __func__);
 
@@ -4491,11 +4497,12 @@ biodone(struct bio *bp)
 	if ((bp->bio_flags & BIO_TRANSIENT_MAPPING) != 0) {
 		bp->bio_flags &= ~BIO_TRANSIENT_MAPPING;
 		bp->bio_flags |= BIO_UNMAPPED;
-		start = trunc_page((vm_offset_t)bp->bio_data);
-		end = round_page((vm_offset_t)bp->bio_data + bp->bio_length);
+		start = trunc_page((char *)bp->bio_data);
+		end = round_page((char *)bp->bio_data + bp->bio_length);
 		bp->bio_data = unmapped_buf;
-		pmap_qremove((void *)start, atop(end - start));
-		vmem_free(transient_arena, start, end - start);
+		pmap_qremove(start, atop((ptraddr_t)end - (ptraddr_t)start));
+		vmem_free(transient_arena, (vmem_addr_t)start,
+		    (ptraddr_t)end - (ptraddr_t)start);
 		atomic_add_int(&inflight_transient_maps, -1);
 	}
 	done = bp->bio_done;
@@ -5030,9 +5037,9 @@ vfs_bio_set_flags(struct buf *bp, int ioflag)
  * not associated with a file object.
  */
 static void
-vm_hold_load_pages(struct buf *bp, vm_offset_t from, vm_offset_t to)
+vm_hold_load_pages(struct buf *bp, char *from, char *to)
 {
-	vm_offset_t pg;
+	char *pg;
 	vm_page_t p;
 	int index;
 
@@ -5040,7 +5047,7 @@ vm_hold_load_pages(struct buf *bp, vm_offset_t from, vm_offset_t to)
 
 	to = round_page(to);
 	from = round_page(from);
-	index = (from - trunc_page((vm_offset_t)bp->b_data)) >> PAGE_SHIFT;
+	index = (from - trunc_page(bp->b_data)) >> PAGE_SHIFT;
 	MPASS((bp->b_flags & B_MAXPHYS) == 0);
 	KASSERT(to - from <= maxbcachebuf,
 	    ("vm_hold_load_pages too large %p %#jx %#jx %u",

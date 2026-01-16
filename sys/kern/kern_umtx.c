@@ -133,7 +133,7 @@
 struct umtx_copyops {
 	int	(*copyin_timeout)(const void *uaddr, struct timespec *tsp);
 	int	(*copyin_umtx_time)(const void *uaddr, size_t size,
-	    struct _umtx_time *tp);
+		    struct _umtx_time *tp);
 	int	(*copyin_robust_lists)(const void *uaddr, size_t size,
 	    struct umtx_robust_lists_params *rbp);
 	int	(*copyout_timeout)(void *uaddr, size_t size,

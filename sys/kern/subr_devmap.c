@@ -298,7 +298,7 @@ pmap_mapdev_attr(vm_paddr_t pa, vm_size_t size, vm_memattr_t ma)
 	if (early_boot) {
 #ifdef __CHERI__
 #ifdef INVARIANTS
-		vm_pointer_t oldva = akva_devmap_vaddr;
+		vm_offset_t oldva = akva_devmap_vaddr;
 #endif
 
 		akva_devmap_vaddr -= CHERI_REPRESENTABLE_LENGTH(size);
@@ -307,7 +307,7 @@ pmap_mapdev_attr(vm_paddr_t pa, vm_size_t size, vm_memattr_t ma)
 		akva_devmap_vaddr = trunc_page(akva_devmap_vaddr);
 		va = cheri_bounds_set_exact(cheri_address_set(
 		    devmap_capability, akva_devmap_vaddr), size);
-		KASSERT(va + cheri_length_get((void *)va) <= oldva,
+		KASSERT((vm_offset_t)va + cheri_length_get(va) <= oldva,
 		    ("%s: early devmap overlaps", __func__));
 #else
 		akva_devmap_vaddr = trunc_page(akva_devmap_vaddr - size);

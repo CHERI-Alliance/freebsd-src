@@ -37,9 +37,18 @@ struct mdthread {
 };
 
 struct mdproc {
+#ifdef __CHERI__
+	void *md_sigcode;
+#else
 	int dummy;
+#endif
 };
 
+#ifdef __CHERI__
+#define	KINFO_PROC_SIZE		1248
+#define	KINFO_PROC64_SIZE	1088
+#else
 #define	KINFO_PROC_SIZE	1088
+#endif
 
 #endif /* !_MACHINE_PROC_H_ */

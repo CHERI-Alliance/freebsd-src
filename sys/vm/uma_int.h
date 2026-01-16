@@ -33,6 +33,7 @@
 #include <sys/_bitset.h>
 #include <sys/_domainset.h>
 #include <sys/_task.h>
+#include <sys/stddef.h>
 
 /* 
  * This file includes definitions, structures, prototypes, and inlines that

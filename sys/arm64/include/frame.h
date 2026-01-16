@@ -56,7 +56,7 @@ struct trapframe {
 #ifdef __CHERI__
 	uint64_t tf_pad;
 #endif
-	uint64_t tf_x[30];
+	uintptr_t tf_x[30];
 };
 
 /*

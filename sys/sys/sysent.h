@@ -167,7 +167,7 @@ struct sysentvec {
 
 #define	SV_ILP32	0x00000100	/* 32-bit executable. */
 #define	SV_LP64		0x00000200	/* 64-bit executable. */
-#define	SV_RESERVED0	0x00004000	/* Formerly SV_IA32 */
+#define	SV_CHERI	0x00004000	/* riABI executable. */
 #define	SV_AOUT		0x00008000	/* a.out executable. */
 #define	SV_SHP		0x00010000	/* Shared page. */
 #define	SV_SIGSYS	0x00020000	/* SIGSYS for non-existing syscall */
