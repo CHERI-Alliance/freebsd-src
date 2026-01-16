@@ -238,7 +238,7 @@ vm_page_init_cache_zones(void *dummy __unused)
 			pgcache->domain = domain;
 			pgcache->pool = pool;
 			pgcache->zone = uma_zcache_create("vm pgcache",
-			    PAGE_SIZE, NULL, NULL, NULL, NULL,
+			    sizeof(struct vm_page), NULL, NULL, NULL, NULL,
 			    vm_page_zone_import, vm_page_zone_release, pgcache,
 			    UMA_ZONE_VM);
 
@@ -537,7 +537,7 @@ vm_page_init_page(vm_page_t m, vm_paddr_t pa, int segind, int pool)
 
 #ifndef PMAP_HAS_PAGE_ARRAY
 static vm_paddr_t
-vm_page_array_alloc(vm_offset_t *vaddr, vm_paddr_t end, vm_paddr_t page_range)
+vm_page_array_alloc(vm_pointer_t *vaddr, vm_paddr_t end, vm_paddr_t page_range)
 {
 	vm_paddr_t new_end;
 
@@ -568,8 +568,8 @@ vm_page_array_alloc(vm_offset_t *vaddr, vm_paddr_t end, vm_paddr_t page_range)
  *	physical pages.  Initializes these structures, and populates the free
  *	page queues.
  */
-vm_offset_t
-vm_page_startup(vm_offset_t vaddr)
+vm_pointer_t
+vm_page_startup(vm_pointer_t vaddr)
 {
 	struct vm_phys_seg *seg;
 	struct vm_domain *vmd;
@@ -3105,7 +3105,10 @@ vm_page_reclaim_run(int req_class, int domain, u_long npages, vm_page_t m_run,
 					KASSERT(m_new->oflags == VPO_UNMANAGED,
 					    ("page %p is managed", m_new));
 					m_new->oflags = 0;
-					pmap_copy_page(m, m_new);
+					if (object->flags & OBJ_HASCAP)
+						pmap_copy_page_tags(m, m_new);
+					else
+						pmap_copy_page(m, m_new);
 					m_new->valid = m->valid;
 					m_new->dirty = m->dirty;
 					m->flags &= ~PG_ZERO;

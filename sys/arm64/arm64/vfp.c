@@ -43,6 +43,7 @@
 #include <vm/uma.h>
 
 #include <machine/armreg.h>
+#include <machine/cheri.h>
 #include <machine/md_var.h>
 #include <machine/pcb.h>
 #include <machine/vfp.h>
@@ -208,7 +209,7 @@ vfp_store(struct vfpstate *state)
 	    "stp	q28, q29, [%2, #16 * 28]\n"
 	    "stp	q30, q31, [%2, #16 * 30]\n"
 	    ".arch_extension nofp\n"
-	    : "=&r"(fpcr), "=&r"(fpsr) : "r"(vfp_state));
+	    : "=&r"(fpcr), "=&r"(fpsr) : ASM_PTR_CONSTR(vfp_state));
 
 	state->vfp_fpcr = fpcr;
 	state->vfp_fpsr = fpsr;
@@ -245,13 +246,16 @@ vfp_restore(struct vfpstate *state)
 	    "msr	fpcr, %0		\n"
 	    "msr	fpsr, %1		\n"
 	    ".arch_extension nofp\n"
-	    : : "r"(fpcr), "r"(fpsr), "r"(vfp_state));
+	    : : "r"(fpcr), "r"(fpsr), ASM_PTR_CONSTR(vfp_state));
 }
 
 static void
 sve_store(void *state, u_int sve_len)
 {
-	vm_offset_t f_start, p_start, z_start;
+#ifdef __CHERI__
+	panic("SVE not supported on Morello");
+#else
+	vm_pointer_t f_start, p_start, z_start;
 	uint64_t fpcr, fpsr;
 
 	/*
@@ -277,7 +281,7 @@ sve_store(void *state, u_int sve_len)
 	 *                 |                         |                   |
 	 *                 +-------------------------+-------------------+
 	 */
-	z_start = (vm_offset_t)state;
+	z_start = (vm_pointer_t)state;
 	p_start = z_start + sve_len * 32;
 	f_start = p_start + (sve_len / 8) * 17;
 
@@ -357,16 +361,20 @@ sve_store(void *state, u_int sve_len)
 	    "stp	%w0, %w1, [%2]				\n"
 	    ".arch_extension nofp				\n"
 	    : "=&r"(fpsr), "=&r"(fpcr) : "r"(f_start));
+#endif
 }
 
 static void
 sve_restore(void *state, u_int sve_len)
 {
-	vm_offset_t f_start, p_start, z_start;
+#ifdef __CHERI__
+	panic("SVE not supported on Morello");
+#else
+	vm_pointer_t f_start, p_start, z_start;
 	uint64_t fpcr, fpsr;
 
 	/* See sve_store for the layout of the state buffer */
-	z_start = (vm_offset_t)state;
+	z_start = (vm_pointer_t)state;
 	p_start = z_start + sve_len * 32;
 	f_start = p_start + (sve_len / 8) * 17;
 
@@ -438,6 +446,7 @@ sve_restore(void *state, u_int sve_len)
 	    "msr	fpcr, %1				\n"
 	    ".arch_extension nofp				\n"
 	    : "=&r"(fpsr), "=&r"(fpcr) : "r"(f_start));
+#endif
 }
 
 /*

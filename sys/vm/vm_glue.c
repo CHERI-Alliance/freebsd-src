@@ -105,6 +105,8 @@
 
 #include <machine/cpu.h>
 
+#include <cheri/cheric.h>
+
 #if VM_NRESERVLEVEL > 1
 #define KVA_KSTACK_QUANTUM_SHIFT (VM_LEVEL_1_ORDER + VM_LEVEL_0_ORDER + \
     PAGE_SHIFT)
@@ -157,8 +159,9 @@ kernacc(void *addr, int len, int rw)
  * used in conjunction with this call.
  */
 bool
-useracc(void *addr, int len, int rw)
+useracc(void *ptr, int len, int rw)
 {
+	vm_offset_t addr;
 	boolean_t rv;
 	vm_prot_t prot;
 	vm_map_t map;
@@ -166,29 +169,39 @@ useracc(void *addr, int len, int rw)
 	KASSERT((rw & ~VM_PROT_ALL) == 0,
 	    ("illegal ``rw'' argument to useracc (%x)\n", rw));
 	prot = rw;
+#ifdef __CHERI__
+	if (!cheri_can_access(ptr, vm_prot2perms(0, prot), len))
+		return (false);
+#endif
+	addr = (vm_offset_t)ptr;
 	map = &curproc->p_vmspace->vm_map;
-	if ((vm_offset_t)addr + len > vm_map_max(map) ||
-	    (vm_offset_t)addr + len < (vm_offset_t)addr) {
+	if (addr + len > vm_map_max(map) || addr + len < addr) {
 		return (false);
 	}
 	vm_map_lock_read(map);
-	rv = vm_map_check_protection(map, trunc_page((vm_offset_t)addr),
-	    round_page((vm_offset_t)addr + len), prot);
+	rv = vm_map_check_protection(map, trunc_page(addr),
+	    round_page(addr + len), prot);
 	vm_map_unlock_read(map);
 	return (rv == TRUE);
 }
 
 int
-vslock(void *addr, size_t len, vm_prot_t prot __unused)
+vslock(void *ptr, size_t len, vm_prot_t prot __unused)
 {
-	vm_offset_t end, last, start;
+	vm_offset_t addr, end, last, start;
 	vm_size_t npages;
 	int error;
 
-	last = (vm_offset_t)addr + len;
-	start = trunc_page((vm_offset_t)addr);
+#ifdef __CHERI__
+	if (!cheri_can_access(ptr,
+	    vm_prot2perms(0, prot | VM_PROT_NO_IMPLY_CAP), len))
+		return (EPROT);
+#endif
+	addr = (vm_offset_t)ptr;
+	last = addr + len;
+	start = trunc_page(addr);
 	end = round_page(last);
-	if (last < (vm_offset_t)addr || end < (vm_offset_t)addr)
+	if (last < addr || end < addr)
 		return (EINVAL);
 	npages = atop(end - start);
 	if (npages > vm_page_max_user_wired)
@@ -208,14 +221,16 @@ vslock(void *addr, size_t len, vm_prot_t prot __unused)
 }
 
 void
-vsunlock(void *addr, size_t len)
+vsunlock(void *ptr, size_t len)
 {
+	vm_offset_t addr;
 
 	/* Rely on the parameter sanity checks performed by vslock(). */
+	addr = (vm_offset_t)ptr;
 	MPASS(curthread->td_vslock_sz >= len);
 	curthread->td_vslock_sz -= len;
 	(void)vm_map_unwire(&curproc->p_vmspace->vm_map,
-	    trunc_page((vm_offset_t)addr), round_page((vm_offset_t)addr + len),
+	    trunc_page(addr), round_page(addr + len),
 	    VM_MAP_WIRE_SYSTEM | VM_MAP_WIRE_NOHOLES);
 }
 
@@ -680,9 +695,10 @@ kstack_cache_init(void *null)
 
 	kstack_object = vm_object_allocate(OBJT_PHYS,
 	    atop(VM_MAX_KERNEL_ADDRESS - VM_MIN_KERNEL_ADDRESS));
+	vm_object_set_flag(kstack_object, OBJ_HASCAP);
 	kstack_cache = uma_zcache_create("kstack_cache",
-	    kstack_pages * PAGE_SIZE, NULL, NULL, NULL, NULL,
-	    kstack_import, kstack_release, NULL,
+	    (kstack_pages + KSTACK_GUARD_PAGES) * PAGE_SIZE, NULL, NULL,
+	    NULL, NULL, kstack_import, kstack_release, NULL,
 	    UMA_ZONE_FIRSTTOUCH);
 	kstack_cache_size = imax(128, mp_ncpus * 4);
 	uma_zone_set_maxcache(kstack_cache, kstack_cache_size);
@@ -701,8 +717,8 @@ kstack_cache_init(void *null)
 	 * parent.
 	 */
 	for (domain = 0; domain < vm_ndomains; domain++) {
-		vmd_kstack_arena[domain] = vmem_create("kstack arena", 0, 0,
-		    PAGE_SIZE, 0, M_WAITOK);
+		vmd_kstack_arena[domain] = vmem_create_flags("kstack arena",
+		    0, 0, PAGE_SIZE, 0, M_WAITOK, VMEM_CAPABILITY_ARENA);
 		KASSERT(vmd_kstack_arena[domain] != NULL,
 		    ("%s: failed to create domain %d kstack_arena", __func__,
 		    domain));
@@ -825,3 +841,28 @@ vm_waitproc(struct proc *p)
 
 	vmspace_exitfree(p);		/* and clean-out the vmspace */
 }
+
+#ifdef __CHERI__
+bool
+vm_cap_allows_prot(const void *cap, vm_prot_t prot)
+{
+	unsigned long reqperm;
+
+	reqperm = 0;
+	if (prot & VM_PROT_READ) {
+		reqperm |= CHERI_PERM_LOAD;
+		if (prot & VM_PROT_CAP)
+			reqperm |= CHERI_PERM_LOAD_CAP;
+	}
+	if (prot & VM_PROT_WRITE) {
+		reqperm |= CHERI_PERM_STORE;
+		if (prot & VM_PROT_CAP)
+			reqperm |= CHERI_PERM_STORE_CAP;
+	}
+	if (prot & VM_PROT_EXECUTE)
+		reqperm |= CHERI_PERM_EXECUTE;
+	if ((cheri_perms_get(cap) & reqperm) != reqperm)
+		return (false);
+	return (true);
+}
+#endif

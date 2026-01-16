@@ -53,6 +53,11 @@
 #include <ddb/ddb.h>
 #endif
 
+#ifdef __CHERI__
+#include <cheri/cheri.h>
+#endif
+#include <cheri/cheric.h>
+
 extern char end[];
 static char *loader_envp;
 
@@ -85,12 +90,17 @@ static char linux_command_line[LBABI_MAX_COMMAND_LINE + 1];
 static vm_offset_t
 fake_preload_metadata(void *dtb_ptr, size_t dtb_size)
 {
-	vm_offset_t lastaddr;
+	vm_pointer_t lastaddr;
 	static char fake_preload[256];
 	caddr_t preload_ptr;
 	size_t size;
 
 	lastaddr = (vm_offset_t)&end;
+#ifdef __CHERI__
+	lastaddr = (vm_pointer_t)cheri_address_set(kernel_root_cap, lastaddr);
+	lastaddr = cheri_perms_and(lastaddr,
+	    CHERI_PERMS_KERNEL_DATA_NOCAP);
+#endif
 	preload_ptr = (caddr_t)&fake_preload[0];
 	size = 0;
 
@@ -180,6 +190,8 @@ linux_parse_boot_param(struct arm64_bootparams *abp)
 		return (0);
 	/* Test if modulep point to valid DTB. */
 	dtb_ptr = (struct fdt_header *)abp->modulep;
+	dtb_ptr = cheri_kern_perms_and(dtb_ptr,
+	    CHERI_PERMS_KERNEL_RODATA & CHERI_PERMS_KERNEL_DATA_NOCAP);
 	if (fdt_check_header(dtb_ptr) != 0)
 		return (0);
 	dtb_size = fdt_totalsize(dtb_ptr);
@@ -196,11 +208,14 @@ freebsd_parse_boot_param(struct arm64_bootparams *abp)
 	vm_offset_t ksym_start;
 	vm_offset_t ksym_end;
 #endif
+	vm_pointer_t env_addr;
 
 	if (abp->modulep == 0)
 		return (0);
 
 	preload_metadata = (caddr_t)(uintptr_t)(abp->modulep);
+	preload_metadata = cheri_kern_perms_and(preload_metadata,
+	    CHERI_PERMS_KERNEL_DATA & CHERI_PERMS_KERNEL_DATA_NOCAP);
 
 	/* Initialize preload_kmdp */
 	preload_initkmdp(false);
@@ -208,7 +223,16 @@ freebsd_parse_boot_param(struct arm64_bootparams *abp)
 		return (0);
 
 	boothowto = MD_FETCH(preload_kmdp, MODINFOMD_HOWTO, int);
-	loader_envp = MD_FETCH(preload_kmdp, MODINFOMD_ENVP, char *);
+	env_addr = MD_FETCH(preload_kmdp, MODINFOMD_ENVP, vm_offset_t);
+#ifdef __CHERI__
+	if (env_addr != 0) {
+		env_addr = (vm_pointer_t)cheri_address_set(kernel_root_cap,
+		    env_addr);
+		env_addr = cheri_perms_and(env_addr,
+		    CHERI_PERMS_KERNEL_DATA_NOCAP);
+	}
+#endif
+	loader_envp = (char *)env_addr;
 	init_static_kenv(loader_envp, 0);
 	lastaddr = MD_FETCH(preload_kmdp, MODINFOMD_KERNEND, vm_offset_t);
 #ifdef DDB

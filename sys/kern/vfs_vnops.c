@@ -1737,7 +1737,7 @@ vn_io_fault_pgmove(vm_page_t ma[], vm_offset_t offset, int xfersize,
     struct uio *uio)
 {
 	struct thread *td;
-	vm_offset_t iov_base;
+	vm_pointer_t iov_base;
 	int cnt, pgadv;
 
 	td = curthread;
@@ -3129,9 +3129,16 @@ vn_mmap(struct file *fp, vm_map_t map, vm_pointer_t *addr,
 			maxprot |= VM_PROT_WRITE;
 		else if ((prot & VM_PROT_WRITE) != 0)
 			return (EACCES);
+		if (((prot | cap_maxprot) & VM_PROT_CAP) != 0)
+			return (EACCES);
 	} else {
 		maxprot |= VM_PROT_WRITE;
 		cap_maxprot |= VM_PROT_WRITE;
+
+		/* Permit capability loads and stores for MAP_PRIVATE. */
+		prot = VM_PROT_ADD_CAP(prot);
+		maxprot = VM_PROT_ADD_CAP(maxprot);
+		cap_maxprot = VM_PROT_ADD_CAP(cap_maxprot);
 	}
 	maxprot &= cap_maxprot;
 

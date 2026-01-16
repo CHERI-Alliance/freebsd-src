@@ -128,6 +128,14 @@ void		 pmap_copy(pmap_t, pmap_t, vm_offset_t, vm_size_t, vm_offset_t);
 void		 pmap_copy_page(vm_page_t, vm_page_t);
 void		 pmap_copy_pages(vm_page_t ma[], vm_offset_t a_offset,
 		    vm_page_t mb[], vm_offset_t b_offset, int xfersize);
+#ifdef __CHERI__
+void		 pmap_copy_page_tags(vm_page_t, vm_page_t);
+void		 pmap_copy_pages_tags(vm_page_t ma[], vm_offset_t a_offset,
+		    vm_page_t mb[], vm_offset_t b_offset, int xfersize);
+#else
+#define	pmap_copy_page_tags(s, d)	pmap_copy_page((s), (d))
+#define	pmap_copy_page_tags(s, d)	pmap_copy_page((s), (d))
+#endif
 int		 pmap_enter(pmap_t pmap, vm_offset_t va, vm_page_t m,
 		    vm_prot_t prot, u_int flags, int8_t psind);
 void		 pmap_enter_object(pmap_t pmap, vm_offset_t start,
@@ -143,7 +151,7 @@ bool		 pmap_is_modified(vm_page_t m);
 bool		 pmap_is_prefaultable(pmap_t pmap, vm_offset_t va);
 bool		 pmap_is_referenced(vm_page_t m);
 bool		 pmap_is_valid_memattr(pmap_t, vm_memattr_t);
-void		*pmap_map(vm_offset_t *, vm_paddr_t, vm_paddr_t, int);
+void		*pmap_map(vm_pointer_t *, vm_paddr_t, vm_paddr_t, int);
 int		 pmap_mincore(pmap_t pmap, vm_offset_t addr, vm_paddr_t *pap);
 void		 pmap_object_init_pt(pmap_t pmap, vm_offset_t addr,
 		    vm_object_t object, vm_pindex_t pindex, vm_size_t size);

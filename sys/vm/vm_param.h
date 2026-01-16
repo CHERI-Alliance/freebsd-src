@@ -113,6 +113,8 @@ struct xswdev {
 #define	KERN_NO_ACCESS		8
 #define	KERN_OUT_OF_BOUNDS	9
 #define	KERN_RESTART		10
+#define	KERN_MEM_PROT_FAILURE	11
+#define	KERN_PAGE_NOT_FILLED	12	/* VM_FAULT_NOFILL didn't insert page */
 
 #ifndef KSTACK_MAX_PAGES
 #define KSTACK_MAX_PAGES 32

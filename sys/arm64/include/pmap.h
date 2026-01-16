@@ -132,8 +132,8 @@ extern bool		pmap_lpa_enabled;
 
 #define	PMAP_WANT_ACTIVE_CPUS_NAIVE
 
-extern vm_offset_t virtual_avail;
-extern vm_offset_t virtual_end;
+extern vm_pointer_t virtual_avail;
+extern vm_pointer_t virtual_end;
 
 extern pt_entry_t pmap_sh_attr;
 

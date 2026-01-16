@@ -54,6 +54,10 @@
 #include <vm/vm_page.h>
 #include <vm/vm_pager.h>
 
+#ifdef __CHERI__
+#include <cheri/cheri.h>
+#endif
+
 static struct sx shared_page_alloc_sx;
 static vm_object_t shared_page_obj;
 static int shared_page_free;
@@ -368,7 +372,7 @@ exec_sysvec_init(void *param)
 	}
 #endif
 
-#if __has_feature(capabilities)
+#ifdef __CHERI__
 	cheri_sysvec_init(sv);
 #endif
 }
@@ -386,7 +390,7 @@ exec_sysvec_init_secondary(struct sysentvec *sv, struct sysentvec *sv2)
 	sv2->sv_shared_page_obj = sv->sv_shared_page_obj;
 	sv2->sv_sigcode_offset = sv->sv_sigcode_offset;
 	sv2->sv_vdso_offset = sv->sv_vdso_offset;
-#if __has_feature(capabilities)
+#ifdef __CHERI__
 	/* Need to compute a new sv_vmspace_cap */
 	cheri_sysvec_init(sv2);
 #endif

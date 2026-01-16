@@ -748,7 +748,7 @@ SYSCTL_ULONG(_kern_geom, OID_AUTO, pause_count, CTLFLAG_RD,
 static int
 g_io_transient_map_bio(struct bio *bp)
 {
-	vm_offset_t addr;
+	vm_pointer_t addr;
 	long size;
 	u_int retried;
 
