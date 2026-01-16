@@ -171,7 +171,7 @@ kern_kexec_load(struct thread *td, u_long entry, u_long nseg,
 	const size_t segsize = nseg * sizeof(struct kexec_segment);
 	vm_page_t *page_list = 0;
 	vm_size_t image_count, md_pages, page_count, tmpsize;
-	vm_offset_t segment_va = 0;
+	vm_pointer_t segment_va = 0;
 	/*
 	 * - Do any sanity checking
 	 * - Load the new segments to temporary

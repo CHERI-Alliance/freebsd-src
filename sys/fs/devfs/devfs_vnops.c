@@ -2041,6 +2041,8 @@ devfs_mmap_f(struct file *fp, vm_map_t map, vm_pointer_t *addr,
 		else if ((prot & VM_PROT_WRITE) != 0)
 			return (EACCES);
 	}
+	if ((prot & (VM_PROT_CAP | VM_PROT_NO_IMPLY_CAP)) != 0)
+		maxprot = VM_PROT_ADD_CAP(maxprot);
 	maxprot &= cap_maxprot;
 
 	fpop = td->td_fpop;
@@ -2048,7 +2050,7 @@ devfs_mmap_f(struct file *fp, vm_map_t map, vm_pointer_t *addr,
 	if (error != 0)
 		return (error);
 
-	error = vm_mmap_cdev(td, size, prot, &maxprot, &flags, dev, dsw, &foff,
+	error = vm_mmap_cdev(td, size, &prot, &maxprot, &flags, dev, dsw, &foff,
 	    &object);
 	td->td_fpop = fpop;
 	dev_relthread(dev, ref);

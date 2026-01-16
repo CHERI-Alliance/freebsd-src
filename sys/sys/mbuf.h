@@ -176,7 +176,7 @@ struct pkthdr {
 	uint16_t	 fibnum;	/* this packet should use this fib */
 	uint8_t		 numa_domain;	/* NUMA domain of recvd pkt */
 	uint8_t		 rsstype;	/* hash type */
-#if !defined(__LP64__)
+#if __SIZEOF_POINTER__ == 4
 	uint32_t	 pad;		/* pad for 64bit alignment */
 #endif
 	union {
@@ -245,7 +245,9 @@ struct pkthdr {
  */
 #define	MBUF_PEXT_TRAIL_LEN	64
 
-#if defined(__LP64__)
+#ifdef __CHERI__
+#define MBUF_PEXT_MAX_PGS (184 / sizeof(vm_paddr_t))
+#elif __SIZEOF_POINTER__ == 8
 #define MBUF_PEXT_MAX_PGS (40 / sizeof(vm_paddr_t))
 #else
 #define MBUF_PEXT_MAX_PGS (64 / sizeof(vm_paddr_t))

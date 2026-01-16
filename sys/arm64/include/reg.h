@@ -103,6 +103,24 @@ struct arm64_addr_mask {
 	__uint64_t	data;
 };
 
+#ifdef __CHERI__
+struct capreg {
+	__intptr_t c[30];
+	__intptr_t clr;
+	__intptr_t csp;
+	__intptr_t celr;
+	__intptr_t ddc;
+	__intptr_t ctpidr;
+	__intptr_t ctpidrro;
+	__intptr_t cid;
+	__intptr_t rcsp;
+	__intptr_t rddc;
+	__intptr_t rctpidr;
+	__uint64_t tagmask;
+	__uint64_t pad;
+};
+#endif
+
 #define	__HAVE_REG32
 
 #endif /* !_MACHINE_REG_H_ */

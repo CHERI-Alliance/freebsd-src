@@ -38,6 +38,7 @@
 #include <sys/proc.h>
 #include <sys/ptrace.h>
 #include <sys/syscall.h>
+#include <sys/sysctl.h>
 #include <sys/sysent.h>
 #ifdef KDB
 #include <sys/kdb.h>
@@ -56,6 +57,8 @@
 #include <machine/pcpu.h>
 #include <machine/undefined.h>
 
+#include <cheri/cheric.h>
+
 #ifdef KDTRACE_HOOKS
 #include <sys/dtrace_bsd.h>
 #endif
@@ -73,6 +76,13 @@
 #include <ddb/db_sym.h>
 #endif
 
+#ifdef __CHERI__
+bool log_user_cheri_exceptions = false;
+SYSCTL_BOOL(_machdep, OID_AUTO, log_user_cheri_exceptions, CTLFLAG_RWTUN,
+    &log_user_cheri_exceptions, 0,
+    "Print registers and process details on user CHERI exceptions");
+#endif
+
 /* Called from exception.S */
 void do_el1h_sync(struct thread *, struct trapframe *);
 void do_el0_sync(struct thread *, struct trapframe *);
@@ -80,7 +90,7 @@ void do_el0_error(struct trapframe *);
 void do_serror(struct trapframe *);
 void unhandled_exception(struct trapframe *);
 
-static void print_gp_register(const char *name, uint64_t value);
+static void print_gp_register(const char *name, uintptr_t value);
 static void print_registers(struct trapframe *frame);
 
 int (*dtrace_invop_jump_addr)(struct trapframe *);
@@ -92,6 +102,9 @@ typedef void (abort_handler)(struct thread *, struct trapframe *, uint64_t,
     uint64_t, int);
 
 static abort_handler align_abort;
+#ifdef __CHERI__
+static abort_handler cap_abort;
+#endif
 static abort_handler data_abort;
 static abort_handler external_abort;
 static abort_handler tag_check_abort;
@@ -119,6 +132,13 @@ static abort_handler *abort_handlers[] = {
 	[ISS_DATA_DFSC_ECC_L1] =  external_abort,
 	[ISS_DATA_DFSC_ECC_L2] =  external_abort,
 	[ISS_DATA_DFSC_ECC_L3] =  external_abort,
+#ifdef __CHERI__
+	[ISS_DATA_DFSC_CAP_TAG] = cap_abort,
+	[ISS_DATA_DFSC_CAP_SEALED] = cap_abort,
+	[ISS_DATA_DFSC_CAP_BOUND] = cap_abort,
+	[ISS_DATA_DFSC_CAP_PERM] = cap_abort,
+	[ISS_DATA_DFSC_LC_SC] = data_abort,
+#endif
 };
 
 static __inline void
@@ -141,6 +161,10 @@ cpu_fetch_syscall_args(struct thread *td)
 	struct proc *p;
 	syscallarg_t *ap, *dst_ap;
 	struct syscall_args *sa;
+#ifdef __CHERI__
+	syscallarg_t *stack_args = NULL;
+	int error;
+#endif
 
 	p = td->td_proc;
 	sa = &td->td_sa;
@@ -152,6 +176,16 @@ cpu_fetch_syscall_args(struct thread *td)
 
 	if (__predict_false(sa->code == SYS_syscall || sa->code == SYS___syscall)) {
 		sa->code = *ap++;
+
+#ifdef __CHERI__
+		/*
+		 * For syscall() and __syscall(), the arguments are
+		 * stored in a var args block on the stack pointed to
+		 * by C9.
+		 */
+		if (SV_PROC_FLAG(td->td_proc, SV_CHERI))
+			stack_args = (syscallarg_t *)td->td_frame->tf_x[9];
+#endif
 	} else {
 		*dst_ap++ = *ap++;
 	}
@@ -164,7 +198,15 @@ cpu_fetch_syscall_args(struct thread *td)
 	KASSERT(sa->callp->sy_narg <= nitems(sa->args),
 	    ("Syscall %d takes too many arguments", sa->code));
 
-	memcpy(dst_ap, ap, (nitems(sa->args) - 1) * sizeof(*dst_ap));
+#ifdef __CHERI__
+	if (__predict_false(stack_args != NULL)) {
+		error = copyinptr(stack_args, dst_ap, sa->callp->sy_narg *
+		    sizeof(*dst_ap));
+		if (error)
+			return (error);
+	} else
+#endif
+		memcpy(dst_ap, ap, (nitems(sa->args) - 1) * sizeof(*dst_ap));
 
 	td->td_retval[0] = 0;
 	td->td_retval[1] = 0;
@@ -244,7 +286,7 @@ external_abort(struct thread *td, struct trapframe *frame, uint64_t esr,
     uint64_t far, int lower)
 {
 	if (lower) {
-		call_trapsignal(td, SIGBUS, BUS_OBJERR, (void *)far,
+		call_trapsignal(td, SIGBUS, BUS_OBJERR, (void *)(uintptr_t)far,
 		    ESR_ELx_EXCEPTION(frame->tf_esr));
 		return;
 	}
@@ -254,7 +296,11 @@ external_abort(struct thread *td, struct trapframe *frame, uint64_t esr,
 	 * bus_space_peek() and/or bus_space_poke() functions.
 	 */
 	if (test_bs_fault((void *)frame->tf_elr)) {
+#ifdef __CHERI__
+		trapframe_set_elr(frame, (uintptr_t)generic_bs_fault);
+#else
 		frame->tf_elr = (uint64_t)generic_bs_fault;
+#endif
 		return;
 	}
 
@@ -287,10 +333,59 @@ tag_check_abort(struct thread *td, struct trapframe *frame, uint64_t esr,
 		panic("Tag Check Fault");
 	}
 
-	call_trapsignal(td, SIGSEGV, SEGV_MTESERR, (void *)far,
+	call_trapsignal(td, SIGSEGV, SEGV_MTESERR, (void *)(uintptr_t)far,
 	    ESR_ELx_EXCEPTION(frame->tf_esr));
 	userret(td, frame);
 }
+
+#ifdef __CHERI__
+static void
+cap_abort(struct thread *td, struct trapframe *frame, uint64_t esr,
+    uint64_t far, int lower)
+{
+	struct pcb *pcb;
+
+	pcb = td->td_pcb;
+	if (!lower) {
+		if (td->td_intr_nesting_level == 0 && pcb->pcb_onfault != 0) {
+			frame->tf_x[0] = EPROT;
+			trapframe_set_elr(frame, pcb->pcb_onfault);
+			return;
+		}
+		print_registers(frame);
+		printf(" far: %16lx\n", far);
+		printf(" esr:         %.8lx\n", esr);
+		panic("Capability abort from kernel space: %s",
+		    cheri_fsc_string(esr & ISS_DATA_DFSC_MASK));
+	}
+
+	if (log_user_cheri_exceptions) {
+		printf("pid %d tid %d (%s) uid %d: capability abort, %s\n",
+		    td->td_proc->p_pid, td->td_tid, td->td_proc->p_comm,
+		    td->td_ucred->cr_uid,
+		    cheri_fsc_string(esr & ISS_DATA_DFSC_MASK));
+		print_registers(frame);
+		printf(" far: %16lx\n", far);
+		printf(" esr:         %.8lx\n", esr);
+	}
+
+	/*
+	 * User accesses to invalid addresses in a compat64 process
+	 * raise SIGSEGV under a non-CHERI kernel via a non-capability
+	 * data abort.  With CHERI however, those accesses can raise a
+	 * capability abort if they are outside the bounds of the user
+	 * DDC.  Map those accesses to SIGSEGV instead of SIGPROT.
+	 */
+	if (!SV_PROC_FLAG(td->td_proc, SV_CHERI) &&
+	    far > CHERI_CAP_USER_DATA_BASE + CHERI_CAP_USER_DATA_LENGTH)
+		call_trapsignal(td, SIGSEGV, SEGV_MAPERR,
+		    (void *)(uintptr_t)far, ESR_ELx_EXCEPTION(esr));
+	else
+		call_trapsignal(td, SIGPROT, cheri_esr_to_sicode(esr),
+		    (void *)frame->tf_elr, ESR_ELx_EXCEPTION(esr));
+	userret(td, frame);
+}
+#endif /* __CHERI__ */
 
 /*
  * It is unsafe to access the stack canary value stored in "td" until
@@ -417,10 +512,19 @@ data_abort(struct thread *td, struct trapframe *frame, uint64_t esr,
 		 * need read permission but will set the WnR flag when the
 		 * memory is unmapped.
 		 */
-		if ((esr & ISS_DATA_WnR) == 0 || (esr & ISS_DATA_CM) != 0)
+		if ((esr & ISS_DATA_WnR) == 0 || (esr & ISS_DATA_CM) != 0) {
 			ftype = VM_PROT_READ;
-		else
+#ifdef __CHERI__
+			if ((esr & ISS_DATA_DFSC_MASK) == ISS_DATA_DFSC_LC_SC)
+				ftype |= VM_PROT_CAP;
+#endif
+		} else {
 			ftype = VM_PROT_WRITE;
+#ifdef __CHERI__
+			if ((esr & ISS_DATA_DFSC_MASK) == ISS_DATA_DFSC_LC_SC)
+				ftype |= VM_PROT_CAP;
+#endif
+		}
 		break;
 	}
 
@@ -428,14 +532,18 @@ data_abort(struct thread *td, struct trapframe *frame, uint64_t esr,
 	error = vm_fault_trap(map, fault_va, ftype, VM_FAULT_NORMAL, &sig,
 	    &ucode);
 	if (error != KERN_SUCCESS) {
+bad_far:
 		if (lower) {
-			call_trapsignal(td, sig, ucode, (void *)far,
+			call_trapsignal(td, sig, ucode, (void *)(uintptr_t)far,
 			    ESR_ELx_EXCEPTION(esr));
 		} else {
-bad_far:
 			if (td->td_intr_nesting_level == 0 &&
 			    pcb->pcb_onfault != 0) {
+#ifdef __CHERI__
+				trapframe_set_elr(frame, pcb->pcb_onfault);
+#else
 				frame->tf_elr = pcb->pcb_onfault;
+#endif
 				return;
 			}
 
@@ -455,13 +563,20 @@ bad_far:
 			}
 #endif
 			panic("vm_fault failed: 0x%lx error %d",
-			    frame->tf_elr, error);
+			    (ptraddr_t)frame->tf_elr, error);
 		}
 	}
 }
 
+#ifdef __CHERI__
+#define	PRINT_REG(name, value)						\
+	printf(" %s: %#.16p\n", name, (void *)(value))
+#else
+#define	PRINT_REG(name, value)	printf(" %s: 0x%.16lx\n", name, value)
+#endif
+
 static void
-print_gp_register(const char *name, uint64_t value)
+print_gp_register(const char *name, uintptr_t value)
 {
 #if defined(DDB)
 	c_db_sym_t sym;
@@ -470,7 +585,11 @@ print_gp_register(const char *name, uint64_t value)
 	db_expr_t offset;
 #endif
 
+#ifdef __CHERI__
+	printf(" %s: %#.16lp", name, (void *)value);
+#else
 	printf(" %s: 0x%.16lx", name, value);
+#endif
 #if defined(DDB)
 	/* If this looks like a kernel address try to find the symbol */
 	if (value >= VM_MIN_KERNEL_ADDRESS) {
@@ -495,7 +614,10 @@ print_registers(struct trapframe *frame)
 		    reg);
 		print_gp_register(name, frame->tf_x[reg]);
 	}
-	printf("  sp: 0x%.16lx\n", frame->tf_sp);
+#ifdef __CHERI__
+	PRINT_REG("ddc", frame->tf_ddc);
+#endif
+	PRINT_REG(" sp", frame->tf_sp);
 	print_gp_register(" lr", frame->tf_lr);
 	print_gp_register("elr", frame->tf_elr);
 	printf("spsr: 0x%.16lx\n", frame->tf_spsr);
@@ -783,8 +905,8 @@ do_el0_sync(struct thread *td, struct trapframe *frame)
 		break;
 	case EXCP_UNKNOWN:
 		if (!undef_insn(frame))
-			call_trapsignal(td, SIGILL, ILL_ILLTRP, (void *)far,
-			    exception);
+			call_trapsignal(td, SIGILL, ILL_ILLTRP,
+			    (void *)(uintptr_t)far, exception);
 		break;
 	case EXCP_FPAC:
 		call_trapsignal(td, SIGILL, ILL_ILLOPN, (void *)frame->tf_elr,
@@ -807,8 +929,8 @@ do_el0_sync(struct thread *td, struct trapframe *frame)
 		    exception);
 		break;
 	case EXCP_WATCHPT_EL0:
-		call_trapsignal(td, SIGTRAP, TRAP_TRACE, (void *)far,
-		    exception);
+		call_trapsignal(td, SIGTRAP, TRAP_TRACE,
+		    (void *)(uintptr_t)far, exception);
 		break;
 	case EXCP_MSR:
 		/*
