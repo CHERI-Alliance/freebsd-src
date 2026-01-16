@@ -42,6 +42,7 @@
 #include <machine/vmparam.h>
 
 #include <vm/vm.h>
+#include <vm/vm_param.h>
 #include <vm/vm_page.h>
 #include <vm/pmap.h>
 

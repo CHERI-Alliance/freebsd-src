@@ -302,10 +302,10 @@ sysctl_vm_reserv_fullpop(SYSCTL_HANDLER_ARGS)
 		seg = &vm_phys_segs[segind];
 		paddr = roundup2(seg->start, VM_LEVEL_0_SIZE);
 #ifdef VM_PHYSSEG_SPARSE
-		rv = seg->first_reserv + (paddr >> VM_LEVEL_0_SHIFT) -
-		    (seg->start >> VM_LEVEL_0_SHIFT);
+		rv = seg->first_reserv + ((paddr >> VM_LEVEL_0_SHIFT) -
+		    (seg->start >> VM_LEVEL_0_SHIFT));
 #else
-		rv = &vm_reserv_array[paddr >> VM_LEVEL_0_SHIFT];
+		rv = vm_reserv_array + (paddr >> VM_LEVEL_0_SHIFT);
 #endif
 		while (paddr + VM_LEVEL_0_SIZE > paddr && paddr +
 		    VM_LEVEL_0_SIZE <= seg->end) {
@@ -496,10 +496,12 @@ vm_reserv_from_page(vm_page_t m)
 {
 #ifdef VM_PHYSSEG_SPARSE
 	struct vm_phys_seg *seg;
+	struct vm_reserv *rv;
 
 	seg = &vm_phys_segs[m->segind];
-	return (seg->first_reserv + (VM_PAGE_TO_PHYS(m) >> VM_LEVEL_0_SHIFT) -
+	rv = seg->first_reserv + ((VM_PAGE_TO_PHYS(m) >> VM_LEVEL_0_SHIFT) -
 	    (seg->start >> VM_LEVEL_0_SHIFT));
+	return (cheri_kern_bounds_set_exact(rv, sizeof(*rv)));
 #else
 	return (&vm_reserv_array[VM_PAGE_TO_PHYS(m) >> VM_LEVEL_0_SHIFT]);
 #endif
@@ -1031,8 +1033,9 @@ vm_reserv_init(void)
 {
 	vm_paddr_t paddr;
 	struct vm_phys_seg *seg;
-	struct vm_reserv *rv;
+	struct vm_reserv *rv, *rv_slice;
 	struct vm_reserv_domain *rvd;
+	vm_pindex_t nreserv __unused;
 #ifdef VM_PHYSSEG_SPARSE
 	vm_pindex_t used;
 #endif
@@ -1047,14 +1050,16 @@ vm_reserv_init(void)
 #endif
 	for (segind = 0; segind < vm_phys_nsegs; segind++) {
 		seg = &vm_phys_segs[segind];
-#ifdef VM_PHYSSEG_SPARSE
-		seg->first_reserv = &vm_reserv_array[used];
-		used += howmany(seg->end, VM_LEVEL_0_SIZE) -
+		nreserv = howmany(seg->end, VM_LEVEL_0_SIZE) -
 		    seg->start / VM_LEVEL_0_SIZE;
+#ifdef VM_PHYSSEG_SPARSE
+		rv_slice = vm_reserv_array + used;
+		used += nreserv;
 #else
-		seg->first_reserv =
-		    &vm_reserv_array[seg->start >> VM_LEVEL_0_SHIFT];
+		rv_slice = vm_reserv_array + (seg->start >> VM_LEVEL_0_SHIFT);
 #endif
+		seg->first_reserv = cheri_kern_bounds_set(rv_slice,
+		    nreserv * sizeof(*rv_slice));
 		paddr = roundup2(seg->start, VM_LEVEL_0_SIZE);
 		rv = seg->first_reserv + (paddr >> VM_LEVEL_0_SHIFT) -
 		    (seg->start >> VM_LEVEL_0_SHIFT);
@@ -1429,7 +1434,7 @@ vm_reserv_size(int level)
  * management system's data structures, in particular, the reservation array.
  */
 vm_paddr_t
-vm_reserv_startup(vm_offset_t *vaddr, vm_paddr_t end)
+vm_reserv_startup(vm_pointer_t *vaddr, vm_paddr_t end)
 {
 	vm_paddr_t new_end;
 	vm_pindex_t count;

@@ -1737,7 +1737,7 @@ vn_io_fault_pgmove(vm_page_t ma[], vm_offset_t offset, int xfersize,
     struct uio *uio)
 {
 	struct thread *td;
-	vm_offset_t iov_base;
+	vm_pointer_t iov_base;
 	int cnt, pgadv;
 
 	td = curthread;

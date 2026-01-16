@@ -303,7 +303,7 @@ vm_mmap_memseg(struct vm *vm, vm_paddr_t gpa, int segid, vm_ooffset_t first,
 	vmmap = &mem->mem_vmspace->vm_map;
 	vm_map_lock(vmmap);
 	error = vm_map_insert(vmmap, seg->object, first, gpa, gpa + len,
-	    prot, prot, 0);
+	    prot, prot, 0, gpa);
 	vm_map_unlock(vmmap);
 	if (error != KERN_SUCCESS)
 		return (vm_mmap_to_errno(error));

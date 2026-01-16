@@ -3214,9 +3214,9 @@ sysctl_kern_proc_sigtramp(SYSCTL_HANDLER_ARGS)
 		    ((sv->sv_flags & SV_DSO_SIG) == 0 ? *sv->sv_szsigcode :
 		    (uintptr_t)sv->sv_szsigcode);
 	} else {
-		kst.ksigtramp_start = (char *)PROC_PS_STRINGS(p) -
+		kst.ksigtramp_start = (char *)(uintptr_t)PROC_PS_STRINGS(p) -
 		    *sv->sv_szsigcode;
-		kst.ksigtramp_end = (char *)PROC_PS_STRINGS(p);
+		kst.ksigtramp_end = (char *)(uintptr_t)PROC_PS_STRINGS(p);
 	}
 	PROC_UNLOCK(p);
 	error = SYSCTL_OUT(req, &kst, sizeof(kst));
