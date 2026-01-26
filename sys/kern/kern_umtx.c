@@ -137,9 +137,20 @@ struct umtx_copyops {
 	const bool	compat32;
 };
 
+#ifdef COMPAT_FREEBSD32
+/*
+ * XXX-CHERI: Not true, but leaving the assertion intact to catch future
+ * issues
+ */
 _Static_assert(sizeof(struct umutex) == sizeof(struct umutex32), "umutex32");
 _Static_assert(__offsetof(struct umutex, m_spare[0]) ==
     __offsetof(struct umutex32, m_spare[0]), "m_spare32");
+#endif
+
+union umutex_all {
+	struct umutex m;
+	struct umutex32 m32;
+};
 
 int umtx_shm_vnobj_persistent = 0;
 SYSCTL_INT(_kern_ipc, OID_AUTO, umtx_vnode_persistent, CTLFLAG_RWTUN,
@@ -379,7 +390,7 @@ umtxq_hash(struct umtx_key *key)
 {
 	unsigned n;
 
-	n = (uintptr_t)key->info.both.a + key->info.both.b;
+	n = (ptraddr_t)key->info.both.a + (ptraddr_t)key->info.both.b;
 	key->hash = ((n * GOLDEN_RATIO_PRIME) >> UMTX_SHIFTS) % UMTX_CHAINS;
 }
 
@@ -869,11 +880,20 @@ umtx_key_get(const void *addr, int type, int share, struct umtx_key *key)
 	vm_prot_t prot;
 	boolean_t wired;
 
+#if __has_feature(capabilities)
+	/*
+	 * Make sure the capability point to something valid.  This
+	 * ensures that capabilities from non-CheriABI binaries are
+	 * inside the bounds of the correct DDC.
+	 */
+	if (!cheri_can_access(addr, CHERI_PERM_LOAD, 1))
+		return (EPROT);
+#endif
 	key->type = type;
 	if (share == THREAD_SHARE) {
 		key->shared = 0;
 		key->info.private.vs = td->td_proc->p_vmspace;
-		key->info.private.addr = (uintptr_t)addr;
+		key->info.private.addr = (ptraddr_t)addr;
 	} else {
 		MPASS(share == PROCESS_SHARE || share == AUTO_SHARE);
 		map = &td->td_proc->p_vmspace->vm_map;
@@ -893,7 +913,7 @@ umtx_key_get(const void *addr, int type, int share, struct umtx_key *key)
 		} else {
 			key->shared = 0;
 			key->info.private.vs = td->td_proc->p_vmspace;
-			key->info.private.addr = (uintptr_t)addr;
+			key->info.private.addr = (ptraddr_t)addr;
 		}
 		vm_map_lookup_done(map, entry);
 	}
@@ -3998,7 +4018,8 @@ __umtx_op_wake(struct thread *td, struct _umtx_op_args *uap,
 	return (kern_umtx_wake(td, uap->obj, uap->val, 0));
 }
 
-#define BATCH_SIZE	128
+#define BATCH_SIZE	(1024 / sizeof(char *))
+
 static int
 __umtx_op_nwake_private_native(struct thread *td, struct _umtx_op_args *uap)
 {
@@ -4010,7 +4031,7 @@ __umtx_op_nwake_private_native(struct thread *td, struct _umtx_op_args *uap)
 	for (count = uap->val, pos = 0; count > 0; count -= tocopy,
 	    pos += tocopy) {
 		tocopy = MIN(count, BATCH_SIZE);
-		error = copyin(upp + pos, uaddrs, tocopy * sizeof(char *));
+		error = copyinptr(upp + pos, uaddrs, tocopy * sizeof(char *));
 		if (error != 0)
 			break;
 		for (i = 0; i < tocopy; ++i) {
@@ -4036,7 +4057,8 @@ __umtx_op_nwake_private_compat32(struct thread *td, struct _umtx_op_args *uap)
 		if (error != 0)
 			break;
 		for (i = 0; i < tocopy; ++i) {
-			kern_umtx_wake(td, (void *)(uintptr_t)uaddrs[i],
+			kern_umtx_wake(td,
+			    USER_PTR((void *)(uintptr_t)uaddrs[i], sizeof(void *)),
 			    INT_MAX, 1);
 		}
 		maybe_yield();
@@ -4573,7 +4595,7 @@ umtx_shm_alive(struct thread *td, void *addr)
 	boolean_t wired;
 
 	map = &td->td_proc->p_vmspace->vm_map;
-	res = vm_map_lookup(&map, (uintptr_t)addr, VM_PROT_READ, &entry,
+	res = vm_map_lookup(&map, (ptraddr_t)addr, VM_PROT_READ, &entry,
 	    &object, &pindex, &prot, &wired);
 	if (res != KERN_SUCCESS)
 		return (EFAULT);
@@ -5127,7 +5149,7 @@ umtx_thread_exit(struct thread *td)
 static int
 umtx_read_uptr(struct thread *td, uintptr_t ptr, uintptr_t *res, bool compat32)
 {
-	u_long res1;
+	intptr_t res1;
 	uint32_t res32;
 	int error;
 
@@ -5136,7 +5158,7 @@ umtx_read_uptr(struct thread *td, uintptr_t ptr, uintptr_t *res, bool compat32)
 		if (error == 0)
 			res1 = res32;
 	} else {
-		error = fueword((void *)ptr, &res1);
+		error = fueptr((void *)ptr, &res1);
 	}
 	if (error == 0)
 		*res = res1;
@@ -5146,35 +5168,35 @@ umtx_read_uptr(struct thread *td, uintptr_t ptr, uintptr_t *res, bool compat32)
 }
 
 static void
-umtx_read_rb_list(struct thread *td, struct umutex *m, uintptr_t *rb_list,
+umtx_read_rb_list(struct thread *td, union umutex_all *mu, uintptr_t *rb_list,
     bool compat32)
 {
-	struct umutex32 m32;
-
 	if (compat32) {
-		memcpy(&m32, m, sizeof(m32));
-		*rb_list = m32.m_rb_lnk;
-	} else {
-		*rb_list = m->m_rb_lnk;
-	}
+		*rb_list = (uintptr_t)USER_PTR_UNBOUND(
+		    (void *)(uintptr_t)mu->m32.m_rb_lnk);
+	} else
+		*rb_list = mu->m.m_rb_lnk;
 }
 
 static int
 umtx_handle_rb(struct thread *td, uintptr_t rbp, uintptr_t *rb_list, bool inact,
     bool compat32)
 {
-	struct umutex m;
+	union umutex_all mu;
 	int error;
 
 	KASSERT(td->td_proc == curproc, ("need current vmspace"));
-	error = copyin((void *)rbp, &m, sizeof(m));
+	if (compat32)
+		error = copyin((void *)rbp, &mu.m32, sizeof(mu.m32));
+	else
+		error = copyinptr((void *)rbp, &mu.m, sizeof(mu.m));
 	if (error != 0)
 		return (error);
 	if (rb_list != NULL)
-		umtx_read_rb_list(td, &m, rb_list, compat32);
-	if ((m.m_flags & UMUTEX_ROBUST) == 0)
+		umtx_read_rb_list(td, &mu, rb_list, compat32);
+	if ((mu.m.m_flags & UMUTEX_ROBUST) == 0)
 		return (EINVAL);
-	if ((m.m_owner & ~UMUTEX_CONTESTED) != td->td_tid)
+	if ((mu.m.m_owner & ~UMUTEX_CONTESTED) != td->td_tid)
 		/* inact is cleared after unlock, allow the inconsistency */
 		return (inact ? 0 : EINVAL);
 	return (do_unlock_umutex(td, (struct umutex *)rbp, true));
@@ -5217,7 +5239,7 @@ umtx_thread_cleanup(struct thread *td)
 {
 	struct umtx_q *uq;
 	struct umtx_pi *pi;
-	uintptr_t rb_inact;
+	uintptr_t rb_inact = 0;
 	bool compat32;
 
 	/*
