@@ -60,13 +60,23 @@
 #include <machine/vfp.h>
 #endif
 
+#ifdef __CHERI__
+#include <cheri/cheri.h>
+#endif
+
 #define	CTX_SIZE_SVE(buf_size)					\
     roundup2(sizeof(struct sve_context) + (buf_size),		\
       _Alignof(struct sve_context))
 
+#ifdef __CHERI__
+_Static_assert(sizeof(mcontext_t) == 1152, "mcontext_t size incorrect");
+_Static_assert(sizeof(ucontext_t) == 1248, "ucontext_t size incorrect");
+_Static_assert(sizeof(siginfo_t) == 112, "siginfo_t size incorrect");
+#else
 _Static_assert(sizeof(mcontext_t) == 880, "mcontext_t size incorrect");
 _Static_assert(sizeof(ucontext_t) == 960, "ucontext_t size incorrect");
 _Static_assert(sizeof(siginfo_t) == 80, "siginfo_t size incorrect");
+#endif
 
 static void get_fpcontext(struct thread *td, mcontext_t *mcp);
 static void set_fpcontext(struct thread *td, mcontext_t *mcp);
@@ -75,6 +85,9 @@ int
 fill_regs(struct thread *td, struct reg *regs)
 {
 	struct trapframe *frame;
+#ifdef __CHERI__
+	int i;
+#endif
 
 	frame = td->td_frame;
 	regs->sp = frame->tf_sp;
@@ -82,7 +95,12 @@ fill_regs(struct thread *td, struct reg *regs)
 	regs->elr = frame->tf_elr;
 	regs->spsr = frame->tf_spsr;
 
+#ifdef __CHERI__
+	for (i = 0; i < nitems(frame->tf_x); i++)
+		regs->x[i] = frame->tf_x[i];
+#else
 	memcpy(regs->x, frame->tf_x, sizeof(regs->x));
+#endif
 
 #ifdef COMPAT_FREEBSD32
 	/*
@@ -101,12 +119,20 @@ int
 set_regs(struct thread *td, struct reg *regs)
 {
 	struct trapframe *frame;
+#ifdef __CHERI__
+	int i;
+#endif
 
 	frame = td->td_frame;
 	frame->tf_sp = regs->sp;
 	frame->tf_lr = regs->lr;
 
+#ifdef __CHERI__
+	for (i = 0; i < nitems(frame->tf_x); i++)
+		frame->tf_x[i] = regs->x[i];
+#else
 	memcpy(frame->tf_x, regs->x, sizeof(frame->tf_x));
+#endif
 
 #ifdef COMPAT_FREEBSD32
 	if (SV_PROC_FLAG(td->td_proc, SV_ILP32)) {
@@ -420,15 +446,42 @@ exec_setregs(struct thread *td, struct image_params *imgp, uintptr_t stack)
 
 	memset(tf, 0, sizeof(struct trapframe));
 
-	tf->tf_x[0] = stack;
-	tf->tf_sp = STACKALIGN(stack);
-	tf->tf_lr = imgp->entry_addr;
-	tf->tf_elr = imgp->entry_addr;
+#ifdef __CHERI__
+	if (SV_PROC_FLAG(td->td_proc, SV_CHERI)) {
+		tf->tf_x[0] = (uintptr_t)imgp->auxv;
+		tf->tf_sp = stack;
+		tf->tf_lr = (uintptr_t)cheri_exec_pcc(td, imgp);
+		trapframe_set_elr(tf, tf->tf_lr);
+		td->td_proc->p_md.md_sigcode = cheri_sigcode_capability(td);
+	} else
+#endif
+	{
+		tf->tf_x[0] = stack;
+		tf->tf_sp = STACKALIGN(stack);
+		tf->tf_lr = imgp->entry_addr;
+		tf->tf_elr = imgp->entry_addr;
+	}
 
 	td->td_pcb->pcb_tpidr_el0 = 0;
 	td->td_pcb->pcb_tpidrro_el0 = 0;
+#ifdef __CHERI__
+	WRITE_SPECIALREG_CAP(ctpidrro_el0, 0);
+	WRITE_SPECIALREG_CAP(ctpidr_el0, 0);
+#else
 	WRITE_SPECIALREG(tpidrro_el0, 0);
 	WRITE_SPECIALREG(tpidr_el0, 0);
+#endif
+
+#ifdef __CHERI__
+	td->td_pcb->pcb_cid_el0 = 0;
+	td->td_pcb->pcb_rcsp_el0 = 0;
+	td->td_pcb->pcb_rddc_el0 = 0;
+	td->td_pcb->pcb_rctpidr_el0 = 0;
+	WRITE_SPECIALREG_CAP(cid_el0, 0);
+	WRITE_SPECIALREG_CAP(rcsp_el0, 0);
+	WRITE_SPECIALREG_CAP(rddc_el0, 0);
+	WRITE_SPECIALREG_CAP(rctpidr_el0, 0);
+#endif
 
 #ifdef VFP
 	vfp_reset_state(td, pcb);
@@ -475,11 +528,69 @@ exec_setregs(struct thread *td, struct image_params *imgp, uintptr_t stack)
 }
 
 /* Sanity check these are the same size, they will be memcpy'd to and from */
+#ifdef __CHERI__
+CTASSERT(sizeof(((struct trapframe *)0)->tf_x) ==
+    sizeof((struct capregs *)0)->cap_x);
+CTASSERT(sizeof(((struct trapframe *)0)->tf_x) ==
+    sizeof((struct capreg *)0)->c);
+#else
 CTASSERT(sizeof(((struct trapframe *)0)->tf_x) ==
     sizeof((struct gpregs *)0)->gp_x);
 CTASSERT(sizeof(((struct trapframe *)0)->tf_x) ==
     sizeof((struct reg *)0)->x);
+#endif
 
+#ifdef __CHERI__
+int
+get_mcontext(struct thread *td, mcontext_t *mcp, int clear_ret)
+{
+	struct trapframe *tf = td->td_frame;
+
+	if (clear_ret & GET_MC_CLEAR_RET) {
+		mcp->mc_capregs.cap_x[0] = 0;
+		mcp->mc_spsr = tf->tf_spsr & ~PSR_C;
+	} else {
+		mcp->mc_capregs.cap_x[0] = tf->tf_x[0];
+		mcp->mc_spsr = tf->tf_spsr;
+	}
+
+	memcpy(&mcp->mc_capregs.cap_x[1], &tf->tf_x[1],
+	    sizeof(mcp->mc_capregs.cap_x[1]) *
+	    (nitems(mcp->mc_capregs.cap_x) - 1));
+
+	mcp->mc_capregs.cap_sp = tf->tf_sp;
+	mcp->mc_capregs.cap_lr = tf->tf_lr;
+	mcp->mc_capregs.cap_elr = tf->tf_elr;
+	mcp->mc_capregs.cap_ddc = tf->tf_ddc;
+	get_fpcontext(td, mcp);
+
+	return (0);
+}
+
+int
+set_mcontext(struct thread *td, mcontext_t *mcp)
+{
+	struct trapframe *tf = td->td_frame;
+	uint32_t spsr;
+
+	spsr = mcp->mc_spsr;
+	if ((spsr & PSR_M_MASK) != PSR_M_EL0t ||
+	    (spsr & PSR_AARCH32) != 0 ||
+	    (spsr & PSR_DAIF) != (td->td_frame->tf_spsr & PSR_DAIF))
+		return (EINVAL);
+
+	memcpy(tf->tf_x, mcp->mc_capregs.cap_x, sizeof(tf->tf_x));
+
+	tf->tf_sp = mcp->mc_capregs.cap_sp;
+	tf->tf_lr = mcp->mc_capregs.cap_lr;
+	trapframe_set_elr(tf, mcp->mc_capregs.cap_elr);
+	tf->tf_ddc = mcp->mc_capregs.cap_ddc;
+	tf->tf_spsr = mcp->mc_spsr;
+	set_fpcontext(td, mcp);
+
+	return (0);
+}
+#else
 int
 get_mcontext(struct thread *td, mcontext_t *mcp, int clear_ret)
 {
@@ -622,6 +733,7 @@ set_mcontext(struct thread *td, mcontext_t *mcp)
 	return (0);
 #undef PSR_13_MASK
 }
+#endif
 
 static void
 get_fpcontext(struct thread *td, mcontext_t *mcp)
@@ -688,7 +800,7 @@ sys_sigreturn(struct thread *td, struct sigreturn_args *uap)
 	ucontext_t uc;
 	int error;
 
-	if (copyin(uap->sigcntxp, &uc, sizeof(uc)))
+	if (copyinptr(uap->sigcntxp, &uc, sizeof(uc)))
 		return (EFAULT);
 
 	/* Stop an interrupt from causing the sve state to be dropped */
@@ -711,10 +823,10 @@ sys_sigreturn(struct thread *td, struct sigreturn_args *uap)
 }
 
 static bool
-sendsig_ctx_end(struct thread *td, vm_offset_t *addrp)
+sendsig_ctx_end(struct thread *td, uintptr_t *addrp)
 {
 	struct arm64_reg_context end_ctx;
-	vm_offset_t ctx_addr;
+	uintptr_t ctx_addr;
 
 	*addrp -= sizeof(end_ctx);
 	ctx_addr = *addrp;
@@ -730,12 +842,12 @@ sendsig_ctx_end(struct thread *td, vm_offset_t *addrp)
 }
 
 static bool
-sendsig_ctx_sve(struct thread *td, vm_offset_t *addrp)
+sendsig_ctx_sve(struct thread *td, uintptr_t *addrp)
 {
 	struct sve_context ctx;
 	struct pcb *pcb;
 	size_t buf_size, ctx_size;
-	vm_offset_t ctx_addr;
+	uintptr_t ctx_addr;
 
 	pcb = td->td_pcb;
 	/* Do nothing if sve hasn't started */
@@ -767,7 +879,7 @@ sendsig_ctx_sve(struct thread *td, vm_offset_t *addrp)
 	return (true);
 }
 
-typedef bool(*ctx_func)(struct thread *, vm_offset_t *);
+typedef bool(*ctx_func)(struct thread *, uintptr_t *);
 static const ctx_func ctx_funcs[] = {
 	sendsig_ctx_end,	/* Must be first to end the linked list */
 	sendsig_ctx_sve,
@@ -782,7 +894,7 @@ sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 	struct trapframe *tf;
 	struct sigframe *fp, frame;
 	struct sigacts *psp;
-	vm_offset_t addr;
+	uintptr_t addr;
 	int onstack, sig;
 
 	td = curthread;
@@ -843,7 +955,7 @@ sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 	fp = STACKALIGN(fp);
 
 	/* Copy the sigframe out to the user's stack. */
-	if (copyout(&frame, fp, sizeof(*fp)) != 0) {
+	if (copyoutptr(&frame, fp, sizeof(*fp)) != 0) {
 		/* Process has trashed its stack. Kill it. */
 		CTR2(KTR_SIG, "sendsig: sigexit td=%p fp=%p", td, fp);
 		PROC_LOCK(p);
@@ -851,11 +963,22 @@ sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 	}
 
 	tf->tf_x[0] = sig;
+#ifdef __CHERI__
+	tf->tf_x[1] = (uintptr_t)cheri_bounds_set(&fp->sf_si,
+	    sizeof(fp->sf_si));
+	tf->tf_x[2] = (uintptr_t)cheri_bounds_set(&fp->sf_uc,
+	    sizeof(fp->sf_uc));
+#else
 	tf->tf_x[1] = (register_t)&fp->sf_si;
 	tf->tf_x[2] = (register_t)&fp->sf_uc;
-	tf->tf_x[8] = (register_t)catcher;
-	tf->tf_sp = (register_t)fp;
+#endif
+	tf->tf_x[8] = (uintptr_t)catcher;
+	tf->tf_sp = (uintptr_t)fp;
+#ifdef __CHERI__
+	trapframe_set_elr(tf, (uintptr_t)p->p_md.md_sigcode);
+#else
 	tf->tf_elr = (register_t)PROC_SIGCODE(p);
+#endif
 
 	/* Clear the single step flag while in the signal handler */
 	if ((td->td_pcb->pcb_flags & PCB_SINGLE_STEP) != 0) {
