@@ -735,7 +735,7 @@ gicv3_its_conftable_init(struct gicv3_its_softc *sc)
 	device_t gicv3;
 	uint32_t ctlr;
 	vm_paddr_t conf_pa;
-	vm_offset_t conf_va;
+	vm_pointer_t conf_va;
 
 	/*
 	 * The PROPBASER is a singleton in our parent. We only set it up the
@@ -775,7 +775,7 @@ gicv3_its_conftable_init(struct gicv3_its_softc *sc)
 		if (bootverbose)
 			device_printf(sc->dev,
 			    "LPI enabled, conf table using pa %#lx va %lx\n",
-			    conf_pa, conf_va);
+			    conf_pa, (ptraddr_t)conf_va);
 	} else {
 		/*
 		 * Otherwise just allocate contiguous pages. We'll configure the
