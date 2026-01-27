@@ -33,6 +33,7 @@
 #include <sys/malloc.h>
 #include <sys/mutex.h>
 #include <sys/rman.h>
+#include <sys/stddef.h>
 
 #include <machine/bus.h>
 
@@ -193,7 +194,7 @@ WR4(struct tegra210_pmc_softc *sc, bus_size_t r, uint32_t v)
 		arm_smccc_invoke_smc(PMC_SMC, PMC_SMC_WRITE, r, v, &res);
 		if (res.a0 != 0)
 			device_printf(sc->dev," PMC SMC write failed: %lu\n",
-			    res.a0);
+			    (ptraddr_t)res.a0);
 	}
 
 	bus_write_4(sc->mem_res, r, v);
@@ -208,7 +209,7 @@ RD4(struct tegra210_pmc_softc *sc, bus_size_t r)
 		arm_smccc_invoke_smc(PMC_SMC, PMC_SMC_READ, r, &res);
 		if (res.a0 != 0)
 			device_printf(sc->dev," PMC SMC write failed: %lu\n",
-			    res.a0);
+			    (ptraddr_t)res.a0);
 		return((uint32_t)res.a1);
 	}
 
