@@ -53,21 +53,20 @@ vcio_ioctl(struct cdev *dev, u_long cmd, caddr_t arg, int mode,
     struct thread *td)
 {
     int error;
-    void *ptr;
     uint32_t size;
     uint8_t *property;
+    uint8_t **mboxp = (uint8_t **)arg;
 
     error = 0;
     switch(cmd) {
     case IOCTL_MBOX_PROPERTY:
-    	memcpy (&ptr, arg, sizeof(ptr));
-	error = copyin(ptr, &size, sizeof(size));
+	error = copyin(*mboxp, &size, sizeof(size));
 
 	if (error != 0)
 		break;
 	property = malloc(size, M_VCIO, M_WAITOK);
 
-	error = copyin(ptr, property, size);
+	error = copyin(*mboxp, property, size);
 	if (error) {
 		free(property, M_VCIO);
 		break;
@@ -79,7 +78,7 @@ vcio_ioctl(struct cdev *dev, u_long cmd, caddr_t arg, int mode,
 		break;
 	}
 
-	error = copyout(property, ptr, size);
+	error = copyout(property, *mboxp, size);
 	free(property, M_VCIO);
 
 	break;
