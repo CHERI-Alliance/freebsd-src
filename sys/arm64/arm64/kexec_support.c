@@ -41,6 +41,11 @@
 #include <machine/pmap.h>
 #include <machine/pte.h>
 
+#ifdef __CHERI__
+#include <cheri/cheri.h>
+#endif
+#include <cheri/cheric.h>
+
 /*
  * Idea behind this:
  *
@@ -64,7 +69,7 @@ void switch_stack(void *, void (*)(void *, void *, struct kexec_image *), void *
 static inline vm_page_t
 phys_vm_page(vm_page_t m, vm_offset_t vm_page_v, vm_paddr_t vm_page_p)
 {
-	return ((vm_page_t)((vm_offset_t)m - vm_page_v + vm_page_p));
+	return ((vm_page_t)((vm_pointer_t)m - vm_page_v + vm_page_p));
 }
 
 /* First 2 args are filler for switch_stack() */
@@ -72,12 +77,17 @@ static void __aligned(16) __dead2
 kexec_reboot_bottom( void *arg1 __unused, void *arg2 __unused,
     struct kexec_image *image)
 {
-	void (*e)(void) = (void *)image->entry;
+#ifdef __CHERI__
+	void *phys_cap = kernel_root_cap;
+#else
+	void *phys_cap __unused;
+#endif
+	void (*e)(void) = cheri_kern_address_set(phys_cap, image->entry);
 	vm_offset_t	vm_page_base = (vm_offset_t)vm_page_array;
 	vm_paddr_t	vm_page_phys = pmap_kextract((vm_offset_t)vm_page_array);
-	struct kexec_segment_stage *phys_segs =
-	    (void *)pmap_kextract((vm_offset_t)&image->segments);
-	vm_paddr_t from_pa, to_pa;
+	struct kexec_segment_stage *phys_segs = cheri_kern_address_set(phys_cap,
+	    pmap_kextract((vm_offset_t)&image->segments));
+	uintptr_t from_pa, to_pa;
 	vm_size_t size;
 	vm_page_t	first, m, mp;
 	struct pctrie_iter pct_i;
@@ -107,13 +117,13 @@ kexec_reboot_bottom( void *arg1 __unused, void *arg2 __unused,
 	for (int i = 0; i < KEXEC_SEGMENT_MAX; i++) {
 		if (phys_segs[i].size == 0)
 			break;
-		to_pa = phys_segs[i].target;
+		to_pa = (uintptr_t)cheri_kern_address_set(phys_cap, phys_segs[i].target);
 		/* Copy the segment here... */
 		for (vm_page_t p = phys_segs[i].first_page;
 		    p != NULL && to_pa - phys_segs[i].target < phys_segs[i].size;
 		    p = SLIST_NEXT(p, plinks.s.ss)) {
 			p = phys_vm_page(p, vm_page_base, vm_page_phys);
-			from_pa = p->phys_addr;
+			from_pa = (uintptr_t)cheri_kern_address_set(phys_cap, p->phys_addr);
 			if (p->phys_addr == to_pa) {
 				to_pa += PAGE_SIZE;
 				continue;
@@ -137,6 +147,7 @@ kexec_reboot_md(struct kexec_image *image)
 {
 	uintptr_t ptr;
 	register_t reg;
+	void *stack;
 
 	for (int i = 0; i < KEXEC_SEGMENT_MAX; i++) {
 		if (image->segments[i].size > 0)
@@ -151,8 +162,13 @@ kexec_reboot_md(struct kexec_image *image)
 	cpu_tlb_flushID();
 
 	typeof(kexec_reboot_bottom) *p = (void *)ptr;
-	switch_stack((void *)pmap_kextract((vm_offset_t)initstack_end),
-	    p, image);
+#ifdef __CHERI__
+	stack = cheri_address_set(kernel_root_cap,
+	    pmap_kextract((vm_offset_t)initstack_end));
+#else
+	stack = (void *)pmap_kextract((vm_offset_t)initstack_end);
+#endif
+	switch_stack(stack, p, image);
 	while (1)
 		;
 }
