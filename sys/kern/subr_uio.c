@@ -52,6 +52,7 @@
 #include <sys/sysctl.h>
 #include <sys/vnode.h>
 
+#include <vm/uma.h>
 #include <vm/vm.h>
 #include <vm/vm_param.h>
 #include <vm/vm_extern.h>
@@ -64,7 +65,17 @@
 SYSCTL_INT(_kern, KERN_IOV_MAX, iov_max, CTLFLAG_RD, SYSCTL_NULL_INT_PTR, UIO_MAXIOV,
 	"Maximum number of elements in an I/O vector; sysconf(_SC_IOV_MAX)");
 
+static uma_zone_t uio_zone;
+
 static int uiomove_faultflag(void *cp, int n, struct uio *uio, int nofault);
+
+static void
+uio_init(void *arg __unused)
+{
+	uio_zone = uma_zcreate("UIO", sizeof(struct uio),
+	    NULL, NULL, NULL, NULL, UMA_ALIGN_PTR, 0);
+}
+SYSINIT(uio_init, SI_SUB_SYSCALLS, SI_ORDER_ANY, uio_init, NULL);
 
 int
 copyin_nofault(const void *udaddr, void *kaddr, size_t len)
@@ -486,13 +497,23 @@ struct uio *
 allocuio(u_int iovcnt)
 {
 	struct uio *uio;
-	int iovlen;
+	size_t iovlen;
 
 	KASSERT(iovcnt <= UIO_MAXIOV,
 	    ("Requested %u iovecs exceed UIO_MAXIOV", iovcnt));
 	iovlen = iovcnt * sizeof(struct iovec);
-	uio = malloc(iovlen + sizeof(*uio), M_IOV, M_WAITOK);
-	uio->uio_iov = (struct iovec *)(uio + 1);
+	uio = uma_zalloc_arg(uio_zone, (void *)(uintptr_t)iovcnt, M_WAITOK);
+	uio->uio_flags = 0;
+	if (iovcnt > UIO_INLINE_IOV) {
+		uio->_uio_ext_iov = malloc(iovlen, M_IOV, M_WAITOK);
+		uio->uio_iov = uio->_uio_ext_iov;
+		uio->uio_flags |= UIO_FLAG_EXT_IOVEC;
+	} else {
+		uio->uio_iov = cheri_kern_bounds_set_exact(
+		    uio->_uio_inline_iov, iovlen);
+	}
+
+	uio->uio_iovcnt = iovcnt;
 
 	return (uio);
 }
@@ -500,22 +521,29 @@ allocuio(u_int iovcnt)
 void
 freeuio(struct uio *uio)
 {
-	free(uio, M_IOV);
+	if (uio == NULL)
+		return;
+	if (uio->uio_flags & UIO_FLAG_EXT_IOVEC) {
+#ifdef __CHERI__
+		KASSERT(cheri_is_address_inbounds(uio->_uio_ext_iov,
+		    (ptraddr_t)uio->uio_iov),
+		    ("uio_iov outside _uio_ext_iov"));
+#endif
+		free(uio->_uio_ext_iov, M_IOV);
+	}
+	uma_zfree(uio_zone, uio);
 }
 
 struct uio *
 cloneuio(struct uio *uiop)
 {
-	struct iovec *iov;
 	struct uio *uio;
-	int iovlen;
 
-	iovlen = uiop->uio_iovcnt * sizeof(struct iovec);
 	uio = allocuio(uiop->uio_iovcnt);
-	iov = uio->uio_iov;
-	*uio = *uiop;
-	uio->uio_iov = iov;
-	bcopy(uiop->uio_iov, uio->uio_iov, iovlen);
+	bcopy(&uiop->uio_startcopy, &uio->uio_startcopy,
+	    __rangeof(struct uio, uio_startcopy, uio_endcopy));
+	bcopy(uiop->uio_iov, uio->uio_iov,
+	    uiop->uio_iovcnt * sizeof(struct iovec));
 	return (uio);
 }
 
