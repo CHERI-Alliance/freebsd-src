@@ -156,6 +156,11 @@ ffs_susp_rdwr(struct cdev *dev, struct uio *uio, int ioflag)
 				if (error != 0)
 					goto out;
 				break;
+#ifdef __CHERI__
+			case UIO_WRITE_CAP:
+			case UIO_READ_CAP:
+				__assert_unreachable();
+#endif
 			}
 			uio->uio_iov[i].iov_base =
 			    (char *)uio->uio_iov[i].iov_base + len;
