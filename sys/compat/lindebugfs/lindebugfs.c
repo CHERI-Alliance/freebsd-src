@@ -158,6 +158,11 @@ debugfs_fill(PFS_FILL_ARGS)
 			    &off);
 		}
 		break;
+#ifdef __CHERI__
+	case UIO_READ_CAP:
+	case UIO_WRITE_CAP:
+		__assert_unreachable();
+#endif
 	}
 
 	if (d->dm_fops->release)

@@ -23,12 +23,13 @@
 .\" (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd October 22, 2025
+.Dd January 29, 2026
 .Dt UIO 9
 .Os
 .Sh NAME
 .Nm uio ,
 .Nm uiomove ,
+.Nm uiomove_enable_cap ,
 .Nm uiomove_frombuf ,
 .Nm uiomove_nofault
 .Nd device driver I/O routines
@@ -48,6 +49,8 @@ struct uio {
 .Ed
 .Ft int
 .Fn uiomove "void *buf" "int howmuch" "struct uio *uiop"
+.Ft void
+.Fn uiomove_enable_cap "struct uio *uiop"
 .Ft int
 .Fn uiomove_frombuf "void *buf" "int howmuch" "struct uio *uiop"
 .Ft int
@@ -107,14 +110,34 @@ The I/O vector points into the kernel address space.
 Do not copy, already in object.
 .El
 .It Va uio_rw
-The direction of the desired transfer.
+The direction of the desired transfer and if pointer provenance should
+be preserved.
 The supported flags are:
 .Bl -tag -width "UIO_WRITE"
 .It Dv UIO_READ
 Transfer data from the buffers into the I/O vectors.
 .It Dv UIO_WRITE
 Transfer data from the I/O vectors into the buffers.
+.It Dv UIO_READ_CAP
+Transfer data from the buffers into the I/O vectors preserving pointer
+provenance.
+Equal to UIO_READ on non-CHERI architectures.
+.It Dv UIO_WRITE_CAP
+Transfer data from the I/O vectors into the buffers preserving pointer
+provenance.
+Equal to UIO_WRITE on non-CHERI architectures.
 .El
+.Pp
+If an operation must always preserve capabilities,
+.Fn uiomove_enable_cap
+can be used to update this member, translating
+.Dv UIO_READ
+to
+.Dv UIO_READ_CAP
+and
+.Dv UIO_WRITE
+to
+.Dv UIO_READ_CAP .
 .It Va uio_td
 The pointer to a
 .Vt "struct thread"

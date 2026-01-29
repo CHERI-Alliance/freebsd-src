@@ -531,6 +531,7 @@ targwrite(struct cdev *dev, struct uio *uio, int ioflag)
 	write_len = error = 0;
 	CAM_DEBUG(softc->path, CAM_DEBUG_PERIPH,
 		  ("write - uio_resid %zd\n", uio->uio_resid));
+	uiomove_enable_cap(uio);
 	while (uio->uio_resid >= sizeof(user_ccb) && error == 0) {
 		union ccb *ccb;
 
@@ -811,6 +812,7 @@ targread(struct cdev *dev, struct uio *uio, int ioflag)
 	user_queue = &softc->user_ccb_queue;
 	abort_queue = &softc->abort_queue;
 	CAM_DEBUG(softc->path, CAM_DEBUG_PERIPH, ("targread\n"));
+	uiomove_enable_cap(uio);
 
 	/* If no data is available, wait or return immediately */
 	cam_periph_lock(softc->periph);

@@ -121,6 +121,11 @@ physio(struct cdev *dev, struct uio *uio, int ioflag)
 				    uio->uio_iov[i].iov_len);
 				racct_add_force(curproc, RACCT_WRITEIOPS, 1);
 				break;
+#ifdef __CHERI__
+			case UIO_READ_CAP:
+			case UIO_WRITE_CAP:
+				__assert_unreachable();
+#endif
 			}
 			PROC_UNLOCK(curproc);
 		}
@@ -137,6 +142,11 @@ physio(struct cdev *dev, struct uio *uio, int ioflag)
 				bp->bio_cmd = BIO_WRITE;
 				curthread->td_ru.ru_oublock++;
 				break;
+#ifdef __CHERI__
+			case UIO_READ_CAP:
+			case UIO_WRITE_CAP:
+				__assert_unreachable();
+#endif
 			}
 			bp->bio_offset = uio->uio_offset;
 			base = uio->uio_iov[i].iov_base;

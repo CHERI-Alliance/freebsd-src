@@ -222,7 +222,8 @@ uiomove_faultflag(void *cp, int n, struct uio *uio, int nofault)
 
 	save = error = 0;
 
-	KASSERT(uio->uio_rw == UIO_READ || uio->uio_rw == UIO_WRITE,
+	KASSERT(uio->uio_rw == UIO_READ || uio->uio_rw == UIO_WRITE || \
+	    uio->uio_rw == UIO_READ_CAP || uio->uio_rw == UIO_WRITE_CAP,
 	    ("uiomove: mode"));
 	KASSERT(uio->uio_segflg != UIO_USERSPACE || uio->uio_td == curthread,
 	    ("uiomove proc"));
@@ -269,6 +270,14 @@ uiomove_faultflag(void *cp, int n, struct uio *uio, int nofault)
 			case UIO_WRITE:
 				error = copyin(iov->iov_base, cp, cnt);
 				break;
+#ifdef __CHERI__
+			case UIO_READ_CAP:
+				error = copyoutptr(cp, iov->iov_base, cnt);
+				break;
+			case UIO_WRITE_CAP:
+				error = copyinptr(iov->iov_base, cp, cnt);
+				break;
+#endif
 			}
 			if (error)
 				goto out;
@@ -277,11 +286,19 @@ uiomove_faultflag(void *cp, int n, struct uio *uio, int nofault)
 		case UIO_SYSSPACE:
 			switch (uio->uio_rw) {
 			case UIO_READ:
-				bcopy(cp, iov->iov_base, cnt);
+				bcopy_data(cp, iov->iov_base, cnt);
 				break;
 			case UIO_WRITE:
+				bcopy_data(iov->iov_base, cp, cnt);
+				break;
+#ifdef __CHERI__
+			case UIO_READ_CAP:
+				bcopy(cp, iov->iov_base, cnt);
+				break;
+			case UIO_WRITE_CAP:
 				bcopy(iov->iov_base, cp, cnt);
 				break;
+#endif
 			}
 			break;
 		case UIO_NOCOPY:

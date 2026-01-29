@@ -481,6 +481,11 @@ dsp_io_ops(struct dsp_cdevpriv *priv, struct uio *buf)
 		ch = priv->wrch;
 		chn_io = chn_write;
 		break;
+#ifdef __CHERI__
+	case UIO_READ_CAP:
+	case UIO_WRITE_CAP:
+		__assert_unreachable();
+#endif
 	}
 	if (ch == NULL) {
 		PCM_GIANT_EXIT(d);
