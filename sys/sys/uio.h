@@ -59,6 +59,25 @@ struct uio {
 	struct thread	*uio_td;	/* owner */
 };
 
+#ifdef __CHERI__
+static __inline void
+uiomove_enable_cap(struct uio *uio)
+{
+	switch (uio->uio_rw) {
+	case UIO_READ:
+		uio->uio_rw = UIO_READ_CAP;
+		break;
+	case UIO_WRITE:
+		uio->uio_rw = UIO_WRITE_CAP;
+		break;
+	default:
+		break;
+	}
+}
+#else
+#define	uiomove_enable_cap(uio)
+#endif
+
 /*
  * Limits
  *
