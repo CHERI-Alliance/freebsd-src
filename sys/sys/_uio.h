@@ -35,7 +35,14 @@
 #if __BSD_VISIBLE
 enum uio_rw {
 	UIO_READ,
-	UIO_WRITE
+	UIO_WRITE,
+#ifdef __CHERI__
+	UIO_READ_CAP,
+	UIO_WRITE_CAP,
+#else
+	UIO_READ_CAP = UIO_READ,
+	UIO_WRITE_CAP = UIO_WRITE,
+#endif
 };
 
 /* Segment flag values. */

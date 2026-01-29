@@ -172,6 +172,11 @@ debugfs_fill(PFS_FILL_ARGS)
 			else
 				rc = -ENODEV;
 			break;
+#ifdef __CHERI__
+		case UIO_READ_CAP:
+		case UIO_WRITE_CAP:
+			__assert_unreachable();
+#endif
 		}
 
 		if (rc <= 0)

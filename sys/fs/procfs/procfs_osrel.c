@@ -65,6 +65,11 @@ procfs_doosrel(PFS_FILL_ARGS)
 		}
 		p->p_osrel = osrel;
 		break;
+#ifdef __CHERI__
+	case UIO_READ_CAP:
+	case UIO_WRITE_CAP:
+		__assert_unreachable();
+#endif
 	}
 	return (0);
 }

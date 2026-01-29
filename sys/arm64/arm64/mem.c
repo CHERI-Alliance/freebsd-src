@@ -91,6 +91,11 @@ memrw(struct cdev *dev, struct uio *uio, int flags)
 			case UIO_WRITE:
 				prot = VM_PROT_WRITE;
 				break;
+#ifdef __CHERI__
+			case UIO_READ_CAP:
+			case UIO_WRITE_CAP:
+				__assert_unreachable();
+#endif
 			}
 
 			if (!kernacc((void *)(uintptr_t)v, cnt, prot)) {
