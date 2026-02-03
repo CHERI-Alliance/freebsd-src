@@ -42,41 +42,49 @@
  */
 .macro	save_registers_head el
 .if \el == 1
-	stp	x0,  x1,  [sp, #-(TF_SIZE - TF_X + 128)]!
+	stp	CAP(0),  CAP(1),  [PTRN(sp), #-(TF_SIZE - TF_X + 128)]!
 .else
-	stp	x0,  x1,  [sp, #-(TF_SIZE - TF_X)]!
+	stp	CAP(0),  CAP(1),  [PTRN(sp), #-(TF_SIZE - TF_X)]!
 .endif
-	stp	x2,  x3,  [sp, #(2  * 8)]
-	stp	x4,  x5,  [sp, #(4  * 8)]
-	stp	x6,  x7,  [sp, #(6  * 8)]
-	stp	x8,  x9,  [sp, #(8  * 8)]
-	stp	x10, x11, [sp, #(10 * 8)]
-	stp	x12, x13, [sp, #(12 * 8)]
-	stp	x14, x15, [sp, #(14 * 8)]
-	stp	x16, x17, [sp, #(16 * 8)]
-	stp	x18, x19, [sp, #(18 * 8)]
-	stp	x20, x21, [sp, #(20 * 8)]
-	stp	x22, x23, [sp, #(22 * 8)]
-	stp	x24, x25, [sp, #(24 * 8)]
-	stp	x26, x27, [sp, #(26 * 8)]
-	stp	x28, x29, [sp, #(28 * 8)]
+	stp	CAP(2),  CAP(3),  [PTRN(sp), #(2  * CAP_WIDTH)]
+	stp	CAP(4),  CAP(5),  [PTRN(sp), #(4  * CAP_WIDTH)]
+	stp	CAP(6),  CAP(7),  [PTRN(sp), #(6  * CAP_WIDTH)]
+	stp	CAP(8),  CAP(9),  [PTRN(sp), #(8  * CAP_WIDTH)]
+	stp	CAP(10), CAP(11), [PTRN(sp), #(10 * CAP_WIDTH)]
+	stp	CAP(12), CAP(13), [PTRN(sp), #(12 * CAP_WIDTH)]
+	stp	CAP(14), CAP(15), [PTRN(sp), #(14 * CAP_WIDTH)]
+	stp	CAP(16), CAP(17), [PTRN(sp), #(16 * CAP_WIDTH)]
+	stp	CAP(18), CAP(19), [PTRN(sp), #(18 * CAP_WIDTH)]
+	stp	CAP(20), CAP(21), [PTRN(sp), #(20 * CAP_WIDTH)]
+	stp	CAP(22), CAP(23), [PTRN(sp), #(22 * CAP_WIDTH)]
+	stp	CAP(24), CAP(25), [PTRN(sp), #(24 * CAP_WIDTH)]
+	stp	CAP(26), CAP(27), [PTRN(sp), #(26 * CAP_WIDTH)]
+	stp	CAP(28), CAP(29), [PTRN(sp), #(28 * CAP_WIDTH)]
 .if \el == 1
-	add	x18, sp, #(TF_SIZE - TF_X + 128)
+	add	PTR(18), PTRN(sp), #(TF_SIZE - TF_X + 128)
 .else
-	mrs	x18, sp_el0
+	mrs	CAP(18), CAPN(sp_el0)
 .endif
-	mrs	x10, elr_el1
+#ifdef __CHERI__
+	mrs	c9, ddc_el0
+#endif
+	mrs	CAP(10), CAPN(elr_el1)
 	mrs	x11, spsr_el1
 	mrs	x12, esr_el1
 	mrs	x13, far_el1
-	stp	x18,  lr, [sp, #(TF_SP - TF_X)]!
+	stp	CAP(18), CAPN(lr), [PTRN(sp), #(TF_SP - TF_X)]!
+#ifdef __CHERI__
+	stp	c10, c9, [PTRN(sp), #(TF_ELR)]
+	str	x11, [PTRN(sp), #(TF_SPSR)]
+#else
 	stp	x10, x11, [sp, #(TF_ELR)]
-	stp	x12, x13, [sp, #(TF_ESR)]
-	mrs	x18, tpidr_el1
+#endif
+	stp	x12, x13, [PTRN(sp), #(TF_ESR)]
+	mrs	PTR(18), PTRN(tpidr_el1)
 .endm
 
 .macro	save_registers el
-	add	x29, sp, #(TF_SIZE)
+	add	PTR(29), PTRN(sp), #(TF_SIZE)
 .if \el == 0
 #if defined(PERTHREAD_SSP)
 	/* Load the SSP canary to sp_el0 */
@@ -86,16 +94,18 @@
 #endif
 
 	/* Apply the SSBD (CVE-2018-3639) workaround if needed */
-	ldr	x1, [x18, #PC_SSBD]
+	ldr	PTR(1), [PTR(18), #PC_SSBD]
 	cbz	x1, 1f
 	mov	w0, #1
-	blr	x1
+	blr	PTR(1)
 1:
 
-	ldr	x0, [x18, #PC_CURTHREAD]
+#ifdef PAC
+	ldr	PTR(0), [PTR(18), #PC_CURTHREAD]
 	bl	ptrauth_exit_el0
+#endif
 
-	ldr	x0, [x18, #(PC_CURTHREAD)]
+	ldr	PTR(0), [PTR(18), #(PC_CURTHREAD)]
 	bl	dbg_monitor_enter
 
 	/* Unmask debug and SError exceptions */
@@ -117,55 +127,77 @@
 	 */
 	msr	daifset, #(DAIF_ALL)
 .if \el == 0
-	ldr	x0, [x18, #PC_CURTHREAD]
-	mov	x1, sp
+	ldr	PTR(0), [PTR(18), #PC_CURTHREAD]
+	mov	PTR(1), PTRN(sp)
 	bl	dbg_monitor_exit
 
+#ifdef PAC
 	ldr	x0, [x18, #PC_CURTHREAD]
 	bl	ptrauth_enter_el0
+#endif
 
 	/* Remove the SSBD (CVE-2018-3639) workaround if needed */
-	ldr	x1, [x18, #PC_SSBD]
+	ldr	PTR(1), [PTR(18), #PC_SSBD]
 	cbz	x1, 1f
 	mov	w0, #0
-	blr	x1
+	blr	PTR(1)
 1:
 .endif
-	ldp	x18,  lr, [sp, #(TF_SP)]
+	ldp	CAP(18), CAPN(lr), [PTRN(sp), #(TF_SP)]
+#ifdef __CHERI__
+	ldr	w11, [PTRN(sp), #(TF_SPSR)]
+	ldp	c10, c9, [PTRN(sp), #(TF_ELR)]
+#else
 	ldp	x10, x11, [sp, #(TF_ELR)]
+#endif
 .if \el == 0
-	msr	sp_el0, x18
+	msr	CAPN(sp_el0), CAP(18)
 .endif
 	msr	spsr_el1, x11
-	msr	elr_el1, x10
-	ldp	x0,  x1,  [sp, #(TF_X + 0  * 8)]
-	ldp	x2,  x3,  [sp, #(TF_X + 2  * 8)]
-	ldp	x4,  x5,  [sp, #(TF_X + 4  * 8)]
-	ldp	x6,  x7,  [sp, #(TF_X + 6  * 8)]
-	ldp	x8,  x9,  [sp, #(TF_X + 8  * 8)]
-	ldp	x10, x11, [sp, #(TF_X + 10 * 8)]
-	ldp	x12, x13, [sp, #(TF_X + 12 * 8)]
-	ldp	x14, x15, [sp, #(TF_X + 14 * 8)]
-	ldp	x16, x17, [sp, #(TF_X + 16 * 8)]
+	msr	CAPN(elr_el1), CAP(10)
+#ifdef __CHERI__
+	msr	ddc_el0, c9
+#endif
+	ldp	CAP(0),  CAP(1),  [PTRN(sp), #(TF_X + 0  * CAP_WIDTH)]
+	ldp	CAP(2),  CAP(3),  [PTRN(sp), #(TF_X + 2  * CAP_WIDTH)]
+	ldp	CAP(4),  CAP(5),  [PTRN(sp), #(TF_X + 4  * CAP_WIDTH)]
+	ldp	CAP(6),  CAP(7),  [PTRN(sp), #(TF_X + 6  * CAP_WIDTH)]
+	ldp	CAP(8),  CAP(9),  [PTRN(sp), #(TF_X + 8  * CAP_WIDTH)]
+	ldp	CAP(10), CAP(11), [PTRN(sp), #(TF_X + 10 * CAP_WIDTH)]
+	ldp	CAP(12), CAP(13), [PTRN(sp), #(TF_X + 12 * CAP_WIDTH)]
+	ldp	CAP(14), CAP(15), [PTRN(sp), #(TF_X + 14 * CAP_WIDTH)]
+	ldp	CAP(16), CAP(17), [PTRN(sp), #(TF_X + 16 * CAP_WIDTH)]
 .if \el == 0
 	/*
 	 * We only restore the callee saved registers when returning to
 	 * userland as they may have been updated by a system call or signal.
+	 * Hybrid kernels, however, won't preserve the full capability
+	 * registers so must always do this.
 	 */
-	ldp	x18, x19, [sp, #(TF_X + 18 * 8)]
-	ldp	x20, x21, [sp, #(TF_X + 20 * 8)]
-	ldp	x22, x23, [sp, #(TF_X + 22 * 8)]
-	ldp	x24, x25, [sp, #(TF_X + 24 * 8)]
-	ldp	x26, x27, [sp, #(TF_X + 26 * 8)]
-	ldp	x28, x29, [sp, #(TF_X + 28 * 8)]
+.if \el == 1
+	/*
+	 * In the kernel, x18 is always used as the per-CPU data pointer and is
+	 * reset to the value in tpidr_el1 further below.  At this point when
+	 * returning to EL1, x18 contains the saved stack pointer, so be careful
+	 * not to clobber it.
+	 */
+	ldr		 CAP(19), [PTRN(sp), #(TF_X + 19 * CAP_WIDTH)]
 .else
-	ldr	     x29, [sp, #(TF_X + 29 * 8)]
+	ldp	CAP(18), CAP(19), [PTRN(sp), #(TF_X + 18 * CAP_WIDTH)]
+.endif
+	ldp	CAP(20), CAP(21), [PTRN(sp), #(TF_X + 20 * CAP_WIDTH)]
+	ldp	CAP(22), CAP(23), [PTRN(sp), #(TF_X + 22 * CAP_WIDTH)]
+	ldp	CAP(24), CAP(25), [PTRN(sp), #(TF_X + 24 * CAP_WIDTH)]
+	ldp	CAP(26), CAP(27), [PTRN(sp), #(TF_X + 26 * CAP_WIDTH)]
+	ldp	CAP(28), CAP(29), [PTRN(sp), #(TF_X + 28 * CAP_WIDTH)]
+.else
+	ldr	         CAP(29), [PTRN(sp), #(TF_X + 29 * CAP_WIDTH)]
 .endif
 .if \el == 0
-	add	sp, sp, #(TF_SIZE)
+	add	PTRN(sp), PTRN(sp), #(TF_SIZE)
 .else
-	mov	sp, x18
-	mrs	x18, tpidr_el1
+	mov	PTRN(sp), PTR(18)
+	mrs	PTR(18), PTRN(tpidr_el1)
 .endif
 .endm
 
@@ -180,8 +212,8 @@
 	msr	daifset, #(DAIF_INTR)
 
 	/* Read the current thread AST mask */
-	ldr	x1, [x18, #PC_CURTHREAD]	/* Load curthread */
-	ldr	w1, [x1, #(TD_AST)]
+	ldr	PTR(1), [PTR(18), #PC_CURTHREAD]	/* Load curthread */
+	ldr	w1, [PTR(1), #(TD_AST)]
 
 	/* Check if we have a non-zero AST mask */
 	cbz	w1, 2f
@@ -190,7 +222,7 @@
 	msr	daif, x19
 
 	/* handle the ast */
-	mov	x0, sp
+	mov	PTR(0), PTRN(sp)
 	bl	_C_LABEL(ast)
 
 	/* Re-check for new ast scheduled */
@@ -223,8 +255,8 @@
 ENTRY(handle_el1h_sync)
 	save_registers 1
 	KMSAN_ENTER
-	ldr	x0, [x18, #PC_CURTHREAD]
-	mov	x1, sp
+	ldr	PTR(0), [PTR(18), #PC_CURTHREAD]
+	mov	PTR(1), PTRN(sp)
 	bl	do_el1h_sync
 	KMSAN_LEAVE
 	restore_registers 1
@@ -234,7 +266,7 @@ END(handle_el1h_sync)
 ENTRY(handle_el1h_irq)
 	save_registers 1
 	KMSAN_ENTER
-	mov	x0, sp
+	mov	PTR(0), PTRN(sp)
 	mov	x1, #INTR_ROOT_IRQ
 	bl	intr_irq_handler
 	KMSAN_LEAVE
@@ -245,7 +277,7 @@ END(handle_el1h_irq)
 ENTRY(handle_el1h_fiq)
 	save_registers 1
 	KMSAN_ENTER
-	mov	x0, sp
+	mov	PTR(0), PTRN(sp)
 	mov	x1, #INTR_ROOT_FIQ
 	bl	intr_irq_handler
 	KMSAN_LEAVE
@@ -256,7 +288,7 @@ END(handle_el1h_fiq)
 ENTRY(handle_el1h_serror)
 	save_registers 1
 	KMSAN_ENTER
-	mov	x0, sp
+	mov	PTR(0), PTRN(sp)
 1:	bl	do_serror
 	b	1b
 	KMSAN_LEAVE
@@ -265,13 +297,13 @@ END(handle_el1h_serror)
 ENTRY(handle_el0_sync)
 	save_registers 0
 	KMSAN_ENTER
-	ldr	x0, [x18, #PC_CURTHREAD]
-	mov	x1, sp
-	mov	x22, x0
-	str	x1, [x0, #TD_FRAME]
+	ldr	PTR(0), [PTR(18), #PC_CURTHREAD]
+	mov	PTR(1), PTRN(sp)
+	mov	PTR(22), PTR(0)
+	str	PTR(1), [PTR(0), #TD_FRAME]
 	bl	do_el0_sync
 	do_ast
-	str	xzr, [x22, #TD_FRAME]
+	str	PTR(zr), [PTR(22), #TD_FRAME]
 	KMSAN_LEAVE
 	restore_registers 0
 	ERET
@@ -280,7 +312,7 @@ END(handle_el0_sync)
 ENTRY(handle_el0_irq)
 	save_registers 0
 	KMSAN_ENTER
-	mov	x0, sp
+	mov	PTR(0), PTRN(sp)
 	mov	x1, #INTR_ROOT_IRQ
 	bl	intr_irq_handler
 	do_ast
@@ -292,7 +324,7 @@ END(handle_el0_irq)
 ENTRY(handle_el0_fiq)
 	save_registers 0
 	KMSAN_ENTER
-	mov	x0, sp
+	mov	PTR(0), PTRN(sp)
 	mov	x1, #INTR_ROOT_FIQ
 	bl	intr_irq_handler
 	do_ast
@@ -304,7 +336,7 @@ END(handle_el0_fiq)
 ENTRY(handle_el0_serror)
 	save_registers 0
 	KMSAN_ENTER
-	mov	x0, sp
+	mov	PTR(0), PTRN(sp)
 1:	bl	do_serror
 	b	1b
 	KMSAN_LEAVE
@@ -313,7 +345,7 @@ END(handle_el0_serror)
 ENTRY(handle_empty_exception)
 	save_registers 0
 	KMSAN_ENTER
-	mov	x0, sp
+	mov	PTR(0), PTRN(sp)
 1:	bl	unhandled_exception
 	b	1b
 	KMSAN_LEAVE

@@ -47,6 +47,13 @@ ASSYM(BP_BOOT_EL, offsetof(struct arm64_bootparams, boot_el));
 ASSYM(EC_EFI_STATUS, offsetof(struct efirt_callinfo, ec_efi_status));
 ASSYM(EC_FPTR, offsetof(struct efirt_callinfo, ec_fptr));
 ASSYM(EC_ARG1, offsetof(struct efirt_callinfo, ec_arg1));
+#ifdef __CHERI__
+ASSYM(EC_ARGCNT, offsetof(struct efirt_callinfo, ec_argcnt));
+ASSYM(EC_ARG2, offsetof(struct efirt_callinfo, ec_arg2));
+ASSYM(EC_ARG3, offsetof(struct efirt_callinfo, ec_arg3));
+ASSYM(EC_ARG4, offsetof(struct efirt_callinfo, ec_arg4));
+ASSYM(EC_ARG5, offsetof(struct efirt_callinfo, ec_arg5));
+#endif
 
 ASSYM(PCPU_SIZE, sizeof(struct pcpu));
 ASSYM(PC_CURPCB, offsetof(struct pcpu, pc_curpcb));
@@ -59,7 +66,13 @@ ASSYM(PCB_SINGLE_STEP_SHIFT, PCB_SINGLE_STEP_SHIFT);
 ASSYM(PCB_REGS, offsetof(struct pcb, pcb_x));
 ASSYM(PCB_X19, PCB_X19);
 ASSYM(PCB_SP, offsetof(struct pcb, pcb_sp));
+#ifdef __CHERI__
+ASSYM(PCB_TPIDR, offsetof(struct pcb, pcb_tpidr_el0));
+ASSYM(PCB_CID, offsetof(struct pcb, pcb_cid_el0));
+ASSYM(PCB_RDDC, offsetof(struct pcb, pcb_rddc_el0));
+#else
 ASSYM(PCB_TPIDRRO, offsetof(struct pcb, pcb_tpidrro_el0));
+#endif
 ASSYM(PCB_ONFAULT, offsetof(struct pcb, pcb_onfault));
 ASSYM(PCB_FLAGS, offsetof(struct pcb, pcb_flags));
 
@@ -67,6 +80,9 @@ ASSYM(P_PID, offsetof(struct proc, p_pid));
 ASSYM(P_MD_TCR, offsetof(struct proc, p_md.md_tcr));
 
 ASSYM(SF_UC, offsetof(struct sigframe, sf_uc));
+#ifdef COMPAT_FREEBSD64
+ASSYM(SF_UC64, offsetof(struct sigframe64, sf_uc));
+#endif
 
 ASSYM(TD_PROC, offsetof(struct thread, td_proc));
 ASSYM(TD_PCB, offsetof(struct thread, td_pcb));
@@ -81,6 +97,9 @@ ASSYM(TF_SIZE, sizeof(struct trapframe));
 ASSYM(TF_SP, offsetof(struct trapframe, tf_sp));
 ASSYM(TF_LR, offsetof(struct trapframe, tf_lr));
 ASSYM(TF_ELR, offsetof(struct trapframe, tf_elr));
+#ifdef __CHERI__
+ASSYM(TF_DDC, offsetof(struct trapframe, tf_ddc));
+#endif
 #ifdef __CHERI__
 ASSYM(TF_DDC, offsetof(struct trapframe, tf_ddc));
 #endif

@@ -49,35 +49,60 @@
 	.word	PAGE_MASK
 
 /*
- * Macro to handle the cache. This takes the start address in x0, length
- * in x1. It will corrupt x0, x1, x2, x3, and x4.
+ * Macro to handle the cache. This takes the start address in x/c0, length
+ * in x1. It will corrupt x0, x1, x2, x3, x4 and x6.
  */
 .macro cache_handle_range dcop = 0, ic = 0, icop = 0
+#ifdef __CHERI__
+	/* Ensure that the capability allows access to the range
+	 * [address, address + x1)
+	 */
+	scbnds	c6, c0, x1
+#endif
 .if \ic == 0
-	adrp	x3, dcache_line_size	/* Load the D cache line size */
-	ldr	x3, [x3, :lo12:dcache_line_size]
+	/* Load the D cache line size */
+	LDR_LABEL(x3, PTR(3), dcache_line_size)
 .else
-	adrp	x3, idcache_line_size	/* Load the I & D cache line size */
-	ldr	x3, [x3, :lo12:idcache_line_size]
+	/* Load the I & D cache line size */
+	LDR_LABEL(x3, PTR(3), idcache_line_size)
 .endif
 	sub	x4, x3, #1		/* Get the address mask */
 	and	x2, x0, x4		/* Get the low bits of the address */
 	add	x1, x1, x2		/* Add these to the size */
 	bic	x0, x0, x4		/* Clear the low bit of the address */
+#ifdef __CHERI__
+	/*
+	 * There is no guarantee that the capability given here has
+	 * sufficient bounds for the whole cache line.
+	 * Re-derive the capability from the kernel root if the addr capability
+	 * is valid within the target range of cache lines, otherwise strip the
+	 * tag and let the dc/ic instruction fail.
+	 */
+	LDR_LABEL(c2, c2, kernel_root_cap)
+	scvalue c0, c2, x0
+	add	x2, x1, x3
+	bic	x2, x2, x4
+	scbnds	c0, c0, x2
+	chkss	c6, c0
+	b.mi	3f
+	/* Use c6 as the source here for more informative debug info */
+	clrtag	c0, c6
+3:
+#endif
 .if \ic != 0
-	mov	x2, x0			/* Save the address */
+	mov	PTR(2), PTR(0)		/* Save the address */
 	mov	x4, x1			/* Save the size */
 .endif
 1:
-	dc	\dcop, x0
-	add	x0, x0, x3		/* Move to the next line */
+	dc	\dcop, PTR(0)
+	add	PTR(0), PTR(0), x3	/* Move to the next line */
 	subs	x1, x1, x3		/* Reduce the size */
 	b.hi	1b			/* Check if we are done */
 	dsb	ish
 .if \ic != 0
 2:
-	ic	\icop, x2
-	add	x2, x2, x3		/* Move to the next line */
+	ic	\icop, PTR(2)
+	add	PTR(2), PTR(2), x3	/* Move to the next line */
 	subs	x4, x4, x3		/* Reduce the size */
 	b.hi	2b			/* Check if we are done */
 	dsb	ish
@@ -175,20 +200,20 @@ END(arm64_aliasing_icache_sync_range)
  * int arm64_icache_sync_range_checked(void *, vm_size_t)
  */
 ENTRY(arm64_icache_sync_range_checked)
-	adr	x5, cache_maint_fault
-	SET_FAULT_HANDLER(x5, x6)
+	adr	PTR(5), cache_maint_fault
+	SET_FAULT_HANDLER(PTR(5), PTR(6))
 	/* XXX: See comment in arm64_icache_sync_range */
 	cache_handle_range	dcop = cvau
 	ic	ialluis
 	dsb	ish
 	isb
-	SET_FAULT_HANDLER(xzr, x6)
+	SET_FAULT_HANDLER(xzr, PTR(6))
 	mov	x0, #0
 	ret
 END(arm64_icache_sync_range_checked)
 
 ENTRY(cache_maint_fault)
-	SET_FAULT_HANDLER(xzr, x1)
+	SET_FAULT_HANDLER(xzr, PTR(1))
 	mov	x0, #EFAULT
 	ret
 END(cache_maint_fault)
