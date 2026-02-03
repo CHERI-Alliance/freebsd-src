@@ -92,7 +92,7 @@ ENTRY(copyout_mops)
 	cbz	x2, 1f
 	check_user_access 1, 2, copyio_fault_nopcb
 
-	adr	x6, copyio_fault /* Get the handler address */
+	adr	PTR(6), copyio_fault /* Get the handler address */
 	SET_FAULT_HANDLER(x6, x7) /* Set the handler */
 
 	.inst   0x19001441      /* cpyfpwt   [x1]!, [x0]!, x2!  */
@@ -131,7 +131,7 @@ ENTRY(copyin_mops)
 	cbz	x2, 1f
 	check_user_access 0, 2, copyio_fault_nopcb
 
-	adr	x6, copyio_fault /* Get the handler address */
+	adr	PTR(6), copyio_fault /* Get the handler address */
 	SET_FAULT_HANDLER(x6, x7) /* Set the handler */
 
 	.inst   0x19002441      /* cpyfprt   [x1]!, [x0]!, x2!  */

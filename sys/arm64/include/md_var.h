@@ -35,6 +35,10 @@
 extern long Maxmem;
 extern char sigcode[];
 extern int szsigcode;
+#ifdef COMPAT_FREEBSD64
+extern char freebsd64_sigcode[];
+extern int freebsd64_szsigcode;
+#endif
 extern u_long elf_hwcap;
 extern u_long elf_hwcap2;
 extern u_long elf_hwcap3;
