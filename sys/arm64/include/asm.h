@@ -93,10 +93,34 @@
 #define	PTR_WIDTH	_INT_WIDTH
 #define	PTRN(n)		INTN(n)
 #define	PTR(n)		INT(n)
-#endif
 
 /* Alias for link register x30 */
 #define	lr		x30
+#endif
+
+/*
+ * Helper to load addresses that can be in the literal pool in the hybrid
+ * kernel but must be loaded from GOT in purecap.
+ */
+#ifdef __CHERI_PURE_CAPABILITY__
+#define	LDR_LABEL(reg, tmpptr, label)			\
+	adrp	tmpptr, :got:##label;			\
+	ldr	tmpptr, [tmpptr, :got_lo12:##label];	\
+	ldr	reg, [tmpptr]
+#else
+#define	LDR_LABEL(reg, tmpptr, label)			\
+	adrp	tmpptr, ##label;			\
+	ldr	reg, [tmpptr, :lo12:##label]
+#endif
+
+#ifdef __CHERI_PURE_CAPABILITY__
+#define	LDR_HAS_PAN(reg, ptmp)				\
+	LDR_LABEL(reg, ptmp, has_pan)
+#else
+#define	LDR_HAS_PAN(reg, ptmp)				\
+	ldr	ptmp, =has_pan;				\
+	ldr	reg, [ptmp]
+#endif
 
 /*
  * Check whether a given cpu feature is present, in the case it is not we jump
@@ -115,14 +139,13 @@
  * clear the handler. The tmp parameter should be a register able to hold
  * the temporary data.
  */
-#define	SET_FAULT_HANDLER(handler, tmp)					\
-	ldr	tmp, [x18, #PC_CURTHREAD];	/* Load curthread */	\
-	ldr	tmp, [tmp, #TD_PCB];		/* Load the pcb */	\
-	str	handler, [tmp, #PCB_ONFAULT]	/* Set the handler */
+#define	SET_FAULT_HANDLER(handler, ptmp)				\
+	ldr	ptmp, [PTR(18), #PC_CURTHREAD];	/* Load curthread */	\
+	ldr	ptmp, [ptmp, #TD_PCB];		/* Load the pcb */	\
+	str	handler, [ptmp, #PCB_ONFAULT]	/* Set the handler */
 
-#define	ENTER_USER_ACCESS(reg, tmp)					\
-	ldr	tmp, =has_pan;			/* Get the addr of has_pan */ \
-	ldr	reg, [tmp];			/* Read it */		\
+#define	ENTER_USER_ACCESS(reg, ptmp)					\
+	LDR_HAS_PAN(reg, ptmp);			/* Get has_pan */	\
 	cbz	reg, 997f;			/* If no PAN skip */	\
 	.arch_extension pan;						\
 	msr pan, #0;				/* Disable PAN checks */ \
@@ -136,9 +159,8 @@
 	.arch_extension nopan;						\
 	998:
 
-#define	EXIT_USER_ACCESS_CHECK(reg, tmp)				\
-	ldr	tmp, =has_pan;			/* Get the addr of has_pan */ \
-	ldr	reg, [tmp];			/* Read it */		\
+#define	EXIT_USER_ACCESS_CHECK(reg, ptmp)				\
+	LDR_HAS_PAN(reg, ptmp);			/* Get has_pan */	\
 	cbz	reg, 999f;			/* If no PAN skip */	\
 	.arch_extension pan;						\
 	msr pan, #1;				/* Enable PAN checks */ \
