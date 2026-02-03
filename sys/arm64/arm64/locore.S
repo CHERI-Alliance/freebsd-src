@@ -37,6 +37,8 @@
 #include <machine/vm.h>
 #include <machine/vmparam.h>
 
+#include <machine/cherireg.h>
+
 #define	VIRT_BITS	48
 
 /*
@@ -84,11 +86,141 @@
  *  D-Cache: off
  *  I-Cache: on or off
  *  We are loaded at a 2MiB aligned address
+ *
+ *  In CHERI kernels we assume that DDC is a valid root capability
+ *  covering the whole address space and PCC is a valid root
+ *  executable capability covering the whole address space.
  */
 
+/*
+ * Build kernel pointer for the given data symbol
+ * assuming the kernel mmu mapping is enabled
+ */
+.macro buildptr dregn, sym, size
+	ldr	x\dregn, =\sym
+#ifdef __CHERI__
+	cvtd	c\dregn, x\dregn
+	scbnds	c\dregn, c\dregn, \size
+#endif
+.endmacro
+
+.macro buildptr_range sregn, eregn, start_sym, end_sym, clrperm = x
+	ldr	x\sregn, =\start_sym
+	ldr	x\eregn, =\end_sym
+#ifdef __CHERI__
+	sub	x\eregn, x\eregn, x\sregn
+	cvtd	c\sregn, x\sregn
+	scbnds	c\sregn, c\sregn, x\eregn
+	clrperm	c\sregn, c\sregn, \clrperm
+	add	c\eregn, c\sregn, x\eregn
+#endif
+.endmacro
+
+/*
+ * Jump into the kernel virtual address at the given position
+ * This also restricts the kernel PCC
+ */
+.macro enter_kern_vaddr regn, scratch1n, scratch2n, dstsym
+	ldr	x\regn, =\dstsym
+#ifdef __CHERI__
+	orr	x\regn, x\regn, #1	/* c64 mode */
+	ldr	x\scratch2n, =_end
+	ldr	x\scratch1n, =KERNBASE
+	sub	x\scratch2n, x\scratch2n, x\scratch1n
+	cvtp	c\scratch1n, x\scratch1n
+	scbnds	c\scratch1n, c\scratch1n, x\scratch2n
+	scvalue	c\regn, c\scratch1n, x\regn
+	clrperm	c\regn, c\regn, w
+#endif
+	br	PTR(\regn)
+.endmacro
+
+/*
+ * Helper to clear ddc and all other general-purpose capability registers,
+ * except c0.
+ */
+.macro clear_capregs
+#ifdef __CHERI__
+	msr	ddc, czr
+	mov	x1, xzr
+	mov	x2, xzr
+	mov	x3, xzr
+	mov	x4, xzr
+	mov	x5, xzr
+	mov	x6, xzr
+	mov	x7, xzr
+	mov	x8, xzr
+	mov	x9, xzr
+	mov	x10, xzr
+	mov	x11, xzr
+	mov	x12, xzr
+	mov	x13, xzr
+	mov	x14, xzr
+	mov	x15, xzr
+	mov	x16, xzr
+	mov	x17, xzr
+	mov	x18, xzr
+	mov	x19, xzr
+	mov	x20, xzr
+	mov	x21, xzr
+	mov	x22, xzr
+	mov	x23, xzr
+	mov	x24, xzr
+	mov	x25, xzr
+	mov	x26, xzr
+	mov	x27, xzr
+	mov	x28, xzr
+	mov	x29, xzr
+	mov	x30, xzr
+#endif
+.endmacro
+
+/*
+ * Initialize morello on a cpu
+ */
+.macro morello_cpu_init
+#ifdef __CHERI__
+	/* Enable Morello instructions at EL0 and EL1 */
+	mrs	x2, cpacr_el1
+	bic	x2, x2, CPACR_CEN_MASK
+	orr	x2, x2, CPACR_CEN_TRAP_NONE
+	msr	cpacr_el1, x2
+	isb
+
+	/*
+	 * Allow access to CNTVCT_EL0 without PCC System permission and enable
+	 * capability sealing for branch and link at EL0.
+	 */
+	mrs	x2, cctlr_el0
+	orr	x2, x2, #(CCTLR_PERMVCT_MASK | CCTLR_SBL_MASK)
+	msr	cctlr_el0, x2
+
+	/*
+	 * Enable capablity sealing for branch and link at EL1
+	 * Use PCC/DDC address interpretation.
+	 * Use DDC as base for adrdp.
+	 */
+	mrs	x2, cctlr_el1
+	bic	x2, x2, #(CCTLR_PCCBO_MASK | CCTLR_DDCBO_MASK | CCTLR_ADRDPB_MASK)
+	orr	x2, x2, #(CCTLR_SBL_MASK)
+	msr	cctlr_el1, x2
+
+	/* We assume that we enter here in a64 mode. */
+	bx	#4
+	.code	c64
+#endif
+.endmacro
+
+#ifdef __CHERI__
+	.code	a64
+#endif
 ENTRY(_start)
 	/* Enter the kernel exception level */
+	/* Note: this is done while still in A64 mode. */
 	bl	enter_kernel_el
+
+	/* Initialize morello capability ISA and switch to C64 */
+	morello_cpu_init
 
 	/* Set the context id */
 	msr	contextidr_el1, xzr
@@ -116,26 +248,27 @@ ENTRY(_start)
 	bl	start_mmu
 
 	/* Load the new ttbr0 pagetable */
-	adrp	x27, pagetable_l0_ttbr0
+	adrp	PTR(27), pagetable_l0_ttbr0
 	add	x27, x27, :lo12:pagetable_l0_ttbr0
 
 	/* Jump to the virtual address space */
-	ldr	x15, .Lvirtdone
-	br	x15
+	enter_kern_vaddr 15, 7, 8, virtdone
 
 virtdone:
 	BTI_J
 
 	/* Set up the stack */
-	adrp	x25, initstack_end
-	add	sp, x25, :lo12:initstack_end
+	mov	x7, #(PAGE_SIZE * KSTACK_PAGES)
+	buildptr 25, initstack, x7
+	/* Preserve initstack in x/c25 for bootparams */
+	add	PTR(7), PTR(25), x7
+	mov	PTRN(sp), PTR(7)
 
 	/* Zero the BSS */
-	ldr	x15, .Lbss
-	ldr	x14, .Lend
+	buildptr_range 15, 14, _bss_start, _end
 1:
-	stp	xzr, xzr, [x15], #16
-	cmp	x15, x14
+	stp	xzr, xzr, [PTR(15)], #16
+	cmp	PTR(15), PTR(14)
 	b.lo	1b
 
 #if defined(PERTHREAD_SSP)
@@ -146,24 +279,57 @@ virtdone:
 #endif
 
 	/* Backup the module pointer */
-	mov	x1, x0
+	mov	x19, x0
 
-	sub	sp, sp, #BOOTPARAMS_SIZE
-	mov	x0, sp
+#ifdef __CHERI__
+	/* Do capability relocations */
+	ldr	x0, =~CHERI_PERMS_KERNEL_DATA
+	mrs	c1, ddc
+	clrperm	c1, c1, x0
+	ldr	x0, =~CHERI_PERMS_KERNEL_CODE
+	adr	c2, #0
+	clrperm	c2, c2, x0
 
-	str	x1,  [x0, #BP_MODULEP]
-	adrp	x25, initstack
-	add	x25, x25, :lo12:initstack
-	str	x25, [x0, #BP_KERN_STACK]
-	str	x27, [x0, #BP_KERN_TTBR0]
-	str	x23, [x0, #BP_BOOT_EL]
+	/* Narrow bounds on data_cap to match code_cap. */
+	gcbase	x0, c2
+	scvalue	c1, c1, x0
+	gclen	x0, c2
+	scbnds	c1, c1, x0
+
+	/* Assume can we reach _DYNAMIC from PCC */
+	adrp	c0, _DYNAMIC
+	add	c0, c0, :lo12:_DYNAMIC
+	bl	elf_reloc_self
+	/* Initialize capabilities. */
+	mrs	c0, ddc
+	bl	cheri_init_capabilities
+
+	/*
+	 * Convert modulep into a capability
+	 */
+	cvtd	c19, x19
+#endif
+
+	sub	PTRN(sp), PTRN(sp), #BOOTPARAMS_SIZE
+	mov	PTR(0), PTRN(sp)
+
+	str	PTR(19), [PTR(0), #BP_MODULEP]
+	str	PTR(25), [PTR(0), #BP_KERN_STACK]
+	str	x27, [PTR(0), #BP_KERN_TTBR0]
+	str	x23, [PTR(0), #BP_BOOT_EL]
 
 	/* Set these before they are used in kasan_init_early */
+#ifdef __CHERI__
+	adrp	c1, :got:pmap_sh_attr
+	ldr	c1, [c1, :got_lo12:pmap_sh_attr]
+	str	x22, [c1]
+#else
 	adrp	x1, pmap_sh_attr
 	str	x22, [x1, :lo12:pmap_sh_attr]
+#endif
 #ifdef __ARM_FEATURE_BTI_DEFAULT
-	adrp	x1, pmap_gp_attr
-	str	x21, [x1, :lo12:pmap_gp_attr]
+	adrp	PTR(1), pmap_gp_attr
+	str	x21, [PTR(1), :lo12:pmap_gp_attr]
 #endif
 
 #ifdef KASAN
@@ -182,9 +348,10 @@ virtdone:
 	/* trace back starts here */
 	mov	fp, #0
 	/* Branch to C code */
+	clear_capregs
 	bl	initarm
 	/* We are done with the boot params */
-	add	sp, sp, #BOOTPARAMS_SIZE
+	add	PTRN(sp), PTRN(sp), #BOOTPARAMS_SIZE
 
 #ifdef PAC
 	/*
@@ -203,15 +370,12 @@ virtdone:
 	brk	0
 
 	.align 3
-.Lvirtdone:
-	.quad	virtdone
-.Lbss:
-	.quad	__bss_start
-.Lend:
-	.quad	__bss_end
 END(_start)
 
 #ifdef SMP
+#ifdef __CHERI__
+	.code	a64
+#endif
 /*
  * void
  * mpentry_psci(unsigned long)
@@ -235,6 +399,9 @@ ENTRY(mpentry_spintable)
 	ldr	x26, =spintable_wait
 	b	mpentry_common
 END(mpentry_spintable)
+#ifdef __CHERI__
+	.code	c64
+#endif
 
 /* Wait for the current CPU to be released */
 LENTRY(spintable_wait)
@@ -243,19 +410,22 @@ LENTRY(spintable_wait)
 	ldr	x2, =CPU_AFF_MASK
 	and	x1, x1, x2
 
-	adrp	x2, ap_cpuid
+	adrp	PTR(2), ap_cpuid
 1:
-	ldr	x0, [x2, :lo12:ap_cpuid]
+	ldr	x0, [PTR(2), :lo12:ap_cpuid]
 	cmp	x0, x1
 	b.ne	1b
 
-	str	xzr, [x2, :lo12:ap_cpuid]
+	str	xzr, [PTR(2), :lo12:ap_cpuid]
 	dsb	sy
 	sev
 
 	ret
 LEND(mpentry_spintable)
 
+#ifdef __CHERI__
+	.code	a64
+#endif
 LENTRY(mpentry_common)
 	/* Disable interrupts */
 	msr	daifset, #DAIF_INTR
@@ -263,26 +433,28 @@ LENTRY(mpentry_common)
 	/* Enter the kernel exception level */
 	bl	enter_kernel_el
 
+	/* Initialize morello capability ISA and switch to C64 */
+	morello_cpu_init
+
 	/* Set the context id */
 	msr	contextidr_el1, xzr
 
 	/* Load the kernel page table */
-	adrp	x24, pagetable_l0_ttbr1
+	adrp	PTR(24), pagetable_l0_ttbr1
 	add	x24, x24, :lo12:pagetable_l0_ttbr1
 	/* Load the identity page table */
-	adrp	x27, pagetable_l0_ttbr0_bootstrap
+	adrp	PTR(27), pagetable_l0_ttbr0_bootstrap
 	add	x27, x27, :lo12:pagetable_l0_ttbr0_bootstrap
 
 	/* Enable the mmu */
 	bl	start_mmu
 
 	/* Load the new ttbr0 pagetable */
-	adrp	x27, pagetable_l0_ttbr0
+	adrp	PTR(27), pagetable_l0_ttbr0
 	add	x27, x27, :lo12:pagetable_l0_ttbr0
 
 	/* Jump to the virtual address space */
-	ldr	x15, =mp_virtdone
-	br	x15
+	enter_kern_vaddr 15, 7, 8, mp_virtdone
 
 mp_virtdone:
 	BTI_J
@@ -292,13 +464,16 @@ mp_virtdone:
 	 * e.g. with spin-table but each CPU uses the same release address
 	 */
 	cbz	x26, 1f
-	blr	x26
+#ifdef __CHERI__
+	orr	x26, x26, #1	/* c64 mode */
+	cvtp	c26, x26
+#endif
+	blr	PTR(26)
 1:
 
 	/* Start using the AP boot stack */
-	adrp	x4, bootstack
-	ldr	x4, [x4, :lo12:bootstack]
-	mov	sp, x4
+	LDR_LABEL(PTR(4), PTR(4), bootstack)
+	mov	PTRN(sp), PTR(4)
 
 #if defined(PERTHREAD_SSP)
 	/* Set sp_el0 to the boot canary for early per-thread SSP to work */
@@ -316,13 +491,15 @@ mp_virtdone:
 	dsb	sy
 	isb
 
+	clear_capregs
+
 	/*
 	 * Initialize the per-CPU pointer before calling into C code, for the
 	 * benefit of kernel sanitizers.
 	 */
-	adrp	x18, bootpcpu
-	ldr	x18, [x18, :lo12:bootpcpu]
-	msr	tpidr_el1, x18
+	adrp	PTR(18), bootpcpu
+	ldr	PTR(18), [PTR(18), :lo12:bootpcpu]
+	msr	PTRN(tpidr_el1), PTR(18)
 
 	b	init_secondary
 LEND(mpentry_common)
@@ -349,6 +526,9 @@ END(mp_cpu_spinloop)
  *    in EL2
  *  - Configure EL2 to support running the kernel at EL1 and exit to that
  */
+#ifdef __CHERI__
+	.code	a64
+#endif
 LENTRY(enter_kernel_el)
 	mrs	x23, CurrentEL
 	and	x23, x23, #(CURRENTEL_EL_MASK)
@@ -431,16 +611,44 @@ LENTRY(enter_kernel_el)
 	isb
 
 	msr	SCTLR_EL12_REG, x2
+#ifdef __CHERI__
+	ldr	x2, =(CPTR_E2H_CEN)
+#else
 	mov	x2, xzr /* CPTR_EL2 is managed by vfp.c */
+#endif
+	msr	cptr_el2, x2
+#ifdef __CHERI__
+	/*
+	 * Wait for the write to cptr_el2 to complete. It will enable the
+	 * use of capabilities at EL2 that we need below. When not using
+	 * capabilities this is unneeded as the eret instruction will
+	 * act as in place of this barrier.
+	 */
+	isb
+
+	/* Clear DDC_EL1 */
+	msr	ddc_el1, czr
+#endif
 	ldr	x3, =(CNTHCTL_E2H_EL1PCTEN_NOTRAP | CNTHCTL_E2H_EL1PTEN_NOTRAP)
 	ldr	x5, =(PSR_DAIF | PSR_M_EL2h)
 	b	.Ldone_vhe
 
 .Lno_vhe:
+	ldr	x2, =(CPTR_RES1)
+	msr	cptr_el2, x2
+#ifdef __CHERI__
+	/* As noted above, wait for the write to cptr_el2 to complete. */
+	isb
+#endif
 	/* Hypervisor trap functions */
 	adrp	x2, hyp_stub_vectors
 	add	x2, x2, :lo12:hyp_stub_vectors
+#ifdef __CHERI__
+	cvtp	c2, x2
+	msr	cvbar_el2, c2
+#else
 	msr	vbar_el2, x2
+#endif
 
 	ldr	x2, =(CPTR_RES1)
 	ldr	x3, =(CNTHCTL_EL1PCTEN_NOTRAP | CNTHCTL_EL1PCEN_NOTRAP)
@@ -450,6 +658,10 @@ LENTRY(enter_kernel_el)
 	mov     x6, MDCR_EL2_E2PB_EL1_0_NO_TRAP
 	msr     mdcr_el2, x6
 
+#ifdef __CHERI__
+	/* Clear DDC_EL2 */
+	msr	ddc, czr
+#endif
 .Ldone_vhe:
 
 	msr	cptr_el2, x2
@@ -486,12 +698,26 @@ LENTRY(enter_kernel_el)
 	msr	icc_sre_el2, x2
 3:
 
+#ifdef __CHERI__
+	/* Enter exception handlers in C64 mode */
+	mrs	x2, cctlr_el2
+	orr	x2, x2, #(CCTLR_EL2_C64E_MASK)
+	msr	cctlr_el2, x2
+#endif
 	/* Set the address to return to our return address */
+#ifdef __CHERI___
+	cvtp	c30, x30
+	msr	celr_el2, c30
+#else
 	msr	elr_el2, x30
+#endif
 	isb
 
 	eret
 LEND(enter_kernel_el)
+#ifdef __CHERI__
+	.code	c64
+#endif
 
 /* Turn off the MMU.  Install ttbr0 from the bootstrap page table, and go there.
  * Does not return.
@@ -523,7 +749,7 @@ LENTRY(get_load_phys_addr)
 	/* Load the offset of get_load_phys_addr from KERNBASE */
 	ldr	x28, =(get_load_phys_addr - KERNBASE)
 	/* Load the physical address of get_load_phys_addr */
-	adr	x29, get_load_phys_addr
+	adr	PTR(29), get_load_phys_addr
 	/* Find the physical address of KERNBASE, i.e. our load address */
 	sub	x28, x29, x28
 	ret
@@ -538,6 +764,11 @@ LEND(get_load_phys_addr)
  *  All the memory must not cross a 1GiB boundaty
  *  x28 contains the physical address we were loaded from
  *
+ * Returns:
+ *  x27 TTBR0 table phys addr
+ *  x26 Kernel L1 table phys addr
+ *  x24 TTBR1 table phys addr
+ *
  *  There are 7 or 8 pages before that address for the page tables
  *   The pages used are:
  *    - The Kernel L3 tables (only for 16k kernel)
@@ -551,19 +782,28 @@ LEND(get_load_phys_addr)
  */
 LENTRY(create_pagetables)
 	/* Save the Link register */
-	mov	x5, x30
+	mov	PTR(5), PTR(30)
 
 	/* Clean the page table */
-	adrp	x6, pagetable
+	adrp	PTR(6), pagetable
 	add	x6, x6, :lo12:pagetable
-	adrp	x27, pagetable_end
+	adrp	PTR(27), pagetable_end
 	add	x27, x27, :lo12:pagetable_end
+#ifdef __CHERI__
+	sub	x7, x27, x6
+	cvtd	c6, x6
+	scbnds	c6, c6, x7
+	ldr	x7, =~CHERI_PERMS_KERNEL_PAGETABLE
+	clrperm	c6, c6, x7
+	scvalue	c27, c6, x27
+#endif
+	mov	PTR(26), PTR(6)	/* Save start addr for later */
 1:
-	stp	xzr, xzr, [x6], #16
-	stp	xzr, xzr, [x6], #16
-	stp	xzr, xzr, [x6], #16
-	stp	xzr, xzr, [x6], #16
-	cmp	x6, x27
+	stp	xzr, xzr, [PTR(6)], #16
+	stp	xzr, xzr, [PTR(6)], #16
+	stp	xzr, xzr, [PTR(6)], #16
+	stp	xzr, xzr, [PTR(6)], #16
+	cmp	PTR(6), PTR(27)
 	b.lo	1b
 
 #ifdef __ARM_FEATURE_BTI_DEFAULT
@@ -645,7 +885,7 @@ booti_fdt:
 booti_no_fdt:
 	/* Booted by U-Boot booti without FTD data */
 	/* Find the end - begin */
-	ldr     x7, .Lend
+	ldr     x7, =_end
 	sub     x8, x7, x6
 
 	/*
@@ -692,7 +932,7 @@ common:
 
 	/* Build the L3 table holding the end of the exectuable code */
 	lsl	x15, x25, #(PTE_SHIFT)
-	adrp	x6, pagetable_l3_ttbr1
+	adrp	PTR(6), pagetable_l3_ttbr1
 	add	x6, x6, :lo12:pagetable_l3_ttbr1
 	ldr	x7, =(ATTR_S1_IDX(VM_MEMATTR_WRITE_BACK) | \
 	    ATTR_S1_AP(ATTR_S1_AP_RO))
@@ -714,13 +954,13 @@ common:
 
 	/* Link the l2 -> l3 table */
 	mov	x9, x6
-	adrp	x6, pagetable_l2_ttbr1
+	adrp	PTR(6), pagetable_l2_ttbr1
 	add	x6, x6, :lo12:pagetable_l2_ttbr1
 	bl	link_l2_pagetable
 #endif
 
 	/* Create the kernel space PTE table */
-	adrp	x6, LL_PAGE_TABLE
+	adrp	PTR(6), LL_PAGE_TABLE
 	add	x6, x6, :lo12:LL_PAGE_TABLE
 	ldr	x7, =(ATTR_S1_IDX(VM_MEMATTR_WRITE_BACK) | \
 	    ATTR_S1_AP(ATTR_S1_AP_RO))
@@ -750,20 +990,20 @@ common:
 #if PAGE_SIZE != PAGE_SIZE_4K
 	/* Link the l2 -> l3 table */
 	mov	x9, x6
-	adrp	x6, pagetable_l2_ttbr1
+	adrp	PTR(6), pagetable_l2_ttbr1
 	add	x6, x6, :lo12:pagetable_l2_ttbr1
 	bl	link_l2_pagetable
 #endif
 
 	/* Link the l1 -> l2 table */
 	mov	x9, x6
-	adrp	x6, pagetable_l1_ttbr1
+	adrp	PTR(6), pagetable_l1_ttbr1
 	add	x6, x6, :lo12:pagetable_l1_ttbr1
 	bl	link_l1_pagetable
 
 	/* Link the l0 -> l1 table */
 	mov	x9, x6
-	adrp	x6, pagetable_l0_ttbr1
+	adrp	PTR(6), pagetable_l0_ttbr1
 	add	x6, x6, :lo12:pagetable_l0_ttbr1
 	mov	x10, #1
 	bl	link_l0_pagetable
@@ -776,12 +1016,12 @@ common:
 	 * They are only needed early on, so the VA = PA map is uncached.
 	 */
 
-	adrp	x6, pagetable_l2_ttbr0_bootstrap
+	adrp	PTR(6), pagetable_l2_ttbr0_bootstrap
 	add	x6, x6, :lo12:pagetable_l2_ttbr0_bootstrap
 
 	/* Create the VA = PA map */
 	mov	x7, #(ATTR_S1_nG | ATTR_S1_IDX(VM_MEMATTR_WRITE_BACK))
-	adrp	x16, _start
+	adrp	PTR(16), _start
 	and	x16, x16, #(~L2_OFFSET)
 	mov	x9, x16		/* PA start */
 	mov	x8, x16		/* VA start (== PA start) */
@@ -797,8 +1037,13 @@ common:
 
 	/* Store the socdev virtual address */
 	add	x17, x8, #(SOCDEV_PA & L2_OFFSET)
-	adrp	x9, socdev_va
-	str	x17, [x9, :lo12:socdev_va]
+	adrp	PTR(9), socdev_va
+	add	x9, x9, :lo12:socdev_va
+#ifdef __CHERI__
+	cvtd	c17, x17
+	cvtd	c9, x9
+#endif
+	str	x17, [PTR(9), :lo12:socdev_va]
 
 	ldr	x9, =(SOCDEV_PA)	/* PA start */
 	mov	x10, #1
@@ -827,16 +1072,26 @@ common:
 
 	/* Link the l1 -> l2 table */
 	mov	x9, x6
-	adrp	x6, pagetable_l1_ttbr0_bootstrap
+	adrp	PTR(6), pagetable_l1_ttbr0_bootstrap
 	add	x6, x6, :lo12:pagetable_l1_ttbr0_bootstrap
 	bl	link_l1_pagetable
 
 	/* Link the l0 -> l1 table */
 	mov	x9, x6
-	adrp	x6, pagetable_l0_ttbr0_bootstrap
+	adrp	PTR(6), pagetable_l0_ttbr0_bootstrap
 	add	x6, x6, :lo12:pagetable_l0_ttbr0_bootstrap
 	mov	x10, #1
 	bl	link_l0_pagetable
+
+#ifdef __CHERI__
+	/*
+	 * Return physical addresses instead of capabilities
+	 * into the identity-mapped early address space.
+	 */
+	gcvalue	x24, c24
+	gcvalue	x26, c26
+	gcvalue	x27, c27
+#endif
 
 	/* Save the TTBR0 table physical address */
 	mov	x27, x6
@@ -849,7 +1104,7 @@ LEND(create_pagetables)
 /*
  * Builds an L0 -> L1 table descriptor
  *
- *  x6  = L0 table
+ *  x/c6  = L0 table
  *  x8  = Virtual Address
  *  x9  = L1 PA (trashed)
  *  x10 = Entry count (trashed)
@@ -872,7 +1127,7 @@ LENTRY(link_l0_pagetable)
 1:	orr	x13, x12, x9, lsl #PAGE_SHIFT
 
 	/* Store the entry */
-	str	x13, [x6, x11, lsl #3]
+	str	x13, [PTR(6), x11, lsl #3]
 
 	sub	x10, x10, #1
 	add	x11, x11, #1
@@ -885,7 +1140,7 @@ LEND(link_l0_pagetable)
 /*
  * Builds an L1 -> L2 table descriptor
  *
- *  x6  = L1 table
+ *  x/c6  = L1 table
  *  x8  = Virtual Address
  *  x9  = L2 PA (trashed)
  *  x11, x12 and x13 are trashed
@@ -906,14 +1161,14 @@ LENTRY(link_l1_pagetable)
 	orr	x13, x12, x9, lsl #PAGE_SHIFT
 
 	/* Store the entry */
-	str	x13, [x6, x11, lsl #3]
+	str	x13, [PTR(6), x11, lsl #3]
 
 	ret
 LEND(link_l1_pagetable)
 
 /*
  * Builds count 2 MiB page table entry
- *  x6  = L2 table
+ *  x/c6  = L2 table
  *  x7  = Block attributes
  *  x8  = VA start
  *  x9  = PA start (trashed)
@@ -945,7 +1200,7 @@ LENTRY(build_l2_block_pagetable)
 1:	orr	x13, x12, x9, lsl #L2_SHIFT
 
 	/* Store the entry */
-	str	x13, [x6, x11, lsl #3]
+	str	x13, [PTR(6), x11, lsl #3]
 
 	sub	x10, x10, #1
 	add	x11, x11, #1
@@ -958,7 +1213,7 @@ LEND(build_l2_block_pagetable)
 /*
  * Builds an L2 -> L3 table descriptor
  *
- *  x6  = L2 table
+ *  x/c6  = L2 table
  *  x8  = Virtual Address
  *  x9  = L3 PA (trashed)
  *  x11, x12 and x13 are trashed
@@ -979,7 +1234,7 @@ LENTRY(link_l2_pagetable)
 	orr	x13, x12, x9, lsl #PAGE_SHIFT
 
 	/* Store the entry */
-	str	x13, [x6, x11, lsl #3]
+	str	x13, [PTR(6), x11, lsl #3]
 
 	ret
 LEND(link_l2_pagetable)
@@ -988,7 +1243,7 @@ LEND(link_l2_pagetable)
  * Builds count level 3 page table entries. Uses ATTR_CONTIGUOUS to create
  * large page (L3C) mappings when the current VA and remaining count allow
  * it.
- *  x6  = L3 table
+ *  x/c6  = L3 table
  *  x7  = Block attributes
  *  x8  = VA start
  *  x9  = PA start (trashed)
@@ -1008,6 +1263,9 @@ LENTRY(build_l3_page_pagetable)
 
 	/* Build the L3 page entry */
 	orr	x12, x7, #L3_PAGE
+#ifdef __CHERI__
+	orr	x12, x12, #(ATTR_CAP_RW)
+#endif
 	orr	x12, x12, #(ATTR_AF)
 	orr	x12, x12, #(ATTR_S1_UXN)
 #ifdef __ARM_FEATURE_BTI_DEFAULT
@@ -1032,7 +1290,7 @@ LENTRY(build_l3_page_pagetable)
 2:	orr	x13, x12, x9, lsl #L3_SHIFT
 
 	/* Store the entry */
-	str	x13, [x6, x11, lsl #3]
+	str	x13, [PTR(6), x11, lsl #3]
 
 	sub	x10, x10, #1
 	add	x11, x11, #1
@@ -1048,7 +1306,16 @@ LENTRY(start_mmu)
 
 	/* Load the exception vectors */
 	ldr	x2, =exception_vectors
+#ifdef __CHERI__
+	cvtp	c2, x2
+	msr	cvbar_el1, c2
+	/* Enter exception handlers in C64 mode */
+	mrs	x2, cctlr_el1
+	orr	x2, x2, #(CCTLR_EL1_C64E_MASK)
+	msr	cctlr_el1, x2
+#else
 	msr	vbar_el1, x2
+#endif
 
 	/* Load ttbr0 and ttbr1 */
 	msr	ttbr0_el1, x27
@@ -1146,9 +1413,15 @@ tcr:
 #error Unsupported page size
 #endif
 
+#ifdef __CHERI__
+#define	TCR_MORELLO	(TCR_HPD0 | TCR_HPD1 | TCR_HWU0 | TCR_HWU1)
+#else
+#define	TCR_MORELLO	0
+#endif
+
 	.quad (TCR_TxSZ(64 - VIRT_BITS) | TCR_TG |			\
 	    TCR_SH1_IS | TCR_ORGN1_WBWA | TCR_IRGN1_WBWA |		\
-	    TCR_SH0_IS | TCR_ORGN0_WBWA | TCR_IRGN0_WBWA)
+	    TCR_SH0_IS | TCR_ORGN0_WBWA | TCR_IRGN0_WBWA | TCR_MORELLO)
 LEND(start_mmu)
 
 ENTRY(switch_stack)
@@ -1164,9 +1437,11 @@ END(abort)
 .bss
 	.align	PAGE_SHIFT
 	.globl	initstack_end
+	.type	initstack,#object
 initstack:
 	.space	BOOT_STACK_SIZE
 initstack_end:
+	.size	initstack, initstack_end - initstack
 
 	.section .init_pagetable, "aw", %nobits
 	.align PAGE_SHIFT
@@ -1188,8 +1463,11 @@ pagetable_l2_ttbr1:
 	.space	PAGE_SIZE
 pagetable_l1_ttbr1:
 	.space	PAGE_SIZE
+	.globl pagetable_l0_ttbr1
+	.type	pagetable_l0_ttbr1,#object
 pagetable_l0_ttbr1:
 	.space	PAGE_SIZE
+	.size	pagetable_l0_ttbr1, . - pagetable_l0_ttbr1
 pagetable_l2_ttbr0_bootstrap:
 	.space	PAGE_SIZE
 pagetable_l1_ttbr0_bootstrap:
@@ -1200,13 +1478,52 @@ pagetable_l0_ttbr0:
 	.space	PAGE_SIZE
 pagetable_end:
 
+	.type	el2_pagetable,#object
 el2_pagetable:
 	.space	PAGE_SIZE
+	.size	el2_pagetable, . - el2_pagetable
 
-	.section .rodata, "a", %progbits
-	.globl	aarch32_sigcode
-	.align 2
-aarch32_sigcode:
+/*
+ * sigcode has to be labeled as an #object type so that the symbols
+ * resolve to the correct address as a source for copies.  This also
+ * ensures that captable pointers to it will be able to read it.  This
+ * is fine as the code is never executed directly in the kernel, just
+ * copied to places for userland to execute.
+ */
+#define	SIGCODE(sym)						\
+	.section .rodata, "a", %progbits; .globl sym; .align 2; \
+	.type sym,#object; sym:					\
+	.cfi_startproc
+
+#ifdef COMPAT_FREEBSD64
+SIGCODE(freebsd64_sigcode)
+	blr	x8
+	mov	x0, sp
+	add	x0, x0, #SF_UC64
+
+1:
+	mov	x8, #SYS_sigreturn
+	svc	0
+
+	/* sigreturn failed, exit */
+	mov	x8, #SYS_exit
+	svc	0
+
+	b	1b
+	/* This may be copied to the stack, keep it 16-byte aligned */
+	.align	3
+END(freebsd64_sigcode)
+freebsd64_esigcode:
+	.data
+	.align	3
+	.global	freebsd64_szsigcode
+	.type	freebsd64_szsigcode,#object
+	.size	freebsd64_szsigcode, 8
+freebsd64_szsigcode:
+	.quad	freebsd64_esigcode - freebsd64_sigcode
+#endif
+
+SIGCODE(aarch32_sigcode)
 	.word 0xe1a0000d	// mov r0, sp
 	.word 0xe2800040	// add r0, r0, #SIGF_UC
 	.word 0xe59f700c	// ldr r7, [pc, #12]
@@ -1217,10 +1534,12 @@ aarch32_sigcode:
 	.word SYS_sigreturn
 	.word SYS_exit
 	.align	3
-	.size aarch32_sigcode, . - aarch32_sigcode
+END(aarch32_sigcode)
 aarch32_esigcode:
 	.data
 	.global sz_aarch32_sigcode
+	.type	sz_aarch32_sigcode,#object
+	.size	sz_aarch32_sigcode, 8
 sz_aarch32_sigcode:
 	.quad aarch32_esigcode - aarch32_sigcode
 
