@@ -31,13 +31,27 @@
 #include <sys/syscall.h>
 #include <machine/asm.h>
 
-	.section .rodata, "a", %progbits
-	.globl	sigcode
-	.align 2
-sigcode:
+/*
+ * sigcode has to be labeled as an #object type so that the symbols
+ * resolve to the correct address as a source for copies.  This also
+ * ensures that captable pointers to it will be able to read it.  This
+ * is fine as the code is never executed directly in the kernel, just
+ * copied to places for userland to execute.
+ */
+#define	SIGCODE(sym)						\
+	.section .rodata, "a", %progbits; .globl sym; .align 2; \
+	.type sym,#object; sym:					\
+	.cfi_startproc
+
+SIGCODE(sigcode)
+#ifdef __CHERI__
+	blrr	c8
+	add	c0, csp, #SF_UC
+#else
 	blr	x8
 	mov	x0, sp
 	add	x0, x0, #SF_UC
+#endif
 
 1:
 	mov	x8, #SYS_sigreturn
@@ -50,12 +64,14 @@ sigcode:
 	b	1b
 	/* This may be copied to the stack, keep it 16-byte aligned */
 	.align	3
-	.size sigcode, . - sigcode
+END(sigcode)
 esigcode:
 
 	.data
 	.align	3
 	.global	szsigcode
+	.type	szsigcode,#object
+	.size	szsigcode, 8
 szsigcode:
 	.quad	esigcode - sigcode
 
