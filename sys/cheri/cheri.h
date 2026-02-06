@@ -72,6 +72,12 @@ extern void *kernel_root_cap;
 void userspace_root_cap_init(void *);
 
 /*
+ * Construct capabilities in the sysvec.
+ */
+struct sysentvec;
+void cheri_sysvec_init(struct sysentvec *sv);
+
+/*
  * Global sysctl definitions.
  */
 SYSCTL_DECL(_security_cheri);
