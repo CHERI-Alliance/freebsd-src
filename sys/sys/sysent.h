@@ -121,6 +121,9 @@ struct sysentvec {
 	int		sv_minsigstksz;	/* minimum signal stack size */
 	vm_offset_t	sv_minuser;	/* VM_MIN_ADDRESS */
 	vm_offset_t	sv_maxuser;	/* VM_MAXUSER_ADDRESS */
+#if __has_feature(capabilities)
+	uintptr_t	sv_vmspace_cap;
+#endif
 	vm_offset_t	sv_usrstack;	/* USRSTACK */
 	size_t		sv_psstringssz;	/* PS_STRINGS size */
 	int		sv_stackprot;	/* vm protection for stack */
