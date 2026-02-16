@@ -37,6 +37,12 @@
 /* Root kernel capability */
 extern void *kernel_root_cap;
 
+/*
+ * Global sysctl definitions.
+ */
+SYSCTL_DECL(_security_cheri);
+SYSCTL_DECL(_security_cheri_stats);
+
 #endif /* _KERNEL */
 
 #include <machine/cheri.h>
