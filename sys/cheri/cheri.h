@@ -33,9 +33,43 @@
 #define _CHERI_CHERI_H_
 
 #ifdef _KERNEL
+struct thread;
+/*
+ * Functions to construct userspace capabilities.
+ */
+void *_cheri_capability_build_user_code(struct thread *td, uint32_t perms,
+    ptraddr_t basep, size_t length, off_t off, const char* func, int line);
+void *_cheri_capability_build_user_data(uint32_t perms, ptraddr_t basep,
+     size_t length, off_t off, const char* func, int line, bool exact);
+void *_cheri_capability_build_user_rwx(uint32_t perms, ptraddr_t basep,
+    size_t length, off_t off, const char* func, int line, bool exact);
+void *_cheri_capability_build_user_rwx_unchecked(uint32_t perms,
+    ptraddr_t basep, size_t length, off_t off, const char* func, int line,
+    bool exact);
+
+#define cheri_capability_build_user_code(td, perms, basep, length, off)	\
+	_cheri_capability_build_user_code(td, perms, basep, length, off, \
+	    __func__, __LINE__)
+#define cheri_capability_build_user_data(perms, basep, length, off)	\
+	_cheri_capability_build_user_data(perms, basep, length, off,	\
+	    __func__, __LINE__, true)
+#define cheri_capability_build_inexact_user_data(perms, basep, length, off) \
+	_cheri_capability_build_user_data(perms, basep, length, off,	\
+	    __func__, __LINE__, false)
+#define cheri_capability_build_user_rwx(perms, basep, length, off)	\
+	_cheri_capability_build_user_rwx(perms, basep, length, off,	\
+	    __func__, __LINE__, true)
+#define cheri_capability_build_user_rwx_unchecked(perms, basep, length, off) \
+	_cheri_capability_build_user_rwx_unchecked(perms, basep, length, \
+	     off, __func__, __LINE__, true)
 
 /* Root kernel capability */
 extern void *kernel_root_cap;
+
+/*
+ * Initialize root caps.
+ */
+void userspace_root_cap_init(void *);
 
 /*
  * Global sysctl definitions.
