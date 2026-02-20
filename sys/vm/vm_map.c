@@ -144,6 +144,15 @@ static int vm_map_stack_locked(vm_map_t map, vm_offset_t addrbos,
 static void vm_map_wire_entry_failure(vm_map_t map, vm_map_entry_t entry,
     vm_offset_t failed_addr);
 
+#ifdef __CHERI__
+uintptr_t _vm_map_buildcap(vm_map_t map, vm_offset_t addr, vm_size_t length,
+    vm_prot_t prot);
+#define	vm_map_buildcap(map, addr, length, prot)	\
+    _vm_map_buildcap(map, addr, length, prot)
+#else
+#define	vm_map_buildcap(map, addr, length, prot)	(addr)
+#endif
+
 #define	CONTAINS_BITS(set, bits)	((~(set) & (bits)) == 0)
 
 #define	ENTRY_CHARGED(e) ((e)->cred != NULL || \
@@ -5309,6 +5318,21 @@ vm_map_range_valid_KBI(vm_map_t map, vm_offset_t start, vm_offset_t end)
 
 	return (vm_map_range_valid(map, start, end));
 }
+
+#ifdef __CHERI__
+uintptr_t
+_vm_map_buildcap(vm_map_t map, vm_offset_t addr, vm_size_t length,
+    vm_prot_t prot)
+{
+	uintptr_t retcap;
+	uintptr_t rootcap = vm_map_rootcap(map);
+	int perms = vm_prot2perms(cheri_perms_get(rootcap), prot);
+
+	retcap = cheri_bounds_set(cheri_address_set(rootcap, addr), length);
+
+	return (cheri_perms_and(retcap, perms));
+}
+#endif
 
 #ifdef INVARIANTS
 static void
