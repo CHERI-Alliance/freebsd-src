@@ -126,8 +126,8 @@ static uma_zone_t mapentzone;
 static uma_zone_t kmapentzone;
 static uma_zone_t vmspace_zone;
 static int vmspace_zinit(void *mem, int size, int flags);
-static void _vm_map_init(vm_map_t map, pmap_t pmap, vm_offset_t min,
-    vm_offset_t max);
+static void _vm_map_init(vm_map_t map, pmap_t pmap, uintptr_t min,
+    uintptr_t max);
 static void vm_map_entry_deallocate(vm_map_entry_t entry, boolean_t system_map);
 static void vm_map_entry_dispose(vm_map_t map, vm_map_entry_t entry);
 static void vm_map_entry_unwire(vm_map_t map, vm_map_entry_t entry);
@@ -318,7 +318,7 @@ vmspace_zdtor(void *mem, int size, void *arg)
  * and initialize those structures.  The refcnt is set to 1.
  */
 struct vmspace *
-vmspace_alloc(vm_offset_t min, vm_offset_t max, pmap_pinit_t pinit)
+vmspace_alloc(uintptr_t min, uintptr_t max, pmap_pinit_t pinit)
 {
 	struct vmspace *vm;
 
@@ -883,7 +883,7 @@ vmspace_resident_count(struct vmspace *vmspace)
  * such as that in the vmspace structure.
  */
 static void
-_vm_map_init(vm_map_t map, pmap_t pmap, vm_offset_t min, vm_offset_t max)
+_vm_map_init(vm_map_t map, pmap_t pmap, uintptr_t min, uintptr_t max)
 {
 
 	map->header.eflags = MAP_ENTRY_HEADER;
@@ -896,20 +896,30 @@ _vm_map_init(vm_map_t map, pmap_t pmap, vm_offset_t min, vm_offset_t max)
 	map->timestamp = 0;
 	map->busy = 0;
 	map->anon_loc = 0;
+#ifdef __CHERI__
+	/*
+	 * Do not enforce exact bounds here. The kernel map
+	 * can not be made representable without dropping some
+	 * physical memory, so restrict bounds as much as possible
+	 * and rely on the vm_map min/max enforcement.
+	 */
+	map->map_capability = cheri_bounds_set(min,
+	    (ptraddr_t)max - (ptraddr_t)min);
+#endif
 #ifdef DIAGNOSTIC
 	map->nupdates = 0;
 #endif
 }
 
 void
-vm_map_init(vm_map_t map, pmap_t pmap, vm_offset_t min, vm_offset_t max)
+vm_map_init(vm_map_t map, pmap_t pmap, uintptr_t min, uintptr_t max)
 {
 	_vm_map_init(map, pmap, min, max);
 	sx_init(&map->lock, "vm map (user)");
 }
 
 void
-vm_map_init_system(vm_map_t map, pmap_t pmap, vm_offset_t min, vm_offset_t max)
+vm_map_init_system(vm_map_t map, pmap_t pmap, uintptr_t min, uintptr_t max)
 {
 	_vm_map_init(map, pmap, min, max);
 	vm_map_modflags(map, MAP_SYSTEM_MAP, 0);
@@ -4372,8 +4382,15 @@ vmspace_fork(struct vmspace *vm1, vm_ooffset_t *fork_charge)
 
 	old_map = &vm1->vm_map;
 	/* Copy immutable fields of vm1 to vm2. */
+#ifdef __CHERI__
+	vm2 = vmspace_alloc(
+	    cheri_address_set(vm_map_rootcap(old_map), vm_map_min(old_map)),
+	    cheri_address_set(vm_map_rootcap(old_map), vm_map_max(old_map)),
+	    pmap_pinit);
+#else
 	vm2 = vmspace_alloc(vm_map_min(old_map), vm_map_max(old_map),
 	    pmap_pinit);
+#endif
 	if (vm2 == NULL)
 		return (NULL);
 
@@ -4915,7 +4932,14 @@ vmspace_exec(struct proc *p, vm_offset_t minuser, vm_offset_t maxuser)
 
 	KASSERT((curthread->td_pflags & TDP_EXECVMSPC) == 0,
 	    ("vmspace_exec recursed"));
+#ifdef __CHERI__
+	newvmspace = vmspace_alloc(
+	    cheri_address_set(p->p_sysent->sv_vmspace_cap, minuser),
+	    cheri_address_set(p->p_sysent->sv_vmspace_cap, maxuser),
+	    pmap_pinit);
+#else
 	newvmspace = vmspace_alloc(minuser, maxuser, pmap_pinit);
+#endif
 	if (newvmspace == NULL)
 		return (ENOMEM);
 	newvmspace->vm_swrss = oldvmspace->vm_swrss;
