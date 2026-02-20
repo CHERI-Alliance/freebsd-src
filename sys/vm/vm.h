@@ -202,6 +202,10 @@ extern struct kva_md_info	kmi;
 extern int old_mlock;
 extern int vm_ndomains;
 extern int vm_overcommit;
+
+#ifdef __CHERI__
+int vm_prot2perms(int base, vm_prot_t prot);
+#endif
 #endif				/* _KERNEL */
 
 #endif				/* VM_H */
