@@ -29,7 +29,7 @@ MKMODULESENV+=  MODULE_TIED=yes
 MKMODULESENV+=	CONF_CFLAGS="${CONF_CFLAGS}"
 .endif
 
-.if defined(WITH_CTF)
+.if defined(WITH_CTF) && !defined(WITHOUT_CTF)
 MKMODULESENV+=	WITH_CTF="${WITH_CTF}"
 .endif
 
