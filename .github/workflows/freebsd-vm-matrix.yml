@@ -50,7 +50,8 @@ jobs:
       matrix:
 #        arch: [amd64, arm64]
         arch: [arm64]
-        toolchain: [gcc12, gcc13, gcc14]
+#        toolchain: [gcc12, gcc13, gcc14]
+        toolchain: [gcc15]
         include:
           - extra_make_flags: -s
           - arch: arm64
