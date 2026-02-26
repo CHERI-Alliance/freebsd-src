@@ -1,0 +1,145 @@
+name: Build with toolchain
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        required: false
+        type: string
+      extra_make_flags:
+        required: false
+        type: string
+      target_arch:
+        required: false
+        type: string
+      toolchain:
+        required: true
+        type: string
+      freebsd_version:
+        required: false
+        type: string
+      anyvm_builder_version:
+        required: false
+        type: string
+      cpus:
+        required: false
+        type: string
+      mem:
+        required: false
+        type: string
+      anyvm_data:
+        required: false
+        type: string
+      anyvm_cache:
+        required: false
+        type: string
+      project_root:
+        required: false
+        type: string
+
+jobs:
+  build:
+    name: "Smoke testing ${{ inputs.target_arch }}-${{ inputs.toolchain }}"
+    runs-on: the-capable-hub-aws-ci
+    container:
+      image: ghcr.io/anyvm-org/anyvm:v0.0.5
+    steps:
+      - name: "Checkout freebsd-src"
+        uses: actions/checkout@v4
+      - name: "setup SSH"
+        run: |
+            # which sudo
+            echo "127.0.0.1 freebsd" | tee -a /etc/hosts
+      - name: "Where are we? Who are we?"
+        run: |
+          echo "GITHUB_WORKSPACE = $GITHUB_WORKSPACE"
+          echo "We are using the ${{ inputs.toolchain }} toolchain"
+      - name: Create Environment (GCC)
+        if: contains( inputs.toolchain, 'gcc' )
+        run: |
+            echo "GCC found"
+            export TOOLCHAIN_PKG=${{ inputs.target_arch }}-${{ inputs.toolchain }}
+            echo "TOOLCHAIN_PKG=${TOOLCHAIN_PKG}" >> $GITHUB_ENV
+            echo "CROSS_TOOLCHAIN=${TOOLCHAIN_PKG}" >> $GITHUB_ENV
+            echo "EXTRA_BUILD_ARGS=--cross-bindir=/usr/local/bin" >> $GITHUB_ENV
+            echo "BUILD_ROUTE=--all" >> $GITHUB_ENV
+
+            TMP_ARCH="x86_64"
+            if [ ${{ inputs.target_arch }} = aarch64 ]; then
+              TMP_ARCH="${{ inputs.target_arch }}"
+            fi
+            TOOLCHAIN_TRIPLE="${TMP_ARCH}-unknown-freebsd15.0-"
+
+            echo "XCC=/usr/local/bin/${TOOLCHAIN_TRIPLE}${{ inputs.toolchain }}" >> $GITHUB_ENV
+            echo "XCXX=/usr/local/bin/${TOOLCHAIN_TRIPLE}${{ inputs.toolchain }}" >> $GITHUB_ENV
+            echo "XLD=ld" >> $GITHUB_ENV
+            # echo "XLD=/usr/local/${TMP_ARCH}-unknown-freebsd15.0/bin/ld" >> $GITHUB_ENV
+            echo "XCPP=/usr/local/bin/${TOOLCHAIN_TRIPLE}${{ inputs.toolchain }}" >> $GITHUB_ENV
+      - name: Create Environment (LLVM)
+        if: contains( inputs.toolchain, 'llvm' )
+        run: |
+            echo "LLVM found"
+            echo "TOOLCHAIN_PKG=${{ inputs.toolchain }}-lite" >> $GITHUB_ENV
+            echo "CROSS_TOOLCHAIN=${{ inputs.toolchain }}" >> $GITHUB_ENV
+            echo "EXTRA_BUILD_ARGS=--cross-bindir=/usr/local/${{ inputs.toolchain }}/bin" >> $GITHUB_ENV
+            echo "BUILD_ROUTE=--ca_build_path" >> $GITHUB_ENV
+      - name: Get NPROC
+        run: echo "NPROC=`getconf _NPROCESSORS_ONLN 2>/dev/null || getconf NPROCESSORS_ONLN 2>/dev/null || echo 1`" >> $GITHUB_ENV
+      - name: "Do BSD VM Build"
+        env:
+          PKG: python3
+        run: |
+          apt-get update; apt-get -yy --no-install-recommends install curl
+          mkdir -p ${{ inputs.anyvm_data }}
+          mkdir -p ${{ inputs.anyvm_cache }}
+          curl -s https://raw.githubusercontent.com/anyvm-org/anyvm/v0.2.0/anyvm.py -o ${{ inputs.anyvm_data }}/anyvm.py
+          python3 ${{ inputs.anyvm_data }}/anyvm.py \
+            --snapshot --os freebsd --release ${{ inputs.freebsd_version }} \
+            --builder ${{ inputs.anyvm_builder_version }} --arch x86_64 \
+            --mem ${{ inputs.mem }} --cpu ${{ inputs.cpus }} \
+            -v ${{ inputs.project_root }}/freebsd-src/:/freebsd-src \
+            --data-dir ${{ inputs.anyvm_data }} \
+            --cache-dir ${{ inputs.anyvm_cache }}
+          scp -rp \
+            -i ${{ inputs.anyvm_data }}/freebsd/v${{ inputs.anyvm_builder_version }}/freebsd-${{ inputs.freebsd_version }}-host.id_rsa \
+            -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+            -P 10022 \
+            ${{ inputs.project_root }}/freebsd-src/ root@127.0.0.1:/
+          # ssh command using a heredoc
+          ssh -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -o LogLevel=ERROR \
+            -i ${{ inputs.anyvm_data }}/freebsd/v${{ inputs.anyvm_builder_version }}/freebsd-${{ inputs.freebsd_version }}-host.id_rsa \
+            -p 10022 root@127.0.0.1 << EOF
+            set -x
+            uname
+            export TARGET=${{ inputs.arch }}
+            export TARGET_ARCH=${{ inputs.target_arch }}
+            export TOOLCHAIN=${{ inputs.toolchain }}
+            export TOOLCHAIN_PKG=${TOOLCHAIN_PKG}
+            export CROSS_TOOLCHAIN="${CROSS_TOOLCHAIN}"
+            export NPROC=${NPROC}
+            export EXTRA_MAKE_FLAGS=${{ inputs.extra_make_flags }}
+            export EXTRA_BUILD_ARGS=${EXTRA_BUILD_ARGS}
+            pkg install -y ${TOOLCHAIN_PKG} ${{ env.PKG }} 2>&1
+            chown user:user /freebsd-src
+            cd /freebsd-src
+            sh /freebsd-src/tools/tools/ci-tools/build-smoke-test.sh ${BUILD_ROUTE}
+            # This echo below means we run the next scp
+            # command. Otherwise github just exits because
+            # the SSH command technically failed.
+            echo "script run"
+          EOF
+          scp \
+            -i ${{ inputs.anyvm_data }}/freebsd/v${{ inputs.anyvm_builder_version }}/freebsd-${{ inputs.freebsd_version }}-host.id_rsa \
+            -o StrictHostKeyChecking=no -o \
+            UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+            -P 10022 \
+            root@127.0.0.1:/status_file \
+            root@127.0.0.1:/last_command_report \
+            ./
+          if [ "$(cat ./status_file)" != "0" ]; then
+            echo "error: VM task returned a non 0 code. Last command output: $(cat ./last_command_report)"
+            exit 1
+          fi
+
