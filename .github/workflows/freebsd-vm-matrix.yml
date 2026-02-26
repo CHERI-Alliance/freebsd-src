@@ -1,0 +1,67 @@
+name: Run BSD Smoke Test matrix
+
+on:
+  workflow_dispatch:
+  branch_protection_rule:
+    types: [created, deleted]
+  push:
+    branches:
+      TheCapableHub
+      cheri
+  pull_request_target:
+    types: [ opened, reopened, edited, synchronize ]
+
+jobs:
+  cheribsd-llvm-matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+        toolchain: [llvm16, llvm17, llvm18, llvm19]
+        include:
+          - extra_make_flags:
+          - arch: arm64
+            target_arch: aarch64
+          - arch: amd64
+            target_arch: amd64
+    uses: The-Capable-Hub/freebsd-src/.github/workflows/freebsd-vm-build.yml@hcarter/1-convert-cirrus-yml-to-github-actions
+    with:
+      arch: ${{ matrix.arch }}
+      toolchain: ${{ matrix.toolchain }}
+      extra_make_flags: ${{ matrix.extra_make_flags }}
+      target_arch: ${{ matrix.target_arch }}
+      # Ensure version is of the form x.y. just 'x' won't work
+      freebsd_version: 14.3
+      anyvm_builder_version: 2.0.5
+      cpus: 8
+      mem: 4096
+      anyvm_data: /__w/freebsd-src/anyvm_data
+      anyvm_cache: /__w/freebsd-src/anyvm_cache
+      project_root: /__w/freebsd-src/
+
+  cheribsd-gcc-matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+        toolchain: [gcc12, gcc13, gcc14]
+        include:
+          - extra_make_flags: -s
+          - arch: arm64
+            target_arch: aarch64
+          - arch: amd64
+            target_arch: amd64
+    uses: The-Capable-Hub/freebsd-src/.github/workflows/freebsd-vm-build.yml@hcarter/1-convert-cirrus-yml-to-github-actions
+    with:
+      arch: ${{ matrix.arch }}
+      toolchain: ${{ matrix.toolchain }}
+      extra_make_flags: ${{ matrix.extra_make_flags }}
+      target_arch: ${{ matrix.target_arch }}
+      # Ensure version is of the form x.y. just 'x' won't work
+      freebsd_version: 14.3
+      anyvm_builder_version: 2.0.5
+      cpus: 8
+      mem: 8192
+      anyvm_data: /__w/freebsd-src/anyvm_data
+      anyvm_cache: /__w/freebsd-src/anyvm_cache
+      project_root: /__w/freebsd-src/
