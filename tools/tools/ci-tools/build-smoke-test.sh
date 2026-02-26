@@ -1,48 +1,94 @@
 #!/bin/sh
+
 set -x
-set -e
-# export MAKEOBJDIR=/usr/obj/$(pwd -P)
+
+export MAKEOBJDIRPREFIX=/usr/obj$(pwd -P)
+touch /last_command_report
+touch /status_file
+
+command_wrapper () {
+    echo "$0:${LINENO}:$@" > /last_command_report
+    set -o pipefail
+    "$@" | tee >> /last_command_report
+    set_status "$?"
+    set +o pipefail
+}
+
+set_success () {
+    printf "0" > /status_file
+}
+
+set_fail () {
+    printf "${1}" > /status_file
+    exit 1
+}
+
+set_status () {
+    if [ "$1" != 0 ]; then
+        set_fail "$1"
+    else
+        set_success
+    fi
+}
 
 setup_script () {
     printf "Running setup_script\n"
 
-    uname -a
-    gpart show
-    df -m
-    pkg --version
-    pw useradd -n user -m
-    mkdir -p /usr/obj/$(pwd -P)
-    chown user:user /usr/obj/$(pwd -P)
-    su user -c "git config --global --add safe.directory $(pwd -P)"
+    if [ ! -f /script_setup ]; then
+        command_wrapper uname -a
+        command_wrapper gpart show
+        command_wrapper df -m
+        command_wrapper pkg --version
+        command_wrapper pw useradd -n user -m
+        command_wrapper mkdir -p ${MAKEOBJDIRPREFIX}
+        command_wrapper chown user:user ${MAKEOBJDIRPREFIX}
+        command_wrapper chown user:user /freebsd-src
+    fi
+
+    touch /script_setup
+}
+
+ca_build_path () {
+    command_wrapper ./tools/build/make.py \
+        --debug ${EXTRA_BUILD_ARGS} \
+        TARGET="${TARGET}" \
+        TARGET_ARCH="${TARGET_ARCH}" \
+        kernel-toolchain -s -j$NPROC \
+        -DWITH_DISK_IMAGE_TOOLS_BOOTSTRAP
+    command_wrapper ./tools/build/make.py \
+        --debug ${EXTRA_BUILD_ARGS} \
+        TARGET="${TARGET}" \
+        TARGET_ARCH="${TARGET_ARCH}" \
+        KERNCONF=GENERIC \
+        NO_MODULES=yes \
+        buildkernel -s -j$NPROC $EXTRA_MAKE_ARGS
 }
 
 build_world_script () {
     printf "Running build_world_script\n"
-    set +e
-    su user -c "make -j$(nproc) ${EXTRA_MAKE_FLAGS} \
-    CROSS_TOOLCHAIN=${TOOLCHAIN} \
+    command_wrapper su user -c "make -j$(nproc) ${EXTRA_MAKE_FLAGS} \
+    CROSS_TOOLCHAIN=${CROSS_TOOLCHAIN} \
     WITHOUT_TOOLCHAIN=yes buildworld"
-    set -e
 }
 
 build_kernel_script () {
     printf "Running build_kernel_script\n"
 
-    su user -c "make -j$(nproc) \
-    CROSS_TOOLCHAIN=${TOOLCHAIN} WITHOUT_TOOLCHAIN=yes \
+    command_wrapper su user -c "make -j$(nproc) \
+    CROSS_TOOLCHAIN=${CROSS_TOOLCHAIN} WITHOUT_TOOLCHAIN=yes \
     buildkernel"
 }
 
 package_script () {
     printf "Running package_script\n"
 
-    su user -c "make -j$(nproc) CROSS_TOOLCHAIN=${TOOLCHAIN} WITHOUT_TOOLCHAIN=yes packages"
+    command_wrapper su user -c "make -j$(nproc) CROSS_TOOLCHAIN=${CROSS_TOOLCHAIN} WITHOUT_TOOLCHAIN=yes packages"
 }
 
 package_check_script () {
     printf "Running package_check_script\n"
 
-    su user -c "/usr/libexec/flua \
+    command_wrapper su user -c "/usr/libexec/flua \
     tools/pkgbase/metalog_reader.lua \
     -c /usr/obj/$(pwd -P)/${TARGET}.${TARGET_ARCH}/worldstage/METALOG"
 }
@@ -50,22 +96,28 @@ package_check_script () {
 test_script () {
     printf "Running test_script\n"
 
-    sh .cirrus-ci/pkg-install.sh qemu-nox11
-    sh tools/boot/ci-qemu-test.sh
+    command_wrapper sh .cirrus-ci/pkg-install.sh qemu-nox11
+    command_wrapper sh tools/boot/ci-qemu-test.sh
 }
 
 make_sysent_script () {
     printf "Running make_sysent_script\n"
     # Check that make sysent results were committed if required
-    make sysent
-    if ! git diff --exit-code; then printf "\n>>> Generated \
-    sysent files not updated, run make sysent <<<\n"; false; fi
+    command_wrapper make sysent
+    if ! git diff --exit-code; then 
+        printf "\n>>> Generated \
+        sysent files not updated, run make sysent <<<\n"
+        set_fail
+    fi
 }
 
 include_ldirs_script () {
     printf "Running include_ldirs_script\n"
     # Check that includes/Makefile refers to existing directories
-    if ! make -C include/ check-ldirs; then printf "\n>>> include/Makefile lists nonexistant directories <<<\n"; false; fi
+    if ! make -C include/ check-ldirs; then 
+        printf "\n>>> include/Makefile lists nonexistant directories <<<\n"
+        set_fail
+    fi
 }
 
 makeman_script () {
@@ -74,21 +126,26 @@ makeman_script () {
     # tools/build/options/makeman (modulo the date which always updates)
     # XXX: This script is slow so keep it last
     (make makeman 2> /tmp/makeman.out); cat /tmp/makeman.out
-    if ! git diff --exit-code --ignore-matching-lines "^.Dd" share/man/man5/src.conf.5; then printf "\n>>> src.conf.5 was not updated as required <<<\n"; false; fi
-    if grep -q "no description found" /tmp/makeman.out; then printf "\n>>> Missing description files <<<\n"; false; fi
+    if ! git diff --exit-code --ignore-matching-lines "^.Dd" share/man/man5/src.conf.5; then 
+        printf "\n>>> src.conf.5 was not updated as required <<<\n"
+        set_fail
+    fi
+    if grep -q "no description found" /tmp/makeman.out; then 
+        printf "\n>>> Missing description files <<<\n"
+        set_fail
+    fi
 }
 
 post_script () {
     printf "Running post_script\n"
 
-    df -m
-    du -m -s /usr/obj
+    command_wrapper df -m
+    command_wrapper du -m -s /usr/obj
 }
 
 all () {
     printf "Running all scripts\n"
 
-    setup_script
     build_world_script
     build_kernel_script
     package_script
@@ -100,12 +157,11 @@ all () {
     post_script
 }
 
+setup_script
+
 # Handle CLI arguments
 for arg in "$@"; do
     case "$arg" in
-        --setup_script)
-            setup_script
-            ;;
         --build_world_script)
             build_world_script
             ;;
@@ -133,6 +189,12 @@ for arg in "$@"; do
         --post_script)
             post_script
             ;;
+        --test_fail)
+            test_fail
+            ;;
+        --ca_build_path)
+            ca_build_path
+            ;;
         --all)
             all
             ;;
@@ -140,7 +202,6 @@ for arg in "$@"; do
             echo "Usage: $0 [SCRIPT]"
             echo ""
             echo "Options:"
-            echo "  --setup_script            "
             echo "  --build_world_script      "
             echo "  --build_kernel_script     "
             echo "  --package_script          "
@@ -150,6 +211,8 @@ for arg in "$@"; do
             echo "  --include_ldirs_script    "
             echo "  --makeman_script          "
             echo "  --post_script             "
+            echo "  --test_fail (for testing) exits with 1 "
+            echo "  --ca_build_path The buildpath used by CA "
             echo "  --all         runs all above tasks in order given"
             echo "Note: At least one feature must be specified."
             exit 0
