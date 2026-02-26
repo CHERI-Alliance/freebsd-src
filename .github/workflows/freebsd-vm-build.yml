@@ -92,7 +92,7 @@ jobs:
           apt-get update; apt-get -yy --no-install-recommends install curl
           mkdir -p ${{ inputs.anyvm_data }}
           mkdir -p ${{ inputs.anyvm_cache }}
-          curl -s https://raw.githubusercontent.com/anyvm-org/anyvm/v0.2.0/anyvm.py -o ${{ inputs.anyvm_data }}/anyvm.py
+          curl -s https://raw.githubusercontent.com/anyvm-org/anyvm/v0.3.0/anyvm.py -o ${{ inputs.anyvm_data }}/anyvm.py
           python3 ${{ inputs.anyvm_data }}/anyvm.py \
             --snapshot --os freebsd --release ${{ inputs.freebsd_version }} \
             --builder ${{ inputs.anyvm_builder_version }} --arch x86_64 \
