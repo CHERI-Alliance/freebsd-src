@@ -36,8 +36,8 @@ jobs:
       extra_make_flags: ${{ matrix.extra_make_flags }}
       target_arch: ${{ matrix.target_arch }}
       # Ensure version is of the form x.y. just 'x' won't work
-      freebsd_version: 14.3
-      anyvm_builder_version: 2.0.5
+      freebsd_version: "15.0"
+      anyvm_builder_version: 2.0.8
       cpus: 8
       mem: 4096
       anyvm_data: /__w/freebsd-src/anyvm_data
@@ -65,8 +65,8 @@ jobs:
       extra_make_flags: ${{ matrix.extra_make_flags }}
       target_arch: ${{ matrix.target_arch }}
       # Ensure version is of the form x.y. just 'x' won't work
-      freebsd_version: 14.3
-      anyvm_builder_version: 2.0.5
+      freebsd_version: "15.0"
+      anyvm_builder_version: 2.0.8
       cpus: 8
       mem: 8192
       anyvm_data: /__w/freebsd-src/anyvm_data
