@@ -29,7 +29,7 @@ jobs:
             toolchain: llvm17
           - arch: amd64
             toolchain: llvm18
-    uses: The-Capable-Hub/freebsd-src/.github/workflows/freebsd-vm-build.yml@hcarter/1-convert-cirrus-yml-to-github-actions
+    uses: ./.github/workflows/freebsd-vm-build.yml
     with:
       arch: ${{ matrix.arch }}
       toolchain: ${{ matrix.toolchain }}
@@ -58,7 +58,7 @@ jobs:
             target_arch: aarch64
           - arch: amd64
             target_arch: amd64
-    uses: The-Capable-Hub/freebsd-src/.github/workflows/freebsd-vm-build.yml@hcarter/1-convert-cirrus-yml-to-github-actions
+    uses: ./.github/workflows/freebsd-vm-build.yml
     with:
       arch: ${{ matrix.arch }}
       toolchain: ${{ matrix.toolchain }}
