@@ -78,8 +78,18 @@ jobs:
       - name: Create Environment (LLVM)
         if: contains( inputs.toolchain, 'llvm' )
         run: |
-            echo "LLVM found"
-            echo "TOOLCHAIN_PKG=${{ inputs.toolchain }}-lite" >> $GITHUB_ENV
+          echo "LLVM found"
+            case "${{ inputs.toolchain }}" in
+            llvm-cheri|llvm-morello)
+              echo "TOOLCHAIN_PKG=${{ inputs.toolchain }}" >> $GITHUB_ENV
+              ;;
+            llvm*)
+              echo "TOOLCHAIN_PKG=${{ inputs.toolchain }}-lite" >> $GITHUB_ENV
+              ;;
+            *)
+              echo "Unknown toolchain '${{ inputs.toolchain }}'"
+              exit 1
+            esac
             echo "CROSS_TOOLCHAIN=${{ inputs.toolchain }}" >> $GITHUB_ENV
             echo "EXTRA_BUILD_ARGS=--cross-bindir=/usr/local/${{ inputs.toolchain }}/bin" >> $GITHUB_ENV
             echo "BUILD_ROUTE=--ca_build_path" >> $GITHUB_ENV
