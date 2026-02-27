@@ -49,6 +49,7 @@ setup_script () {
 }
 
 ca_build_path () {
+    command_wrapper sh .cirrus-ci/pkg-install.sh python3
     command_wrapper ./tools/build/make.py \
         --debug ${EXTRA_BUILD_ARGS} \
         TARGET="${TARGET}" \
