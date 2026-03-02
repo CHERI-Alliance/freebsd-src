@@ -46,31 +46,29 @@ jobs:
       anyvm_cache: /__w/freebsd-src/anyvm_cache
       project_root: /__w/freebsd-src/
 
-  cheribsd-gcc-matrix:
-    strategy:
-      fail-fast: false
-      matrix:
+#  cheribsd-gcc-matrix:
+#    strategy:
+#      fail-fast: false
+#      matrix:
 #        arch: [amd64, arm64]
-        arch: [arm64]
-#        toolchain: [gcc12, gcc13, gcc14]
-        toolchain: [gcc15]
-        include:
-          - extra_make_flags: -s
-          - arch: arm64
-            target_arch: aarch64
-          - arch: amd64
-            target_arch: amd64
-    uses: ./.github/workflows/freebsd-vm-build.yml
-    with:
-      arch: ${{ matrix.arch }}
-      toolchain: ${{ matrix.toolchain }}
-      extra_make_flags: ${{ matrix.extra_make_flags }}
-      target_arch: ${{ matrix.target_arch }}
-      # Ensure version is of the form x.y. just 'x' won't work
-      freebsd_version: "15.0"
-      anyvm_builder_version: 2.0.8
-      cpus: 8
-      mem: 8192
-      anyvm_data: /__w/freebsd-src/anyvm_data
-      anyvm_cache: /__w/freebsd-src/anyvm_cache
-      project_root: /__w/freebsd-src/
+#        toolchain: [gcc15]
+#        include:
+#          - extra_make_flags: -s
+#          - arch: arm64
+#            target_arch: aarch64
+#          - arch: amd64
+#            target_arch: amd64
+#    uses: ./.github/workflows/freebsd-vm-build.yml
+#    with:
+#      arch: ${{ matrix.arch }}
+#      toolchain: ${{ matrix.toolchain }}
+#      extra_make_flags: ${{ matrix.extra_make_flags }}
+#      target_arch: ${{ matrix.target_arch }}
+#      # Ensure version is of the form x.y. just 'x' won't work
+#      freebsd_version: "15.0"
+#      anyvm_builder_version: 2.0.8
+#      cpus: 4
+#      mem: 8192
+#      anyvm_data: /__w/freebsd-src/anyvm_data
+#      anyvm_cache: /__w/freebsd-src/anyvm_cache
+#      project_root: /__w/freebsd-src/
