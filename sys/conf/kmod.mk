@@ -384,8 +384,10 @@ afterinstall: _kldxref
 _kldxref: .PHONY
 	${KLDXREF_CMD} ${DESTDIR}${KMODDIR}
 .if defined(NO_ROOT) && defined(METALOG)
-	echo ".${DISTBASE}${KMODDIR}/linker.hints type=file uname=root gname=wheel mode=0644" | \
-	    cat -l >> ${METALOG}
+	if [ -e ${DESTDIR}${KMODDIR}/linker.hints ]; then \
+		echo ".${DISTBASE}${KMODDIR}/linker.hints type=file uname=root gname=wheel mode=0644" | \
+		    cat -l >> ${METALOG}; \
+	fi
 .endif
 .endif
 .endif # !target(realinstall)
