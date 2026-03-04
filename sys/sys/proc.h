@@ -360,7 +360,11 @@ struct thread {
 	/* Note: td_state must be accessed using TD_{GET,SET}_STATE(). */
 	union {
 		syscallarg_t	tdu_retval[2];
+#ifdef __CHERI__
+#define	tdu_off	tdu_retval[0]
+#else
 		off_t		tdu_off;
+#endif
 	} td_uretoff;			/* (k) Syscall aux returns. */
 #define td_retval	td_uretoff.tdu_retval
 	u_int		td_cowgen;	/* (k) Generation of COW pointers. */
