@@ -92,7 +92,7 @@
 #define	SYS_IOCTL_SMALL_SIZE	128	/* bytes */
 #define	SYS_IOCTL_SMALL_ALIGN	8	/* bytes */
 
-#ifdef __LP64__
+#if __SIZEOF_SIZE_T__ == 8
 static int iosize_max_clamp = 0;
 SYSCTL_INT(_debug, OID_AUTO, iosize_max_clamp, CTLFLAG_RW,
     &iosize_max_clamp, 0, "Clamp max i/o size to INT_MAX");
@@ -163,7 +163,7 @@ struct selfd {
 MALLOC_DEFINE(M_SELFD, "selfd", "selfd");
 static struct mtx_pool *mtxpool_select;
 
-#ifdef __LP64__
+#if __SIZEOF_SIZE_T__ == 8
 size_t
 devfs_iosize_max(void)
 {
