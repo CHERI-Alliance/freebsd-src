@@ -83,11 +83,23 @@ cpu_fork(struct thread *td1, struct proc *p2, struct thread *td2, int flags)
 		 * in cpu_switch, but if userland changes these then forks
 		 * this may not have happened.
 		 */
+#ifdef __CHERI__
+		td1->td_pcb->pcb_tpidr_el0 = READ_SPECIALREG_CAP(ctpidr_el0);
+		td1->td_pcb->pcb_tpidrro_el0 =
+		    READ_SPECIALREG_CAP(ctpidrro_el0);
+#else
 		td1->td_pcb->pcb_tpidr_el0 = READ_SPECIALREG(tpidr_el0);
 		td1->td_pcb->pcb_tpidrro_el0 = READ_SPECIALREG(tpidrro_el0);
+#endif
 #ifdef VFP
 		if ((td1->td_pcb->pcb_fpflags & PCB_FP_STARTED) != 0)
 			vfp_save_state(td1, td1->td_pcb);
+#endif
+#ifdef __CHERI__
+		td1->td_pcb->pcb_cid_el0 = READ_SPECIALREG_CAP(cid_el0);
+		td1->td_pcb->pcb_rcsp_el0 = READ_SPECIALREG_CAP(rcsp_el0);
+		td1->td_pcb->pcb_rddc_el0 = READ_SPECIALREG_CAP(rddc_el0);
+		td1->td_pcb->pcb_rctpidr_el0 = READ_SPECIALREG_CAP(rctpidr_el0);
 #endif
 	}
 
@@ -96,6 +108,10 @@ cpu_fork(struct thread *td1, struct proc *p2, struct thread *td2, int flags)
 
 	/* Clear the debug register state. */
 	bzero(&pcb2->pcb_dbg_regs, sizeof(pcb2->pcb_dbg_regs));
+
+#ifdef __CHERI__
+	p2->p_md.md_sigcode = td1->td_proc->p_md.md_sigcode;
+#endif
 
 #ifdef PAC
 	ptrauth_fork(td2, td1);
@@ -106,7 +122,11 @@ cpu_fork(struct thread *td1, struct proc *p2, struct thread *td2, int flags)
 	bcopy(td1->td_frame, tf, sizeof(*tf));
 	tf->tf_x[0] = 0;
 	tf->tf_x[1] = 0;
-	tf->tf_spsr = td1->td_frame->tf_spsr & (PSR_M_32 | PSR_DAIF);
+	tf->tf_spsr = td1->td_frame->tf_spsr & (PSR_M_32 | PSR_DAIF
+#ifdef __CHERI__
+	    | PSR_C64
+#endif
+	    );
 
 	/* Set the return value registers for fork() */
 	td2->td_pcb->pcb_x[PCB_X19] = (uintptr_t)fork_return;
@@ -222,13 +242,21 @@ cpu_set_upcall(struct thread *td, void (*entry)(void *), void *arg,
 	if (td->td_frame->tf_spsr & PSR_M_32) {
 		tf->tf_x[13] = STACKALIGN((uintptr_t)stack->ss_sp +
 		    stack->ss_size);
-		if ((register_t)entry & 1)
+		if ((uintptr_t)entry & 1)
 			tf->tf_spsr |= PSR_T;
 	} else
 		tf->tf_sp = STACKALIGN((uintptr_t)stack->ss_sp +
 		    stack->ss_size);
-	tf->tf_elr = (register_t)entry;
-	tf->tf_x[0] = (register_t)arg;
+
+#ifdef __CHERI__
+	if (SV_PROC_FLAG(td->td_proc, SV_CHERI)) {
+		trapframe_set_elr(tf, (uintptr_t)entry);
+	} else
+		legacyabi_thread_setregs(td, (unsigned long)(uintptr_t)entry);
+#else
+	tf->tf_elr = (uintptr_t)entry;
+#endif
+	tf->tf_x[0] = (uintptr_t)arg;
 	tf->tf_x[29] = 0;
 	tf->tf_lr = 0;
 	return (0);
@@ -239,22 +267,31 @@ cpu_set_user_tls(struct thread *td, void *tls_base, int thr_flags __unused)
 {
 	struct pcb *pcb;
 
-	if ((uintptr_t)tls_base >= VM_MAXUSER_ADDRESS)
+	if ((ptraddr_t)tls_base >= VM_MAXUSER_ADDRESS)
 		return (EINVAL);
 
 	pcb = td->td_pcb;
 	if (td->td_frame->tf_spsr & PSR_M_32) {
 		/* 32bits arm stores the user TLS into tpidrro */
-		pcb->pcb_tpidrro_el0 = (register_t)tls_base;
-		pcb->pcb_tpidr_el0 = (register_t)tls_base;
+		pcb->pcb_tpidrro_el0 = (uintptr_t)tls_base;
+		pcb->pcb_tpidr_el0 = (uintptr_t)tls_base;
 		if (td == curthread) {
+#ifdef __CHERI__
+			WRITE_SPECIALREG_CAP(ctpidrro_el0, tls_base);
+			WRITE_SPECIALREG_CAP(ctpidr_el0, tls_base);
+#else
 			WRITE_SPECIALREG(tpidrro_el0, tls_base);
 			WRITE_SPECIALREG(tpidr_el0, tls_base);
+#endif
 		}
 	} else {
-		pcb->pcb_tpidr_el0 = (register_t)tls_base;
+		pcb->pcb_tpidr_el0 = (uintptr_t)tls_base;
 		if (td == curthread)
+#ifdef __CHERI__
+			WRITE_SPECIALREG_CAP(ctpidr_el0, tls_base);
+#else
 			WRITE_SPECIALREG(tpidr_el0, tls_base);
+#endif
 	}
 
 	return (0);
