@@ -34,8 +34,11 @@
 
 #ifndef	_KERNEL
 #include <sys/queue.h>
+
+#include <stddef.h>
 #else
 #include <sys/_mutex.h>
+#include <sys/stddef.h>
 #include <machine/_bus.h>
 #include <machine/resource.h>
 #endif
@@ -71,9 +74,9 @@ enum	rman_type { RMAN_UNINIT = 0, RMAN_GAUGE, RMAN_ARRAY };
  * Userspace-exported structures.
  */
 struct u_resource {
-	uintptr_t	r_handle;		/* resource uniquifier */
-	uintptr_t	r_parent;		/* parent rman */
-	uintptr_t	r_device;		/* device owning this resource */
+	ptraddr_t	r_handle;		/* resource uniquifier */
+	ptraddr_t	r_parent;		/* parent rman */
+	ptraddr_t	r_device;		/* device owning this resource */
 	char		r_devname[RM_TEXTLEN];	/* device name XXX obsolete */
 
 	rman_res_t	r_start;		/* offset in resource space */
@@ -82,7 +85,7 @@ struct u_resource {
 };
 
 struct u_rman {
-	uintptr_t	rm_handle;		/* rman uniquifier */
+	ptraddr_t	rm_handle;		/* rman uniquifier */
 	char		rm_descr[RM_TEXTLEN];	/* rman description */
 
 	rman_res_t	rm_start;		/* base of managed region */
