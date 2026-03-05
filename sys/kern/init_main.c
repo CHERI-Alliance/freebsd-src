@@ -98,6 +98,10 @@
 #include <ddb/ddb.h>
 #include <ddb/db_sym.h>
 
+#ifdef __CHERI__
+#include <cheri/cheri.h>
+#endif
+
 void mi_startup(void);				/* Should be elsewhere */
 
 /* Components of the first process -- never freed. */
@@ -621,8 +625,26 @@ proc0_init(void *dummy __unused)
 	 * proc0 is not expected to enter usermode, so there is no special
 	 * handling for sv_minuser here, like is done for exec_new_vmspace().
 	 */
+#ifndef __CHERI__
 	vm_map_init(&vmspace0.vm_map, vmspace_pmap(&vmspace0),
 	    p->p_sysent->sv_minuser, p->p_sysent->sv_maxuser);
+#else
+	/*
+	 * We provide dummy userspace capabilities for the map.  Note
+	 * that we strip all access permission because proc0 is not
+	 * expected to enter usermode.
+	 */
+	uintptr_t minuser_cap =
+	    (uintptr_t)cheri_capability_build_user_rwx_unchecked(0,
+	    p->p_sysent->sv_minuser,
+	    p->p_sysent->sv_maxuser - p->p_sysent->sv_minuser,
+	    p->p_sysent->sv_minuser);
+
+	vm_map_init(&vmspace0.vm_map, vmspace_pmap(&vmspace0),
+	    minuser_cap,
+	    minuser_cap + cheri_length_get(minuser_cap));
+	vmspace0.vm_map.flags |= MAP_RESERVATIONS;
+#endif
 
 	/*
 	 * Call the init and ctor for the new thread and proc.  We wait
