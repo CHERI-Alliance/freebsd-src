@@ -116,6 +116,20 @@
 #endif
 .endmacro
 
+.macro buildptr_pagetable dregn, sym, scratchn
+	adrp	PTR(\dregn), \sym
+	add	x\dregn, x\dregn, :lo12:\sym
+#ifdef __CHERI__
+	cvtd	c\dregn, x\dregn
+	adrp	PTR(\scratchn), \sym\()_end
+	add	x\scratchn, x\scratchn, :lo12:\sym\()_end
+	sub	x\scratchn, x\scratchn, x\dregn
+	scbnds	c\dregn, c\dregn, x\scratchn
+	ldr	x\scratchn, =~CHERI_PERMS_KERNEL_PAGETABLE
+	clrperm	c\dregn, c\dregn, x\scratchn
+#endif
+.endmacro
+
 /*
  * Jump into the kernel virtual address at the given position
  * This also restricts the kernel PCC
@@ -797,7 +811,6 @@ LENTRY(create_pagetables)
 	clrperm	c6, c6, x7
 	scvalue	c27, c6, x27
 #endif
-	mov	PTR(26), PTR(6)	/* Save start addr for later */
 1:
 	stp	xzr, xzr, [PTR(6)], #16
 	stp	xzr, xzr, [PTR(6)], #16
@@ -932,8 +945,7 @@ common:
 
 	/* Build the L3 table holding the end of the exectuable code */
 	lsl	x15, x25, #(PTE_SHIFT)
-	adrp	PTR(6), pagetable_l3_ttbr1
-	add	x6, x6, :lo12:pagetable_l3_ttbr1
+	buildptr_pagetable	6, pagetable_l3_ttbr1, 11
 	ldr	x7, =(ATTR_S1_IDX(VM_MEMATTR_WRITE_BACK) | \
 	    ATTR_S1_AP(ATTR_S1_AP_RO))
 	ldr	x8, =(KERNBASE)
@@ -954,14 +966,12 @@ common:
 
 	/* Link the l2 -> l3 table */
 	mov	x9, x6
-	adrp	PTR(6), pagetable_l2_ttbr1
-	add	x6, x6, :lo12:pagetable_l2_ttbr1
+	buildptr_pagetable	6, pagetable_l2_ttbr1, 11
 	bl	link_l2_pagetable
 #endif
 
 	/* Create the kernel space PTE table */
-	adrp	PTR(6), LL_PAGE_TABLE
-	add	x6, x6, :lo12:LL_PAGE_TABLE
+	buildptr_pagetable	6, LL_PAGE_TABLE, 11
 	ldr	x7, =(ATTR_S1_IDX(VM_MEMATTR_WRITE_BACK) | \
 	    ATTR_S1_AP(ATTR_S1_AP_RO))
 	mov	x8, #(KERNBASE)
@@ -990,21 +1000,18 @@ common:
 #if PAGE_SIZE != PAGE_SIZE_4K
 	/* Link the l2 -> l3 table */
 	mov	x9, x6
-	adrp	PTR(6), pagetable_l2_ttbr1
-	add	x6, x6, :lo12:pagetable_l2_ttbr1
+	buildptr_pagetable	6, pagetable_l2_ttbr1, 11
 	bl	link_l2_pagetable
 #endif
 
 	/* Link the l1 -> l2 table */
 	mov	x9, x6
-	adrp	PTR(6), pagetable_l1_ttbr1
-	add	x6, x6, :lo12:pagetable_l1_ttbr1
+	buildptr_pagetable	6, pagetable_l1_ttbr1, 11
 	bl	link_l1_pagetable
 
 	/* Link the l0 -> l1 table */
 	mov	x9, x6
-	adrp	PTR(6), pagetable_l0_ttbr1
-	add	x6, x6, :lo12:pagetable_l0_ttbr1
+	buildptr_pagetable	6, pagetable_l0_ttbr1, 11
 	mov	x10, #1
 	bl	link_l0_pagetable
 
@@ -1016,8 +1023,7 @@ common:
 	 * They are only needed early on, so the VA = PA map is uncached.
 	 */
 
-	adrp	PTR(6), pagetable_l2_ttbr0_bootstrap
-	add	x6, x6, :lo12:pagetable_l2_ttbr0_bootstrap
+	buildptr_pagetable	6, pagetable_l2_ttbr0_bootstrap, 11
 
 	/* Create the VA = PA map */
 	mov	x7, #(ATTR_S1_nG | ATTR_S1_IDX(VM_MEMATTR_WRITE_BACK))
@@ -1072,14 +1078,12 @@ common:
 
 	/* Link the l1 -> l2 table */
 	mov	x9, x6
-	adrp	PTR(6), pagetable_l1_ttbr0_bootstrap
-	add	x6, x6, :lo12:pagetable_l1_ttbr0_bootstrap
+	buildptr_pagetable	6, pagetable_l1_ttbr0_bootstrap, 11
 	bl	link_l1_pagetable
 
 	/* Link the l0 -> l1 table */
 	mov	x9, x6
-	adrp	PTR(6), pagetable_l0_ttbr0_bootstrap
-	add	x6, x6, :lo12:pagetable_l0_ttbr0_bootstrap
+	buildptr_pagetable	6, pagetable_l0_ttbr0_bootstrap, 11
 	mov	x10, #1
 	bl	link_l0_pagetable
 
@@ -1459,23 +1463,31 @@ initstack_end:
 pagetable:
 pagetable_l3_ttbr1:
 	.space	(PAGE_SIZE * L3_PAGE_COUNT)
+pagetable_l3_ttbr1_end:
 pagetable_l2_ttbr1:
 	.space	PAGE_SIZE
+pagetable_l2_ttbr1_end:
 pagetable_l1_ttbr1:
 	.space	PAGE_SIZE
+pagetable_l1_ttbr1_end:
 	.globl pagetable_l0_ttbr1
 	.type	pagetable_l0_ttbr1,#object
 pagetable_l0_ttbr1:
 	.space	PAGE_SIZE
+pagetable_l0_ttbr1_end:
 	.size	pagetable_l0_ttbr1, . - pagetable_l0_ttbr1
 pagetable_l2_ttbr0_bootstrap:
 	.space	PAGE_SIZE
+pagetable_l2_ttbr0_bootstrap_end:
 pagetable_l1_ttbr0_bootstrap:
 	.space	PAGE_SIZE
+pagetable_l1_ttbr0_bootstrap_end:
 pagetable_l0_ttbr0_bootstrap:
 	.space	PAGE_SIZE
+pagetable_l0_ttbr0_bootstrap_end:
 pagetable_l0_ttbr0:
 	.space	PAGE_SIZE
+pagetable_l0_ttbr0_end:
 pagetable_end:
 
 	.type	el2_pagetable,#object
