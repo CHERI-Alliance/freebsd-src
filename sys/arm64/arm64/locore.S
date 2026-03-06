@@ -1195,6 +1195,9 @@ LENTRY(build_l2_block_pagetable)
 
 	/* Build the L2 block entry */
 	orr	x12, x7, #L2_BLOCK
+#ifdef __CHERI__
+	orr	x12, x12, #(ATTR_CAP_RW)
+#endif
 	orr	x12, x12, #(ATTR_AF)
 	orr	x12, x12, #(ATTR_S1_UXN)
 #ifdef __ARM_FEATURE_BTI_DEFAULT
