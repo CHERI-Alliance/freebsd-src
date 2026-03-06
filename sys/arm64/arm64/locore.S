@@ -1101,7 +1101,7 @@ common:
 	mov	x27, x6
 
 	/* Restore the Link register */
-	mov	x30, x5
+	mov	PTR(30), PTR(5)
 	ret
 LEND(create_pagetables)
 
