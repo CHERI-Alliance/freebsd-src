@@ -342,8 +342,14 @@ virtdone:
 	str	x22, [x1, :lo12:pmap_sh_attr]
 #endif
 #ifdef __ARM_FEATURE_BTI_DEFAULT
-	adrp	PTR(1), pmap_gp_attr
-	str	x21, [PTR(1), :lo12:pmap_gp_attr]
+#ifdef __CHERI__
+	adrp	c1, :got:pmap_gp_attr
+	ldr	c1, [c1, :got_lo12:pmap_gp_attr]
+	str	x21, [c1]
+#else
+	adrp	x1, pmap_gp_attr
+	str	x21, [x1, :lo12:pmap_gp_attr]
+#endif
 #endif
 
 #ifdef KASAN
