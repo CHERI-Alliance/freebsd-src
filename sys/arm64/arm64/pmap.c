@@ -1006,6 +1006,13 @@ pmap_pte_prot(pmap_t pmap, vm_prot_t prot)
 			val |= ATTR_S2_XN(ATTR_S2_XN_ALL);
 	}
 
+#ifdef __CHERI__
+	if (VM_PROT_HAS_READ_CAP(prot))
+		val |= ATTR_LC_ENABLED;
+	if (VM_PROT_HAS_WRITE_CAP(prot))
+		val |= ATTR_SC;
+#endif
+
 	return (val);
 }
 
