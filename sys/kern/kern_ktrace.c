@@ -3,8 +3,13 @@
  *
  * Copyright (c) 1989, 1993
  *	The Regents of the University of California.
- * Copyright (c) 2005 Robert N. M. Watson
+ * Copyright (c) 2005, 2016 Robert N. M. Watson
+ * Copyright (c) 2015-2016 SRI International
  * All rights reserved.
+ *
+ * This software was developed by SRI International and the University of
+ * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
+ * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -544,7 +549,7 @@ ktrsyscall(int code, int narg, syscallarg_t args[])
 	struct ktr_request *req;
 	struct ktr_syscall *ktp;
 	size_t buflen;
-	char *buf = NULL;
+	register_t *buf = NULL;
 
 	if (__predict_false(curthread->td_pflags & TDP_INKTRACE))
 		return;
@@ -552,7 +557,12 @@ ktrsyscall(int code, int narg, syscallarg_t args[])
 	buflen = sizeof(register_t) * narg;
 	if (buflen > 0) {
 		buf = malloc(buflen, M_KTRACE, M_WAITOK);
+#ifdef __CHERI__
+		for (int i = 0; i < narg; i++)
+			buf[i] = (register_t)args[i];
+#else
 		bcopy(args, buf, buflen);
+#endif
 	}
 	req = ktr_getrequest(KTR_SYSCALL);
 	if (req == NULL) {
