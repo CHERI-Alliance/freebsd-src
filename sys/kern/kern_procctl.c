@@ -1012,6 +1012,7 @@ struct procctl_cmd_info {
 	bool copyout_on_error : 1;
 	bool no_nonnull_data : 1;
 	bool need_candebug : 1;
+	bool copyinptr : 1;
 	int copyin_sz;
 	int copyout_sz;
 	int (*exec)(struct thread *, struct proc *, void *);
@@ -1047,6 +1048,7 @@ static const struct procctl_cmd_info procctl_cmds_info[] = {
 	    { .lock_tree = PCTL_SLOCKED, .one_proc = true,
 	      .esrch_is_einval = false, .no_nonnull_data = false,
 	      .need_candebug = false,
+	      .copyinptr = true,
 	      .copyin_sz = sizeof(struct procctl_reaper_pids),
 	      .copyout_sz = 0,
 	      .exec = reap_getpids, .copyout_on_error = false, },
@@ -1189,7 +1191,10 @@ sys_procctl(struct thread *td, struct procctl_args *uap)
 	bzero(&x, sizeof(x));
 
 	if (cmd_info->copyin_sz > 0) {
-		error = copyin(uap->data, &x, cmd_info->copyin_sz);
+		if (cmd_info->copyinptr)
+			error = copyinptr(uap->data, &x, cmd_info->copyin_sz);
+		else
+			error = copyin(uap->data, &x, cmd_info->copyin_sz);
 		if (error != 0)
 			return (error);
 	} else if (cmd_info->no_nonnull_data && uap->data != NULL) {
