@@ -93,6 +93,10 @@
 #include <sys/sysproto.h>
 #include <sys/jail.h>
 
+#ifdef __CHERI__
+#include <cheri/cheric.h>
+#endif
+
 #include <security/audit/audit.h>
 #include <security/mac/mac_framework.h>
 
@@ -126,6 +130,11 @@ static int shmget_allocate_segment(struct thread *td, key_t key, size_t size,
     int mode);
 static int shmget_existing(struct thread *td, size_t size, int shmflg,
     int mode, int segnum);
+static int kern_shmat(struct thread *td, int shmid,
+	const void *shmaddr, int shmflg);
+static int kern_shmdt(struct thread *td, const void *shmaddr);
+static int user_shmctl(struct thread *td, int shmid, int cmd,
+    struct shmid_ds *ubuf);
 static void shmrealloc(void);
 static int shminit(void);
 static int sysvshm_modload(struct module *, int, void *);
@@ -250,6 +259,10 @@ shm_deallocate_segment(struct shmid_kernel *shmseg)
 	vm_object_deallocate(shmseg->object);
 	shmseg->object = NULL;
 	size = round_page(shmseg->u.shm_segsz);
+#ifdef __CHERI__
+	if (SV_CURPROC_FLAG(SV_CHERI))
+		size = CHERI_REPRESENTABLE_LENGTH(size);
+#endif
 	shm_committed -= btoc(size);
 	shm_nused--;
 	shmseg->u.shm_perm.mode = SHMSEG_FREE;
@@ -276,6 +289,10 @@ shm_delete_mapping(struct vmspace *vm, struct shmmap_state *shmmap_s)
 
 	shmseg = &shmsegs[segnum];
 	size = round_page(shmseg->u.shm_segsz);
+#ifdef __CHERI__
+	if (SV_CURPROC_FLAG(SV_CHERI))
+		size = CHERI_REPRESENTABLE_LENGTH(size);
+#endif
 	result = vm_map_remove(&vm->vm_map, shmmap_s->va, shmmap_s->va + size);
 	if (result != KERN_SUCCESS)
 		return (EINVAL);
@@ -329,6 +346,7 @@ kern_shmdt_locked(struct thread *td, const void *shmaddr)
 {
 	struct proc *p = td->td_proc;
 	struct shmmap_state *shmmap_s;
+	static struct shmid_kernel *shmseg __unused;
 #ifdef MAC
 	int error;
 #endif
@@ -342,6 +360,8 @@ kern_shmdt_locked(struct thread *td, const void *shmaddr)
 		return (EINVAL);
 	AUDIT_ARG_SVIPC_ID(shmmap_s->shmid);
 	for (i = 0; i < shminfo.shmseg; i++, shmmap_s++) {
+		KASSERT(shmmap_s->shmid == -1 || shmmap_s->va != 0,
+		    ("SysV SHM segment %d mapped at NULL\n", shmmap_s->shmid));
 		if (shmmap_s->shmid != -1 &&
 		    shmmap_s->va == (vm_offset_t)shmaddr) {
 			break;
@@ -349,9 +369,19 @@ kern_shmdt_locked(struct thread *td, const void *shmaddr)
 	}
 	if (i == shminfo.shmseg)
 		return (EINVAL);
+	shmseg = &shmsegs[IPCID_TO_IX(shmmap_s->shmid)];
+#ifdef __CHERI__
+	/*
+	 * Ideally we'd check CHERI_PERM_STORE when this wasn't attached
+	 * with SHM_RDONLY, but that information isn't available here.
+	 */
+	if (SV_PROC_FLAG(td->td_proc, SV_CHERI) &&
+	    !cheri_can_access(shmaddr, CHERI_PERM_SW_VMEM | CHERI_PERM_LOAD,
+	    shmseg->u.shm_segsz))
+		return (EPROT);
+#endif
 #ifdef MAC
-	error = mac_sysvshm_check_shmdt(td->td_ucred,
-	    &shmsegs[IPCID_TO_IX(shmmap_s->shmid)]);
+	error = mac_sysvshm_check_shmdt(td->td_ucred, shmseg);
 	if (error != 0)
 		return (error);
 #endif
@@ -366,10 +396,18 @@ struct shmdt_args {
 int
 sys_shmdt(struct thread *td, struct shmdt_args *uap)
 {
+	const void *shmaddr = uap->shmaddr;
+
+	return (kern_shmdt(td, shmaddr));
+}
+
+static int
+kern_shmdt(struct thread *td, const void *shmaddr)
+{
 	int error;
 
 	SYSVSHM_LOCK();
-	error = kern_shmdt_locked(td, uap->shmaddr);
+	error = kern_shmdt_locked(td, shmaddr);
 	SYSVSHM_UNLOCK();
 	return (error);
 }
@@ -382,7 +420,7 @@ kern_shmat_locked(struct thread *td, int shmid, const void *shmaddr,
 	struct proc *p = td->td_proc;
 	struct shmid_kernel *shmseg;
 	struct shmmap_state *shmmap_s;
-	vm_pointer_t attach_va;
+	vm_pointer_t attach_va = 0, max_va;
 	vm_prot_t prot;
 	vm_size_t size;
 	int cow, error, find_space, i, rv;
@@ -423,17 +461,59 @@ kern_shmat_locked(struct thread *td, int shmid, const void *shmaddr,
 	if (i >= shminfo.shmseg)
 		return (EMFILE);
 	size = round_page(shmseg->u.shm_segsz);
+#ifdef __CHERI__
+	KASSERT(size == CHERI_REPRESENTABLE_LENGTH(size),
+	    ("shmget left unrepresentable size %zu", size));
+#endif
 	prot = VM_PROT_READ;
 	cow = MAP_INHERIT_SHARE | MAP_PREFAULT_PARTIAL;
 	if ((shmflg & SHM_RDONLY) == 0)
 		prot |= VM_PROT_WRITE;
 	if (shmaddr != NULL) {
+		attach_va = (vm_offset_t)shmaddr;
 		if ((shmflg & SHM_RND) != 0)
-			attach_va = rounddown2((vm_offset_t)shmaddr, SHMLBA);
+			attach_va = rounddown2(attach_va, SHMLBA);
 		else if (((vm_offset_t)shmaddr & (SHMLBA-1)) == 0)
 			attach_va = (vm_offset_t)shmaddr;
 		else
 			return (EINVAL);
+#ifdef __CHERI__
+		/*
+		 * XXX: in principle we should be able to use a reservation
+		 * extending before and after the entry to allow arbitrary
+		 * addresses (subject to available space...).
+		 */
+		if (CHERI_REPRESENTABLE_ALIGN_DOWN(attach_va, size) !=
+		    attach_va)
+			return (EINVAL);
+		if (cheri_tag_get(shmaddr)) {
+			int reqperm;
+
+			/*
+			 * Fixed mapping through a capability only makes
+			 * sense if we're knowingly remapping.
+			 */
+			if ((shmflg & SHM_REMAP) == 0)
+				return (EINVAL);
+
+			reqperm = CHERI_PERM_SW_VMEM | CHERI_PERM_LOAD;
+			if ((shmflg & SHM_RDONLY) == 0)
+				reqperm |= CHERI_PERM_STORE;
+
+			/* XXX: require that a reservation exists. */
+			/* Handle any rounding above */
+			shmaddr = cheri_address_set(shmaddr, attach_va);
+			if (!cheri_can_access(shmaddr, reqperm, size))
+				return (EPROT);
+		} else {
+			/* As with mmap, untagged implies exclusive. */
+			if ((shmflg & SHM_REMAP) != 0)
+				return (EINVAL);
+			shmaddr = (void * __capability)cheri_address_set(
+			    vm_map_rootcap(&td->td_proc->p_vmspace->vm_map),
+			    attach_va);
+		}
+#endif
 		if ((shmflg & SHM_REMAP) != 0)
 			cow |= MAP_REMAP;
 		find_space = VMFS_NO_SPACE;
@@ -444,23 +524,68 @@ kern_shmat_locked(struct thread *td, int shmid, const void *shmaddr,
 		 */
 		attach_va = round_page((vm_offset_t)p->p_vmspace->vm_daddr +
 		    lim_max(td, RLIMIT_DATA));
-		find_space = VMFS_OPTIMAL_SPACE;
+#ifdef __CHERI__
+		if (SV_CURPROC_FLAG(SV_CHERI)) {
+			/*
+			 * Require representable alignment for large objects
+			 * and preserve the fragmentation promoting default
+			 * of attempting to superpage align other objects.
+			 *
+			 * XXX: 12 should probably be the superpage shift.
+			 */
+			find_space =
+			    CHERI_REPRESENTABLE_ALIGNMENT(size) < (1UL << 12) ?
+			    VMFS_OPTIMAL_SPACE :
+			    VMFS_ALIGNED_SPACE(CHERI_ALIGN_SHIFT(size));
+			shmaddr = (void * __capability)cheri_address_set(
+			    vm_map_rootcap(&td->td_proc->p_vmspace->vm_map),
+			    attach_va);
+		} else
+#endif
+			find_space = VMFS_OPTIMAL_SPACE;
 	}
-
+#ifdef __CHERI__
+	max_va = cheri_top_get(shmaddr);
+#else
+	max_va = 0;
+#endif
 	vm_object_reference(shmseg->object);
 	rv = vm_map_find(&p->p_vmspace->vm_map, shmseg->object, 0, &attach_va,
-	    size, 0, find_space, prot, prot, cow);
+	    size, max_va, find_space, prot, prot, cow);
 	if (rv != KERN_SUCCESS) {
 		vm_object_deallocate(shmseg->object);
 		return (ENOMEM);
 	}
+#ifdef __CHERI__
+	KASSERT(cheri_tag_get(attach_va), ("Expected valid capability"));
+	KASSERT(cheri_length_get(attach_va) == size,
+	    ("Inexact bounds expected %zx found %zx",
+	    (size_t)size, (size_t)cheri_length_get(attach_va)));
+#endif
 
 	shmmap_s->va = attach_va;
 	shmmap_s->shmid = shmid;
 	shmseg->u.shm_lpid = p->p_pid;
 	shmseg->u.shm_atime = time_second;
 	shmseg->u.shm_nattch++;
-	td->td_retval[0] = attach_va;
+#ifdef __CHERI__
+	if (SV_CURPROC_FLAG(SV_CHERI)) {
+		/*
+		 * XXX-AM: The purecap kernel reservations should have taken care of this
+		 * and just return attach_va, as the capability will be derived from the
+		 * root map capability.
+		 */
+		shmaddr = cheri_bounds_set_exact(cheri_address_set(shmaddr,
+		     attach_va), size);
+		/* Remove inappropriate permissions. */
+		shmaddr = cheri_perms_and(shmaddr, ~(CHERI_PERM_EXECUTE |
+		    CHERI_PERM_LOAD_CAP | CHERI_PERM_STORE_CAP |
+		    ((shmflg & SHM_RDONLY) != 0 ? CHERI_PERM_STORE : 0)));
+		td->td_retval[0] = (uintptr_t)__DECONST(void *,
+		    shmaddr);
+	} else
+#endif
+		td->td_retval[0] = attach_va;
 	return (error);
 }
 
@@ -485,8 +610,19 @@ struct shmat_args {
 int
 sys_shmat(struct thread *td, struct shmat_args *uap)
 {
+	const char *shmaddr = uap->shmaddr;
 
-	return (kern_shmat(td, uap->shmid, uap->shmaddr, uap->shmflg));
+#ifdef __CHERI__
+	/*
+	 * Require that shmaddr be NULL-derived or a valid, unsealed,
+	 * SW_VMEM bearing capability.
+	 */
+	if (!cheri_is_null_derived(shmaddr) &&
+	    (!cheri_tag_get(shmaddr) || cheri_is_sealed(shmaddr) ||
+	    (cheri_perms_get(shmaddr) & CHERI_PERM_SW_VMEM) == 0))
+		return (EPROT);
+#endif
+	return (kern_shmat(td, uap->shmid, shmaddr, uap->shmflg));
 }
 
 static int
@@ -614,6 +750,12 @@ struct shmctl_args {
 int
 sys_shmctl(struct thread *td, struct shmctl_args *uap)
 {
+	return (user_shmctl(td, uap->shmid, uap->cmd, uap->buf));
+}
+
+static int
+user_shmctl(struct thread *td, int shmid, int cmd, struct shmid_ds *ubuf)
+{
 	int error;
 	struct shmid_ds buf;
 	size_t bufsz;
@@ -623,24 +765,23 @@ sys_shmctl(struct thread *td, struct shmctl_args *uap)
 	 * Linux binaries.  If we see the call come through the FreeBSD ABI,
 	 * return an error back to the user since we do not to support this.
 	 */
-	if (uap->cmd == IPC_INFO || uap->cmd == SHM_INFO ||
-	    uap->cmd == SHM_STAT)
+	if (cmd == IPC_INFO || cmd == SHM_INFO || cmd == SHM_STAT)
 		return (EINVAL);
 
 	/* IPC_SET needs to copyin the buffer before calling kern_shmctl */
-	if (uap->cmd == IPC_SET) {
-		if ((error = copyin(uap->buf, &buf, sizeof(struct shmid_ds))))
+	if (cmd == IPC_SET) {
+		if ((error = copyin(ubuf, &buf, sizeof(struct shmid_ds))))
 			goto done;
 	}
 
-	error = kern_shmctl(td, uap->shmid, uap->cmd, (void *)&buf, &bufsz);
+	error = kern_shmctl(td, shmid, cmd, &buf, &bufsz);
 	if (error)
 		goto done;
 
 	/* Cases in which we need to copyout */
-	switch (uap->cmd) {
+	switch (cmd) {
 	case IPC_STAT:
-		error = copyout(&buf, uap->buf, bufsz);
+		error = copyout(&buf, ubuf, bufsz);
 		break;
 	}
 
@@ -693,6 +834,10 @@ shmget_allocate_segment(struct thread *td, key_t key, size_t size, int mode)
 	if (shm_nused >= shminfo.shmmni) /* Any shmids left? */
 		return (ENOSPC);
 	size = round_page(size);
+#ifdef __CHERI__
+	if (SV_CURPROC_FLAG(SV_CHERI))
+		size = CHERI_REPRESENTABLE_LENGTH(size);
+#endif
 	if (shm_committed + btoc(size) > shminfo.shmall)
 		return (ENOMEM);
 	if (shm_last_free < 0) {
@@ -731,7 +876,7 @@ shmget_allocate_segment(struct thread *td, key_t key, size_t size, int mode)
 	 * to.
 	 */
 	shm_object = vm_pager_allocate(shm_use_phys ? OBJT_PHYS : OBJT_SWAP,
-	    0, size, VM_PROT_DEFAULT, 0, cred);
+	    0, size, VM_PROT_DEFAULT | VM_PROT_CAP, 0, cred);
 	if (shm_object == NULL) {
 #ifdef RACCT
 		if (racct_enable) {
@@ -745,7 +890,7 @@ shmget_allocate_segment(struct thread *td, key_t key, size_t size, int mode)
 	}
 
 	VM_OBJECT_WLOCK(shm_object);
-	vm_object_set_flag(shm_object, OBJ_SYSVSHM);
+	vm_object_set_flag(shm_object, OBJ_SYSVSHM | OBJ_HASCAP);
 	VM_OBJECT_WUNLOCK(shm_object);
 
 	shmseg->object = shm_object;
@@ -1065,6 +1210,7 @@ static int
 sysctl_shmsegs(SYSCTL_HANDLER_ARGS)
 {
 	struct shmid_kernel tshmseg;
+	struct shmid_kernel_sysctl tshmseg_u;
 #ifdef COMPAT_FREEBSD32
 	struct shmid_kernel32 tshmseg32;
 #endif
@@ -1105,11 +1251,10 @@ sysctl_shmsegs(SYSCTL_HANDLER_ARGS)
 		} else
 #endif
 		{
-			tshmseg.object = NULL;
-			tshmseg.label = NULL;
-			tshmseg.cred = NULL;
-			outaddr = &tshmseg;
-			outsize = sizeof(tshmseg);
+			bzero(&tshmseg_u, sizeof(tshmseg_u));
+			tshmseg_u.u = tshmseg.u;
+			outaddr = &tshmseg_u;
+			outsize = sizeof(tshmseg_u);
 		}
 		error = SYSCTL_OUT(req, outaddr, outsize);
 		if (error != 0)
@@ -1680,7 +1825,7 @@ freebsd7_shmctl(struct thread *td, struct freebsd7_shmctl_args *uap)
 
 	/* IPC_SET needs to copyin the buffer before calling kern_shmctl */
 	if (uap->cmd == IPC_SET) {
-		if ((error = copyin(uap->buf, &old, sizeof(old))))
+		if ((error = copyinptr(uap->buf, &old, sizeof(old))))
 			goto done;
 		ipcperm_old2new(&old.shm_perm, &buf.shm_perm);
 		CP(old, buf, shm_segsz);
@@ -1715,7 +1860,7 @@ freebsd7_shmctl(struct thread *td, struct freebsd7_shmctl_args *uap)
 		CP(buf, old, shm_dtime);
 		CP(buf, old, shm_ctime);
 		old.shm_internal = NULL;
-		error = copyout(&old, uap->buf, sizeof(old));
+		error = copyoutptr(&old, uap->buf, sizeof(old));
 		break;
 	}
 
