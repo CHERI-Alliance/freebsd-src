@@ -696,11 +696,13 @@ struct ioctl_args {
 int
 sys_ioctl(struct thread *td, struct ioctl_args *uap)
 {
-	return (user_ioctl(td, uap->fd, uap->com, uap->data, &uap->data));
+	return (user_ioctl(td, uap->fd, uap->com, uap->data, &uap->data,
+	    true));
 }
 
 int
-user_ioctl(struct thread *td, int fd, u_long ucom, void *udata, void *datap)
+user_ioctl(struct thread *td, int fd, u_long ucom, void *udata, void *datap,
+    bool copycaps)
 {
 	u_char smalldata[SYS_IOCTL_SMALL_SIZE] __aligned(SYS_IOCTL_SMALL_ALIGN);
 	uint32_t com;
@@ -747,7 +749,10 @@ user_ioctl(struct thread *td, int fd, u_long ucom, void *udata, void *datap)
 	} else
 		data = datap;
 	if (com & IOC_IN) {
-		error = copyin(udata, data, size);
+		if (copycaps)
+			error = copyinptr(udata, data, size);
+		else
+			error = copyin(udata, data, size);
 		if (error != 0)
 			goto out;
 	} else if (com & IOC_OUT) {
@@ -760,8 +765,12 @@ user_ioctl(struct thread *td, int fd, u_long ucom, void *udata, void *datap)
 
 	error = kern_ioctl(td, fd, com, data);
 
-	if (error == 0 && (com & IOC_OUT))
-		error = copyout(data, udata, (u_int)size);
+	if (error == 0 && (com & IOC_OUT)) {
+		if (copycaps)
+			error = copyoutptr(data, udata, size);
+		else
+			error = copyout(data, udata, size);
+	}
 
 out:
 	if (size > SYS_IOCTL_SMALL_SIZE)
