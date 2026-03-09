@@ -114,6 +114,16 @@ _sglist_append_buf(struct sglist *sg, void *buf, size_t len, pmap_t pmap,
 	size_t seglen;
 	int error;
 
+#ifdef __CHERI__
+	/*
+	 * The memory at *buf will be accessed via physical addressing
+	 * (typically DMA).  The caller should verify the capability
+	 * permissions.
+	 */
+	if (!cheri_can_access(buf, 0, len))
+		return (EPROT);
+#endif
+
 	if (donep)
 		*donep = 0;
 	if (len == 0)
