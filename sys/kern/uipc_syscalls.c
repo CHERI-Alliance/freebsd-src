@@ -888,7 +888,7 @@ sys_sendmsg(struct thread *td, struct sendmsg_args *uap)
 	struct iovec *iov;
 	int error;
 
-	error = copyin(uap->msg, &msg, sizeof (msg));
+	error = copyinptr(uap->msg, &msg, sizeof (msg));
 	if (error != 0)
 		return (error);
 	error = copyiniov(msg.msg_iov, msg.msg_iovlen, &iov, EMSGSIZE);
@@ -1177,7 +1177,7 @@ sys_recvmsg(struct thread *td, struct recvmsg_args *uap)
 	struct iovec *uiov, *iov;
 	int error;
 
-	error = copyin(uap->msg, &msg, sizeof (msg));
+	error = copyinptr(uap->msg, &msg, sizeof (msg));
 	if (error != 0)
 		return (error);
 	error = copyiniov(msg.msg_iov, msg.msg_iovlen, &iov, EMSGSIZE);
@@ -1193,7 +1193,7 @@ sys_recvmsg(struct thread *td, struct recvmsg_args *uap)
 	error = recvit(td, uap->s, &msg, NULL);
 	if (error == 0) {
 		msg.msg_iov = uiov;
-		error = copyout(&msg, uap->msg, sizeof(msg));
+		error = copyoutptr(&msg, uap->msg, sizeof(msg));
 	}
 	free(iov, M_IOV);
 	return (error);
