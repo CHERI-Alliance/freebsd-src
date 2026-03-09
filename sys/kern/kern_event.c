@@ -1356,7 +1356,7 @@ kevent_copyout(void *arg, struct kevent *kevp, int count)
 	KASSERT(count <= KQ_NEVENTS, ("count (%d) > KQ_NEVENTS", count));
 	uap = (struct kevent_args *)arg;
 
-	error = copyout(kevp, uap->eventlist, count * sizeof *kevp);
+	error = copyoutptr(kevp, uap->eventlist, count * sizeof *kevp);
 	if (error == 0)
 		uap->eventlist += count;
 	return (error);
@@ -1374,7 +1374,7 @@ kevent_copyin(void *arg, struct kevent *kevp, int count)
 	KASSERT(count <= KQ_NEVENTS, ("count (%d) > KQ_NEVENTS", count));
 	uap = (struct kevent_args *)arg;
 
-	error = copyin(uap->changelist, kevp, count * sizeof *kevp);
+	error = copyinptr(uap->changelist, kevp, count * sizeof *kevp);
 	if (error == 0)
 		uap->changelist += count;
 	return (error);
@@ -1398,7 +1398,7 @@ kevent11_copyout(void *arg, struct kevent *kevp, int count)
 		kev11.fflags = kevp->fflags;
 		kev11.data = kevp->data;
 		kev11.udata = kevp->udata;
-		error = copyout(&kev11, uap->eventlist, sizeof(kev11));
+		error = copyoutptr(&kev11, uap->eventlist, sizeof(kev11));
 		if (error != 0)
 			break;
 		uap->eventlist++;
@@ -1421,7 +1421,7 @@ kevent11_copyin(void *arg, struct kevent *kevp, int count)
 	uap = (struct freebsd11_kevent_args *)arg;
 
 	for (i = 0; i < count; i++) {
-		error = copyin(uap->changelist, &kev11, sizeof(kev11));
+		error = copyinptr(uap->changelist, &kev11, sizeof(kev11));
 		if (error != 0)
 			break;
 		kevp->ident = kev11.ident;
