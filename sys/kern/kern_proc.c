@@ -2697,6 +2697,8 @@ kern_proc_vmmap_out(struct proc *p, struct sbuf *sb, ssize_t maxlen, int flags)
 				if (tobj != obj && tobj != lobj)
 					VM_OBJECT_RUNLOCK(tobj);
 			}
+			if ((obj->flags & OBJ_HASCAP) != 0)
+				kve->kve_flags |= KVME_FLAG_HASCAP;
 		} else {
 			lobj = NULL;
 		}
@@ -2704,17 +2706,22 @@ kern_proc_vmmap_out(struct proc *p, struct sbuf *sb, ssize_t maxlen, int flags)
 		kve->kve_start = entry->start;
 		kve->kve_end = entry->end;
 		kve->kve_offset += entry->offset;
+		kve->kve_reservation = entry->reservation;
 
 		if (entry->protection & VM_PROT_READ)
 			kve->kve_protection |= KVME_PROT_READ;
 		if (entry->protection & VM_PROT_WRITE)
 			kve->kve_protection |= KVME_PROT_WRITE;
+		if (entry->protection & VM_PROT_CAP)
+			kve->kve_protection |= KVME_PROT_CAP;
 		if (entry->protection & VM_PROT_EXECUTE)
 			kve->kve_protection |= KVME_PROT_EXEC;
 		if (entry->max_protection & VM_PROT_READ)
 			kve->kve_protection |= KVME_MAX_PROT_READ;
 		if (entry->max_protection & VM_PROT_WRITE)
 			kve->kve_protection |= KVME_MAX_PROT_WRITE;
+		if (entry->max_protection & VM_PROT_CAP)
+			kve->kve_protection |= KVME_MAX_PROT_CAP;
 		if (entry->max_protection & VM_PROT_EXECUTE)
 			kve->kve_protection |= KVME_MAX_PROT_EXEC;
 
@@ -2728,6 +2735,10 @@ kern_proc_vmmap_out(struct proc *p, struct sbuf *sb, ssize_t maxlen, int flags)
 			kve->kve_flags |= KVME_FLAG_GROWS_DOWN;
 		if (entry->eflags & MAP_ENTRY_USER_WIRED)
 			kve->kve_flags |= KVME_FLAG_USER_WIRED;
+		if (entry->eflags & MAP_ENTRY_GUARD)
+			kve->kve_flags |= KVME_FLAG_GUARD;
+		if (entry->eflags & MAP_ENTRY_UNMAPPED)
+			kve->kve_flags |= KVME_FLAG_UNMAPPED;
 
 		guard = (entry->eflags & MAP_ENTRY_GUARD) != 0;
 
@@ -3330,11 +3341,11 @@ sysctl_kern_proc_vm_layout(SYSCTL_HANDLER_ARGS)
 	memset(&kvm, 0, sizeof(kvm));
 	kvm.kvm_min_user_addr = vm_map_min(&vmspace->vm_map);
 	kvm.kvm_max_user_addr = vm_map_max(&vmspace->vm_map);
-	kvm.kvm_text_addr = (uintptr_t)vmspace->vm_taddr;
+	kvm.kvm_text_addr = (ptraddr_t)vmspace->vm_taddr;
 	kvm.kvm_text_size = vmspace->vm_tsize;
-	kvm.kvm_data_addr = (uintptr_t)vmspace->vm_daddr;
+	kvm.kvm_data_addr = (ptraddr_t)vmspace->vm_daddr;
 	kvm.kvm_data_size = vmspace->vm_dsize;
-	kvm.kvm_stack_addr = (uintptr_t)vmspace->vm_maxsaddr;
+	kvm.kvm_stack_addr = (ptraddr_t)vmspace->vm_maxsaddr;
 	kvm.kvm_stack_size = vmspace->vm_ssize;
 	kvm.kvm_shp_addr = vmspace->vm_shp_base;
 	kvm.kvm_shp_size = p->p_sysent->sv_shared_page_len;
