@@ -128,14 +128,44 @@ struct vm_object;
 /* 
  * Add a kernel wrapper to the shmid_ds struct so that private info (like the
  * MAC label) can be added to it, without changing the user interface.
+ *
+ * Kernel wrapper for struct shmid_ds.  This is used internally and exposed
+ * via kvm(3).  If this changes, consumers such as usr.bin/ipcs/ipc.c must
+ * be updated.
+ *
+ * This struct ABI is unstable.
  */
+#ifdef _KERNEL
 struct shmid_kernel {
+#else
+struct shmid_kernel_kvm {
+#endif
 	struct shmid_ds u;
 	struct vm_object *object;
 	struct label *label;	/* MAC label */
 	struct ucred *cred;	/* creator's credendials */
 };
 #endif
+
+/*
+ * This is the interface to shmid_ds via the kern.ipc.shmsegs sysctl.
+ *
+ * This struct ABI is stable.
+ *
+ * HISTORY: when kern.ipc.shmsegs was created, it exposed the internal
+ * kernel struct to match the existing kvm interface.  This defeated the
+ * purpose of having a kernel wrapper so they are now decoupled.
+ */
+#ifdef _KERNEL
+struct shmid_kernel_sysctl {
+#else
+struct shmid_kernel {
+#endif
+	struct shmid_ds u;
+	void *object;	/* Always NULL */
+	void *label;	/* Always NULL */
+	void *cred;	/* Always NULL */
+};
 
 struct shm_info {
 	int used_ids;
