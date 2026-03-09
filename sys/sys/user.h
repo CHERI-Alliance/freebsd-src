@@ -61,6 +61,7 @@
 #ifndef _SYS_SOCKET_VAR_H_
 #include <sys/socket.h>
 #endif
+#include <sys/stddef.h>
 #include <sys/caprights.h>
 
 /*
@@ -543,9 +544,11 @@ struct kinfo_lockf {
 #define	KVME_PROT_READ		0x00000001
 #define	KVME_PROT_WRITE		0x00000002
 #define	KVME_PROT_EXEC		0x00000004
+#define	KVME_PROT_CAP		0x00000020
 #define	KVME_MAX_PROT_READ	0x00010000
 #define	KVME_MAX_PROT_WRITE	0x00020000
 #define	KVME_MAX_PROT_EXEC	0x00040000
+#define	KVME_MAX_PROT_CAP	0x00200000
 
 #define	KVME_FLAG_COW		0x00000001
 #define	KVME_FLAG_NEEDS_COPY	0x00000002
@@ -556,6 +559,9 @@ struct kinfo_lockf {
 #define	KVME_FLAG_USER_WIRED	0x00000040
 #define	KVME_FLAG_SYSVSHM	0x00000080
 #define	KVME_FLAG_POSIXSHM	0x00000100
+#define	KVME_FLAG_GUARD		0x01000000
+#define	KVME_FLAG_UNMAPPED	0x02000000
+#define	KVME_FLAG_HASCAP	0x04000000
 
 #if defined(__amd64__)
 #define	KINFO_OVMENTRY_SIZE	1168
@@ -611,7 +617,8 @@ struct kinfo_vmentry {
 		uint64_t _kve_obj;		/* handle of anon obj */
 	} kve_type_spec;
 	uint64_t kve_vn_rdev;			/* Device id if device. */
-	int	 _kve_ispare[8];		/* Space for more stuff. */
+	uint64_t kve_reservation;		/* Map reservation */
+	int	 _kve_ispare[6];		/* Space for more stuff. */
 	/* Truncated before copyout in sysctl */
 	char	 kve_path[PATH_MAX];		/* Path to VM obj, if any. */
 };
@@ -689,18 +696,18 @@ struct kinfo_sigtramp {
 #define	KMAP_FLAG_ASLR_SHARED_PAGE 0x20	/* the shared page location is randomized */
 
 struct kinfo_vm_layout {
-	uintptr_t	kvm_min_user_addr;
-	uintptr_t	kvm_max_user_addr;
-	uintptr_t	kvm_text_addr;
+	ptraddr_t	kvm_min_user_addr;
+	ptraddr_t	kvm_max_user_addr;
+	ptraddr_t	kvm_text_addr;
 	size_t		kvm_text_size;
-	uintptr_t	kvm_data_addr;
+	ptraddr_t	kvm_data_addr;
 	size_t		kvm_data_size;
-	uintptr_t	kvm_stack_addr;
+	ptraddr_t	kvm_stack_addr;
 	size_t		kvm_stack_size;
 	int		kvm_map_flags;
-	uintptr_t	kvm_shp_addr;
+	ptraddr_t	kvm_shp_addr;
 	size_t		kvm_shp_size;
-	uintptr_t	kvm_spare[12];
+	ptraddr_t	kvm_spare[12];
 };
 
 #define	KNOTE_STATUS_ACTIVE		0x00000001
