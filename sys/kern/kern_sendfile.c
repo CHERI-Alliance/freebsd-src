@@ -1220,7 +1220,7 @@ out:
 static int
 copyin_hdtr(const struct sf_hdtr *uhdtr, struct sf_hdtr *hdtr)
 {
-	return (copyin(uhdtr, hdtr, sizeof(*hdtr)));
+	return (copyinptr(uhdtr, hdtr, sizeof(*hdtr)));
 }
 
 int
