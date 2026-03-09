@@ -378,8 +378,16 @@ link_elf_link_preload(linker_class_t cls, const char *filename,
 
 	ef = (elf_file_t)lf;
 	ef->preloaded = 1;
+#ifdef __CHERI__
+	ef->address = cheri_address_set(kernel_root_cap,
+	    *(ptraddr_t *)baseptr);
+	ef->address = cheri_bounds_set(ef->address, *(size_t *)sizeptr);
+	ef->address = cheri_perms_and(ef->address, CHERI_PERMS_KERNEL_CODE |
+	    CHERI_PERMS_KERNEL_DATA);
+#else
 	ef->address = *(caddr_t *)baseptr;
-	lf->address = *(caddr_t *)baseptr;
+#endif
+	lf->address = ef->address;
 	lf->size = *(size_t *)sizeptr;
 
 	if (hdr->e_ident[EI_CLASS] != ELF_TARG_CLASS ||
@@ -387,6 +395,9 @@ link_elf_link_preload(linker_class_t cls, const char *filename,
 	    hdr->e_ident[EI_VERSION] != EV_CURRENT ||
 	    hdr->e_version != EV_CURRENT ||
 	    hdr->e_type != ET_REL ||
+#ifdef __CHERI__
+	    !ELF_IS_CHERI(hdr) ||
+#endif
 	    hdr->e_machine != ELF_TARG_MACH) {
 		error = EFTYPE;
 		goto out;
@@ -470,13 +481,20 @@ link_elf_link_preload(linker_class_t cls, const char *filename,
 			shdr[i].sh_addr = shdr[i].sh_addr - off +
 			    (Elf_Addr)ef->address;
 	}
+#ifdef __CHERI__
+#define	section_ptr(shdr)						\
+	cheri_bounds_set(cheri_address_set(ef->address, (shdr).sh_addr), \
+	    (shdr).sh_size)
+#else
+#define	section_ptr(shdr)	(void *)((shdr).sh_addr)
+#endif
 
 	ef->ddbsymcnt = shdr[symtabindex].sh_size / sizeof(Elf_Sym);
-	ef->ddbsymtab = (Elf_Sym *)shdr[symtabindex].sh_addr;
+	ef->ddbsymtab = section_ptr(shdr[symtabindex]);
 	ef->ddbstrcnt = shdr[symstrindex].sh_size;
-	ef->ddbstrtab = (char *)shdr[symstrindex].sh_addr;
+	ef->ddbstrtab = section_ptr(shdr[symstrindex]);
 	ef->shstrcnt = shdr[shstrindex].sh_size;
-	ef->shstrtab = (char *)shdr[shstrindex].sh_addr;
+	ef->shstrtab = section_ptr(shdr[shstrindex]);
 
 	/* Now fill out progtab and the relocation tables. */
 	pb = 0;
@@ -494,7 +512,7 @@ link_elf_link_preload(linker_class_t cls, const char *filename,
 			if (shdr[i].sh_addr == 0)
 				break;
 			ef->progtab[pb].addr = ef->progtab[pb].origaddr =
-			    (void *)shdr[i].sh_addr;
+			    section_ptr(shdr[i]);
 			if (shdr[i].sh_type == SHT_PROGBITS)
 				ef->progtab[pb].name = "<<PROGBITS>>";
 #ifdef __amd64__
@@ -588,7 +606,7 @@ link_elf_link_preload(linker_class_t cls, const char *filename,
 		case SHT_REL:
 			if (shdr[shdr[i].sh_info].sh_addr == 0)
 				break;
-			ef->reltab[rl].rel = (Elf_Rel *)shdr[i].sh_addr;
+			ef->reltab[rl].rel = section_ptr(shdr[i]);
 			ef->reltab[rl].nrel = shdr[i].sh_size / sizeof(Elf_Rel);
 			ef->reltab[rl].sec = shdr[i].sh_info;
 			rl++;
@@ -596,7 +614,7 @@ link_elf_link_preload(linker_class_t cls, const char *filename,
 		case SHT_RELA:
 			if (shdr[shdr[i].sh_info].sh_addr == 0)
 				break;
-			ef->relatab[ra].rela = (Elf_Rela *)shdr[i].sh_addr;
+			ef->relatab[ra].rela = section_ptr(shdr[i]);
 			ef->relatab[ra].nrela =
 			    shdr[i].sh_size / sizeof(Elf_Rela);
 			ef->relatab[ra].sec = shdr[i].sh_info;
@@ -721,7 +739,7 @@ link_elf_load_file(linker_class_t cls, const char *filename,
 	Elf_Shdr *shdr;
 	Elf_Sym *es;
 	int nbytes, i, j;
-	vm_offset_t mapbase;
+	vm_pointer_t mapbase;
 	size_t mapsize;
 	int error = 0;
 	ssize_t resid;
@@ -798,6 +816,13 @@ link_elf_load_file(linker_class_t cls, const char *filename,
 		error = ENOEXEC;
 		goto out;
 	}
+#ifdef __CHERI__
+	if (!ELF_IS_CHERI(hdr)) {
+		link_elf_error(filename, "Traditional ABI");
+		error = ENOEXEC;
+		goto out;
+	}
+#endif
 
 	lf = linker_make_file(filename, &link_elf_class);
 	if (!lf) {
@@ -991,6 +1016,7 @@ link_elf_load_file(linker_class_t cls, const char *filename,
 #if VM_NRESERVLEVEL > 0
 	vm_object_color(ef->object, 0);
 #endif
+	vm_object_set_flag(ef->object, OBJ_HASCAP);
 
 	/*
 	 * In order to satisfy amd64's architectural requirements on the
@@ -1530,21 +1556,55 @@ link_elf_lookup_debug_symbol_ctf(linker_file_t lf, const char *name,
 	return (link_elf_ctf_get_ddb(lf, lc));
 }
 
+#ifdef __CHERI_PURE_CAPABILITY__
+/*
+ * Given a pointer into a linker file derived from ef->address, narrow
+ * its permissions and bounds.
+ */
+static caddr_t
+make_capability(const Elf_Sym *sym, caddr_t val)
+{
+	switch (ELF_ST_TYPE(sym->st_info)) {
+	case STT_FUNC:
+	case STT_GNU_IFUNC:
+		val = cheri_perms_and(val, CHERI_PERMS_KERNEL_CODE);
+#ifdef CHERI_FLAGS_CAP_MODE
+		val = cheri_flags_set(val, CHERI_FLAGS_CAP_MODE);
+#endif
+		val = cheri_sentry_create(val);
+		break;
+	default:
+		val = cheri_bounds_set(val, sym->st_size);
+		val = cheri_perms_and(val, CHERI_PERMS_KERNEL_DATA);
+		break;
+	}
+	return (val);
+}
+#endif
+
 static void
 link_elf_ifunc_symbol_value(linker_file_t lf, caddr_t *valp, size_t *sizep)
 {
 	c_linker_sym_t sym;
+	elf_file_t ef;
 	const Elf_Sym *es;
 	caddr_t val;
 	long off;
 
 	val = *valp;
+	ef = (elf_file_t)lf;
 
 	/* Provide the value and size of the target symbol, if available. */
 	val = ((caddr_t (*)(void))val)();
-	if (link_elf_search_symbol(lf, (ptraddr_t)val, &sym, &off) == 0 && off == 0) {
+	if (link_elf_search_symbol(lf, (ptraddr_t)val, &sym, &off) == 0 &&
+	    off == 0) {
 		es = (const Elf_Sym *)sym;
-		*valp = (caddr_t)es->st_value;
+#ifdef __CHERI__
+		(void)ef;
+		*valp = val;
+#else
+		*valp = (caddr_t)ef->address + es->st_value;
+#endif
 		*sizep = es->st_size;
 	} else {
 		*valp = val;
@@ -1563,12 +1623,18 @@ link_elf_symbol_values1(linker_file_t lf, c_linker_sym_t sym,
 
 	ef = (elf_file_t) lf;
 	es = (const Elf_Sym*) sym;
+#ifdef __CHERI__
+	val = cheri_address_set(ef->address, es->st_value);
+#else
 	val = (caddr_t)es->st_value;
+#endif
 	if (es >= ef->ddbsymtab && es < (ef->ddbsymtab + ef->ddbsymcnt)) {
 		if (!see_local && ELF_ST_BIND(es->st_info) == STB_LOCAL)
 			return (ENOENT);
 		symval->name = ef->ddbstrtab + es->st_name;
-		val = (caddr_t)es->st_value;
+#ifdef __CHERI__
+		val = make_capability(es, val);
+#endif
 		if (ELF_ST_TYPE(es->st_info) == STT_GNU_IFUNC)
 			link_elf_ifunc_symbol_value(lf, &val, &size);
 		else
@@ -1748,7 +1814,12 @@ elf_obj_lookup(linker_file_t lf, Elf_Size symidx, int deps, uintptr_t *res)
 
 	/* Quick answer if there is a definition included. */
 	if (sym->st_shndx != SHN_UNDEF) {
+#ifdef __CHERI__
+		res1 = make_capability(sym, cheri_address_set(ef->address,
+		    sym->st_value));
+#else
 		res1 = (Elf_Addr)sym->st_value;
+#endif
 		if (ELF_ST_TYPE(sym->st_info) == STT_GNU_IFUNC)
 			res1 = ((uintptr_t (*)(void))res1)();
 		*res = res1;
