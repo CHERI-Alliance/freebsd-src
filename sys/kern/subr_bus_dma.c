@@ -308,6 +308,15 @@ _bus_dmamap_load_uio(bus_dma_tag_t dmat, bus_dmamap_t map, struct uio *uio,
 
 		addr = (caddr_t) iov[i].iov_base;
 		minlen = resid < iov[i].iov_len ? resid : iov[i].iov_len;
+#ifdef __CHERI__
+		/*
+		 * XXX: In principle, we could derive required permissions
+		 * from uio_rw, but callers don't (and some cases e.g.,
+		 * mpt(4) can't) set uio_rw to a sensible value.
+		 */
+		if (!cheri_can_access(addr, 0, minlen))
+			return (EPROT);
+#endif
 		if (minlen > 0) {
 			error = _bus_dmamap_load_buffer(dmat, map, addr,
 			    minlen, pmap, flags, NULL, nsegs);
