@@ -949,13 +949,13 @@ sys_sigaction(struct thread *td, struct sigaction_args *uap)
 	actp = (uap->act != NULL) ? &act : NULL;
 	oactp = (uap->oact != NULL) ? &oact : NULL;
 	if (actp) {
-		error = copyin(uap->act, actp, sizeof(act));
+		error = copyinptr(uap->act, actp, sizeof(act));
 		if (error)
 			return (error);
 	}
 	error = kern_sigaction(td, uap->sig, actp, oactp, 0);
 	if (oactp && !error)
-		error = copyout(oactp, uap->oact, sizeof(oact));
+		error = copyoutptr(oactp, uap->oact, sizeof(oact));
 	return (error);
 }
 
@@ -977,13 +977,13 @@ freebsd4_sigaction(struct thread *td, struct freebsd4_sigaction_args *uap)
 	actp = (uap->act != NULL) ? &act : NULL;
 	oactp = (uap->oact != NULL) ? &oact : NULL;
 	if (actp) {
-		error = copyin(uap->act, actp, sizeof(act));
+		error = copyinptr(uap->act, actp, sizeof(act));
 		if (error)
 			return (error);
 	}
 	error = kern_sigaction(td, uap->sig, actp, oactp, KSA_FREEBSD4);
 	if (oactp && !error)
-		error = copyout(oactp, uap->oact, sizeof(oact));
+		error = copyoutptr(oactp, uap->oact, sizeof(oact));
 	return (error);
 }
 #endif	/* COMAPT_FREEBSD4 */
@@ -1282,7 +1282,7 @@ user_sigwait(struct thread *td, const sigset_t *uset, int *usig)
 static int
 copyout_siginfo(const siginfo_t *si, void *info)
 {
-	return (copyout(si, info, sizeof(*si)));
+	return (copyoutptr(si, info, sizeof(*si)));
 }
 
 int
@@ -1779,7 +1779,7 @@ sys_sigaltstack(struct thread *td, struct sigaltstack_args *uap)
 	int error;
 
 	if (uap->ss != NULL) {
-		error = copyin(uap->ss, &ss, sizeof(ss));
+		error = copyinptr(uap->ss, &ss, sizeof(ss));
 		if (error)
 			return (error);
 	}
@@ -1788,7 +1788,7 @@ sys_sigaltstack(struct thread *td, struct sigaltstack_args *uap)
 	if (error)
 		return (error);
 	if (uap->oss != NULL)
-		error = copyout(&oss, uap->oss, sizeof(stack_t));
+		error = copyoutptr(&oss, uap->oss, sizeof(stack_t));
 	return (error);
 }
 
