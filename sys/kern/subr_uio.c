@@ -445,18 +445,19 @@ again:
 int
 copyiniov(const struct iovec *iovp, u_int iovcnt, struct iovec **iov, int error)
 {
-	u_int iovlen;
+	struct iovec *iovs;
+	size_t iovlen;
 
 	*iov = NULL;
 	if (iovcnt > UIO_MAXIOV)
 		return (error);
 	iovlen = iovcnt * sizeof(struct iovec);
-	*iov = malloc(iovlen, M_IOV, M_WAITOK);
-	error = copyin(iovp, *iov, iovlen);
-	if (error) {
-		free(*iov, M_IOV);
-		*iov = NULL;
-	}
+	iovs = malloc(iovlen, M_IOV, M_WAITOK);
+	error = copyinptr(iovp, iovs, iovlen);
+	if (error != 0)
+		free(iovs, M_IOV);
+	else
+		*iov = iovs;
 	return (error);
 }
 
@@ -465,7 +466,7 @@ copyinuio(const struct iovec *iovp, u_int iovcnt, struct uio **uiop)
 {
 	struct iovec *iov;
 	struct uio *uio;
-	u_int iovlen;
+	size_t iovlen;
 	int error, i;
 
 	*uiop = NULL;
@@ -474,7 +475,7 @@ copyinuio(const struct iovec *iovp, u_int iovcnt, struct uio **uiop)
 	iovlen = iovcnt * sizeof(struct iovec);
 	uio = allocuio(iovcnt);
 	iov = uio->uio_iov;
-	error = copyin(iovp, iov, iovlen);
+	error = copyinptr(iovp, iov, iovlen);
 	if (error != 0) {
 		freeuio(uio);
 		return (error);
