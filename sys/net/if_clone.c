@@ -223,7 +223,7 @@ ifc_create_ifp_nl(const char *name, struct ifc_data_nl *ifd)
 }
 
 int
-if_clone_create(char *name, size_t len, caddr_t params)
+if_clone_create(char *name, size_t len, void *params)
 {
 	struct ifc_data ifd = { .params = params };
 	struct ifnet *ifp;
