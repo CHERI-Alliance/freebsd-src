@@ -123,10 +123,10 @@ int ifc_copyin(const struct ifc_data *ifd, void *target, size_t len);
 
 /* Methods. */
 typedef int	ifc_match_t(struct if_clone *, const char *);
-typedef int	ifc_create_t(struct if_clone *, char *, size_t, caddr_t);
+typedef int	ifc_create_t(struct if_clone *, char *, size_t, void *);
 typedef int	ifc_destroy_t(struct if_clone *, struct ifnet *);
 
-typedef int	ifcs_create_t(struct if_clone *, int, caddr_t);
+typedef int	ifcs_create_t(struct if_clone *, int, void *);
 typedef void	ifcs_destroy_t(struct ifnet *);
 
 /* Interface cloner (de)allocating functions. */
@@ -148,7 +148,7 @@ typedef void (*if_clone_event_handler_t)(void *, struct if_clone *);
 EVENTHANDLER_DECLARE(if_clone_event, if_clone_event_handler_t);
 
 /* The below interfaces used only by net/if.c. */
-int	if_clone_create(char *, size_t, caddr_t);
+int	if_clone_create(char *, size_t, void *);
 int	if_clone_destroy(const char *);
 int	if_clone_list(struct if_clonereq *);
 void	if_clone_restoregroup(struct ifnet *);
