@@ -1,0 +1,1941 @@
+/*-
+ * Copyright (c) 2015-2019 SRI International
+ * Copyright (c) 2002 Doug Rabson
+ * Copyright (c) 2002 Marcel Moolenaar
+ * All rights reserved.
+ *
+ * This software was developed by SRI International and the University of
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
+ * ("CTSRD"), as part of the DARPA CRASH research programme.
+ *
+ * This software was developed by SRI International and the University of
+ * Cambridge Computer Laboratory (Department of Computer Science and
+ * Technology) under DARPA contract HR0011-18-C-0016 ("ECATS"), as part of
+ * the DARPA SSITH research programme.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
+#include "opt_inet.h"
+#include "opt_inet6.h"
+#include "opt_ktrace.h"
+#include "opt_posix.h"
+#include "opt_capsicum.h"
+
+#include <sys/param.h>
+#include <sys/bus.h>
+#include <sys/capsicum.h>
+#include <sys/clock.h>
+#include <sys/exec.h>
+#include <sys/fcntl.h>
+#include <sys/filedesc.h>
+#include <sys/imgact.h>
+#include <sys/imgact_elf.h>
+#include <sys/jail.h>
+#include <sys/kernel.h>
+#include <sys/limits.h>
+#include <sys/linker.h>
+#include <sys/lock.h>
+#include <sys/malloc.h>
+#include <sys/file.h>		/* Must come after sys/malloc.h */
+#include <sys/imgact.h>
+#include <sys/mbuf.h>
+#include <sys/mman.h>
+#include <sys/module.h>
+#include <sys/mount.h>
+#include <sys/mutex.h>
+#include <sys/namei.h>
+#include <sys/proc.h>
+#include <sys/procctl.h>
+#include <sys/posix4.h>
+#include <sys/ptrace.h>
+#include <sys/reboot.h>
+#include <sys/resource.h>
+#include <sys/resourcevar.h>
+#include <sys/selinfo.h>
+#include <sys/eventvar.h>	/* Must come after sys/selinfo.h */
+#include <sys/pipe.h>		/* Must come after sys/selinfo.h */
+#include <sys/signal.h>
+#include <sys/ktrace.h>		/* Must come after sys/signal.h */
+#include <sys/signalvar.h>
+#include <sys/smp.h>
+#include <sys/socket.h>
+#include <sys/socketvar.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
+#include <sys/syscallsubr.h>
+#include <sys/sysctl.h>
+#include <sys/sysent.h>
+#include <sys/sysproto.h>
+#include <sys/systm.h>
+#include <sys/thr.h>
+#include <sys/unistd.h>
+#include <sys/ucontext.h>
+#include <sys/user.h>
+#include <sys/umtxvar.h>
+#include <sys/uuid.h>
+#include <sys/vnode.h>
+#include <sys/vdso.h>
+#include <sys/wait.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+#include <sys/sem.h>
+#include <sys/shm.h>
+
+#ifdef INET
+#include <netinet/in.h>
+#endif
+
+#include <vm/vm.h>
+#include <vm/vm_param.h>
+#include <vm/pmap.h>
+#include <vm/vm_map.h>
+#include <vm/vm_object.h>
+#include <vm/vm_extern.h>
+
+#include <machine/cpu.h>
+#include <machine/elf.h>
+
+#include <security/audit/audit.h>
+#include <security/mac/mac_framework.h>
+
+#include <cheri/cheri.h>
+#include <cheri/cheric.h>
+
+#include <compat/freebsd64/freebsd64.h>
+#include <compat/freebsd64/freebsd64_util.h>
+#include <compat/freebsd64/freebsd64_signal.h>
+#include <compat/freebsd64/freebsd64_proto.h>
+#include <compat/freebsd64/freebsd64_syscall.h>
+
+MALLOC_DECLARE(M_KQUEUE);
+
+struct sf_hdtr64 {
+	struct iovec64 *headers;
+	int hdr_cnt;
+	struct iovec64 *trailers;
+	int trl_cnt;
+};
+
+FEATURE(compat_freebsd64_abi, "Compatible 64-bit FreeBSD system call ABI");
+
+static int freebsd64_kevent_copyout(void *arg, struct kevent *kevp, int count);
+static int freebsd64_kevent_copyin(void *arg, struct kevent *kevp, int count);
+
+int
+freebsd64_wait4(struct thread *td, struct freebsd64_wait4_args *uap)
+{
+	return (kern_wait4(td, uap->pid, USER_PTR_OBJ(uap->status),
+	    uap->options, USER_PTR_OBJ(uap->rusage)));
+}
+
+int
+freebsd64_wait6(struct thread *td, struct freebsd64_wait6_args *uap)
+{
+	siginfo_t si, *sip;
+	struct __siginfo64 si64;
+	int error;
+
+	if (uap->info != NULL) {
+		sip = &si;
+		bzero(sip, sizeof(*sip));
+	} else
+		sip = NULL;
+	error = user_wait6(td, uap->idtype, uap->id,
+	    USER_PTR_OBJ(uap->status), uap->options,
+	    USER_PTR_OBJ(uap->wrusage), sip);
+	if (uap->info != NULL && error == 0) {
+		siginfo_to_siginfo64(&si, &si64);
+		error = copyout(&si64, USER_PTR_OBJ(uap->info), sizeof(si64));
+	}
+	return (error);
+}
+
+int freebsd64_pdwait(struct thread *td, struct freebsd64_pdwait_args *uap)
+{
+	siginfo_t si, *sip;
+	struct __siginfo64 si64;
+	int error;
+
+	if (uap->info != NULL) {
+		sip = &si;
+		bzero(sip, sizeof(*sip));
+	} else {
+		sip = NULL;
+	}
+	error = user_pdwait(td, uap->fd, USER_PTR_OBJ(uap->status),
+	    uap->options, USER_PTR_OBJ(uap->wrusage), sip);
+	if (uap->info != NULL && error == 0) {
+		siginfo_to_siginfo64(&si, &si64);
+		error = copyout(&si64, USER_PTR_OBJ(uap->info), sizeof(si64));
+	}
+	return (error);
+}
+
+int
+freebsd64_execve(struct thread *td, struct freebsd64_execve_args *uap)
+{
+	struct image_args eargs;
+	struct vmspace *oldvmspace;
+	int error;
+
+	error = pre_execve(td, &oldvmspace);
+	if (error != 0)
+		return (error);
+	error = exec_copyin_args(&eargs, USER_PTR_PATH(uap->fname),
+	    USER_PTR_UNBOUND(uap->argv), USER_PTR_UNBOUND(uap->envv));
+	if (error == 0)
+		error = kern_execve(td, &eargs, NULL, oldvmspace);
+	post_execve(td, error, oldvmspace);
+	return (error);
+}
+
+int
+freebsd64_fexecve(struct thread *td, struct freebsd64_fexecve_args *uap)
+{
+	struct image_args eargs;
+	struct vmspace *oldvmspace;
+	int error;
+
+	error = pre_execve(td, &oldvmspace);
+	if (error != 0)
+		return (error);
+	error = exec_copyin_args(&eargs, NULL,
+	    USER_PTR_UNBOUND(uap->argv), USER_PTR_UNBOUND(uap->envv));
+	if (error == 0) {
+		eargs.fd = uap->fd;
+		error = kern_execve(td, &eargs, NULL, oldvmspace);
+	}
+	post_execve(td, error, oldvmspace);
+	return (error);
+}
+
+/*
+ * Copy 'count' items into the destination list pointed to by uap->eventlist.
+ */
+static int
+freebsd64_kevent_copyout(void *arg, struct kevent *kevp, int count)
+{
+	struct freebsd64_kevent_args *uap;
+	struct kevent64 ks64[KQ_NEVENTS];
+	int error, i;
+
+	KASSERT(count <= KQ_NEVENTS, ("count (%d) > KQ_NEVENTS", count));
+	uap = (struct freebsd64_kevent_args *)arg;
+
+	for (i = 0; i < count; i++) {
+		ks64[i].ident = kevp[i].ident;
+		ks64[i].filter = kevp[i].filter;
+		ks64[i].flags = kevp[i].flags;
+		ks64[i].fflags = kevp[i].fflags;
+		ks64[i].data = kevp[i].data;
+		ks64[i].udata = (uint64_t)kevp[i].udata;
+		memcpy(&ks64[i].ext[0], &kevp->ext[0], sizeof(kevp->ext));
+	}
+	error = copyout(ks64, USER_PTR_ARRAY(uap->eventlist, count),
+	    count * sizeof(*ks64));
+	if (error == 0)
+		uap->eventlist += count;
+	return (error);
+}
+
+/*
+ * Copy 'count' items from the list pointed to by uap->changelist.
+ */
+static int
+freebsd64_kevent_copyin(void *arg, struct kevent *kevp, int count)
+{
+	struct freebsd64_kevent_args *uap;
+	struct kevent64 ks64[KQ_NEVENTS];
+	int error, i;
+
+	KASSERT(count <= KQ_NEVENTS, ("count (%d) > KQ_NEVENTS", count));
+	uap = (struct freebsd64_kevent_args *)arg;
+
+	error = copyin(USER_PTR_ARRAY(uap->changelist, count), ks64,
+	    count * sizeof(*ks64));
+	if (error != 0)
+		return (error);
+	for (i = 0; i < count; i++) {
+		kevp[i].ident = ks64[i].ident;
+		kevp[i].filter = ks64[i].filter;
+		kevp[i].flags = ks64[i].flags;
+		kevp[i].fflags = ks64[i].fflags;
+		kevp[i].data = ks64[i].data;
+		/* Store untagged. */
+		kevp[i].udata = (void *)(intptr_t)ks64[i].udata;
+		memcpy(&kevp[i].ext[0], &ks64->ext[0], sizeof(ks64->ext));
+	}
+	uap->changelist += count;
+	return (error);
+}
+
+int
+freebsd64_kevent(struct thread *td, struct freebsd64_kevent_args *uap)
+{
+	struct timespec ts, *tsp;
+	struct kevent_copyops k_ops = { uap,
+					freebsd64_kevent_copyout,
+					freebsd64_kevent_copyin};
+	int error;
+
+	if (uap->timeout) {
+		error = copyin(USER_PTR_OBJ(uap->timeout), &ts, sizeof(ts));
+		if (error)
+			return (error);
+		tsp = &ts;
+	} else
+		tsp = NULL;
+	error = kern_kevent(td, uap->fd, uap->nchanges, uap->nevents,
+	    &k_ops, tsp);
+	return (error);
+}
+
+#ifdef COMPAT_FREEBSD11
+struct freebsd11_kevent64 {
+	uint64_t	ident;	/* (uintptr_t) identifier for this event */
+	short		filter;	/* filter for event */
+	unsigned short	flags;
+	unsigned int	fflags;
+	int64_t		data;	/* (intptr_t) */
+	uint64_t	udata;	/* (void *) opaque user data identifier */
+};
+
+static int
+kevent11_freebsd64_copyout(void *arg, struct kevent *kevp, int count)
+{
+	struct freebsd11_freebsd64_kevent_args *uap;
+	struct freebsd11_kevent64 kev11;
+	int error, i;
+
+	KASSERT(count <= KQ_NEVENTS, ("count (%d) > KQ_NEVENTS", count));
+	uap = (struct freebsd11_freebsd64_kevent_args *)arg;
+
+	for (i = 0; i < count; i++) {
+		kev11.ident = (uint64_t)kevp->ident;
+		kev11.filter = kevp->filter;
+		kev11.flags = kevp->flags;
+		kev11.fflags = kevp->fflags;
+		kev11.data = kevp->data;
+		kev11.udata = (uint64_t)kevp->udata;
+		error = copyout(&kev11, USER_PTR_OBJ(uap->eventlist),
+		    sizeof(kev11));
+		if (error != 0)
+			break;
+		uap->eventlist++;
+		kevp++;
+	}
+	return (error);
+}
+
+/*
+ * Copy 'count' items from the list pointed to by uap->changelist.
+ */
+static int
+kevent11_freebsd64_copyin(void *arg, struct kevent *kevp, int count)
+{
+	struct freebsd11_freebsd64_kevent_args *uap;
+	struct freebsd11_kevent64 kev11;
+	int error, i;
+
+	KASSERT(count <= KQ_NEVENTS, ("count (%d) > KQ_NEVENTS", count));
+	uap = (struct freebsd11_freebsd64_kevent_args *)arg;
+
+	for (i = 0; i < count; i++) {
+		error = copyin(USER_PTR_OBJ(uap->changelist), &kev11,
+		    sizeof(kev11));
+		if (error != 0)
+			break;
+		kevp->ident = (uintptr_t)kev11.ident;
+		kevp->filter = kev11.filter;
+		kevp->flags = kev11.flags;
+		kevp->fflags = kev11.fflags;
+		kevp->data = kev11.data;
+		kevp->udata = (void *)(uintptr_t)kev11.udata;
+		bzero(&kevp->ext, sizeof(kevp->ext));
+		uap->changelist++;
+		kevp++;
+	}
+	return (error);
+}
+
+int
+freebsd11_freebsd64_kevent(struct thread *td,
+    struct freebsd11_freebsd64_kevent_args *uap)
+{
+	struct kevent_copyops k_ops = {
+		.arg = uap,
+		.k_copyout = kevent11_freebsd64_copyout,
+		.k_copyin = kevent11_freebsd64_copyin,
+		.kevent_size = sizeof(struct freebsd11_kevent64),
+	};
+	struct g_kevent_args gk_args = {
+		.fd = uap->fd,
+		.changelist = USER_PTR_ARRAY(uap->changelist, uap->nchanges),
+		.nchanges = uap->nchanges,
+		.eventlist = USER_PTR_ARRAY(uap->eventlist, uap->nevents),
+		.nevents = uap->nevents,
+		.timeout = USER_PTR_OBJ(uap->timeout),
+	};
+
+	return (kern_kevent_generic(td, &gk_args, &k_ops,
+	    "freebsd11_kevent64"));
+}
+#endif
+
+int
+freebsd64_copyinuio(const struct iovec *cb_arg, u_int iovcnt,
+    struct uio **uiop)
+{
+	struct iovec64 iov64;
+	struct iovec *iov;
+	struct uio *uio;
+	int error, i;
+	/*
+	 * The first argument is not actually a struct iovec *, but C's type
+	 * system does not allow for overloaded callbacks.
+	 */
+	const struct iovec64 *iovp =
+	    (const struct iovec64 *)cb_arg;
+
+	*uiop = NULL;
+	if (iovcnt > UIO_MAXIOV)
+		return (EINVAL);
+	uio = allocuio(iovcnt);
+	iov = uio->uio_iov;
+	for (i = 0; i < iovcnt; i++) {
+		error = copyin(&iovp[i], &iov64, sizeof(iov64));
+		if (error) {
+			freeuio(uio);
+			return (error);
+		}
+		IOVEC_INIT(&iov[i], USER_PTR(iov64.iov_base, iov64.iov_len),
+		    iov64.iov_len);
+	}
+	uio->uio_iovcnt = iovcnt;
+	uio->uio_segflg = UIO_USERSPACE;
+	uio->uio_offset = -1;
+	uio->uio_resid = 0;
+	for (i = 0; i < iovcnt; i++) {
+		if (iov[i].iov_len > SIZE_MAX - uio->uio_resid) {
+			freeuio(uio);
+			return (EINVAL);
+		}
+		uio->uio_resid += iov[i].iov_len;
+	}
+	*uiop = uio;
+	return (0);
+}
+
+int
+freebsd64_copyiniov(const struct iovec *cb_arg, u_int iovcnt,
+    struct iovec **iovp, int error)
+{
+	struct iovec64 useriov;
+	struct iovec *iovs;
+	size_t iovlen;
+	int i;
+	/*
+	 * The first argument is not actually a struct iovec *, but C's type
+	 * system does not allow for overloaded callbacks.
+	 */
+	const struct iovec64 *iov64 =
+	    (const struct iovec64 *)cb_arg;
+
+	*iovp = NULL;
+	if (iovcnt > UIO_MAXIOV)
+		return (error);
+	iovlen = iovcnt * sizeof(struct iovec);
+	iovs = malloc(iovlen, M_IOV, M_WAITOK);
+	for (i = 0; i < iovcnt; i++) {
+		error = copyin(iov64 + i, &useriov, sizeof(useriov));
+		if (error) {
+			free(iovs, M_IOV);
+			return (error);
+		}
+		IOVEC_INIT(iovs + i,
+		    USER_PTR(useriov.iov_base, useriov.iov_len),
+		    useriov.iov_len);
+	}
+	*iovp = iovs;
+	return (0);
+}
+
+static int
+freebsd64_copyin_hdtr(const struct sf_hdtr64 *uhdtr,
+    struct sf_hdtr *hdtr)
+{
+	struct sf_hdtr64 hdtr64;
+	int error;
+
+	error = copyin(uhdtr, &hdtr64, sizeof(hdtr64));
+	if (error != 0)
+		return (error);
+	hdtr->headers = (void *)USER_PTR_ARRAY(hdtr64.headers,
+	    hdtr64.hdr_cnt);
+	hdtr->hdr_cnt = hdtr64.hdr_cnt;
+	hdtr->trailers = (void *)USER_PTR_ARRAY(hdtr64.trailers,
+	    hdtr64.trl_cnt);
+	hdtr->hdr_cnt = hdtr64.trl_cnt;
+
+	return (0);
+}
+
+int
+freebsd64_sendfile(struct thread *td, struct freebsd64_sendfile_args *uap)
+{
+	return (kern_sendfile(td, &(struct sendfile_args){
+		.fd = uap->fd,
+		.s = uap->s,
+		.offset = uap->offset,
+		.nbytes = uap->nbytes,
+		.hdtr = USER_PTR_OBJ(uap->hdtr),
+		.sbytes = USER_PTR_OBJ(uap->sbytes),
+		.flags = uap->flags,
+	    }, false, (copyin_hdtr_t *)freebsd64_copyin_hdtr,
+	    freebsd64_copyinuio));
+}
+
+int
+freebsd64_jail_set(struct thread *td, struct freebsd64_jail_set_args *uap)
+{
+	return (user_jail_set(td, USER_PTR_ARRAY(uap->iovp, uap->iovcnt),
+	    uap->iovcnt, uap->flags, freebsd64_copyinuio));
+}
+
+static int
+freebsd64_updateiov(const struct uio *uiop, struct iovec *cb_arg)
+{
+	int i, error;
+	/*
+	 * The second argument is not actually a struct iovec *, but C's type
+	 * system does not allow for overloaded callbacks.
+	 */
+	struct iovec64 *iovp =
+	    (struct iovec64 *)cb_arg;
+
+
+	for (i = 0; i < uiop->uio_iovcnt; i++) {
+		error = suword(&iovp[i].iov_len, uiop->uio_iov[i].iov_len);
+		if (error != 0)
+			return (error);
+	}
+	return (0);
+}
+
+int
+freebsd64_jail_get(struct thread *td, struct freebsd64_jail_get_args *uap)
+{
+	return (user_jail_get(td, USER_PTR_ARRAY(uap->iovp, uap->iovcnt),
+	    uap->iovcnt, uap->flags, freebsd64_copyinuio, freebsd64_updateiov));
+}
+
+#define UC_COPY_SIZE	offsetof(ucontext64_t, uc_link)
+
+int
+freebsd64_getcontext(struct thread *td, struct freebsd64_getcontext_args *uap)
+{
+	ucontext64_t uc;
+
+	if (uap->ucp == NULL)
+		return (EINVAL);
+
+	bzero(&uc, sizeof(uc));
+	freebsd64_get_mcontext(td, &uc.uc_mcontext, GET_MC_CLEAR_RET);
+	PROC_LOCK(td->td_proc);
+	uc.uc_sigmask = td->td_sigmask;
+	PROC_UNLOCK(td->td_proc);
+	return (copyout(&uc, USER_PTR_OBJ(uap->ucp), UC_COPY_SIZE));
+}
+
+int
+freebsd64_setcontext(struct thread *td, struct freebsd64_setcontext_args *uap)
+{
+	ucontext64_t uc;
+	int ret;
+
+	if (uap->ucp == NULL)
+		return (EINVAL);
+	if ((ret = copyin(USER_PTR_OBJ(uap->ucp), &uc, UC_COPY_SIZE)) != 0)
+		return (ret);
+	if ((ret = freebsd64_set_mcontext(td, &uc.uc_mcontext)) != 0)
+		return (ret);
+	kern_sigprocmask(td, SIG_SETMASK, &uc.uc_sigmask, NULL, 0);
+
+	return (EJUSTRETURN);
+}
+
+int
+freebsd64_swapcontext(struct thread *td, struct freebsd64_swapcontext_args *uap)
+{
+	ucontext64_t uc;
+	int ret;
+
+	if (uap->oucp == NULL || uap->ucp == NULL)
+		return (EINVAL);
+
+	bzero(&uc, sizeof(uc));
+	freebsd64_get_mcontext(td, &uc.uc_mcontext, GET_MC_CLEAR_RET);
+	PROC_LOCK(td->td_proc);
+	uc.uc_sigmask = td->td_sigmask;
+	PROC_UNLOCK(td->td_proc);
+	if ((ret = copyout(&uc, USER_PTR_OBJ(uap->oucp), UC_COPY_SIZE)) !=
+	    0)
+		return (ret);
+	if ((ret = copyin(USER_PTR_OBJ(uap->ucp), &uc, UC_COPY_SIZE)) != 0)
+		return (ret);
+	if ((ret = freebsd64_set_mcontext(td, &uc.uc_mcontext)) != 0)
+		return (ret);
+	kern_sigprocmask(td, SIG_SETMASK, &uc.uc_sigmask, NULL, 0);
+
+	return (EJUSTRETURN);
+}
+
+int
+freebsd64_procctl(struct thread *td, struct freebsd64_procctl_args *uap)
+{
+	void *data;
+	union {
+		struct procctl_reaper_status rs;
+		struct procctl_reaper_pids rp;
+		struct procctl_reaper_kill rk;
+	} x;
+	union {
+		struct procctl_reaper_pids64 rp;
+	} x64;
+	int error, error1, flags, signum;
+
+	if (uap->com >= PROC_PROCCTL_MD_MIN)
+		return (cpu_procctl(td, uap->idtype, uap->id, uap->com,
+		    USER_PTR_UNBOUND(uap->data)));
+
+	switch (uap->com) {
+	case PROC_ASLR_CTL:
+	case PROC_PROTMAX_CTL:
+	case PROC_SPROTECT:
+	case PROC_STACKGAP_CTL:
+	case PROC_TRACE_CTL:
+	case PROC_TRAPCAP_CTL:
+	case PROC_NO_NEW_PRIVS_CTL:
+	case PROC_WXMAP_CTL:
+	case PROC_LOGSIGEXIT_CTL:
+		error = copyin(USER_PTR(uap->data, sizeof(flags)), &flags,
+		    sizeof(flags));
+		if (error != 0)
+			return (error);
+		data = &flags;
+		break;
+	case PROC_REAP_ACQUIRE:
+	case PROC_REAP_RELEASE:
+		if (uap->data != NULL)
+			return (EINVAL);
+		data = NULL;
+		break;
+	case PROC_REAP_STATUS:
+		data = &x.rs;
+		break;
+	case PROC_REAP_GETPIDS:
+		error = copyin(USER_PTR(uap->data, sizeof(x64.rp)), &x64.rp,
+		    sizeof(x64.rp));
+		if (error != 0)
+			return (error);
+		CP(x64.rp, x.rp, rp_count);
+		x.rp.rp_pids = USER_PTR(x64.rp.rp_pids,
+		    x64.rp.rp_count * sizeof(*x.rp.rp_pids));
+		data = &x.rp;
+		break;
+	case PROC_REAP_KILL:
+		error = copyin(USER_PTR(uap->data, sizeof(x.rk)), &x.rk,
+		    sizeof(x.rk));
+		if (error != 0)
+			return (error);
+		data = &x.rk;
+		break;
+	case PROC_ASLR_STATUS:
+	case PROC_PROTMAX_STATUS:
+	case PROC_STACKGAP_STATUS:
+	case PROC_TRACE_STATUS:
+	case PROC_TRAPCAP_STATUS:
+	case PROC_NO_NEW_PRIVS_STATUS:
+	case PROC_WXMAP_STATUS:
+	case PROC_LOGSIGEXIT_STATUS:
+		data = &flags;
+		break;
+	case PROC_PDEATHSIG_CTL:
+		error = copyin(USER_PTR(uap->data, sizeof(signum)), &signum,
+		    sizeof(signum));
+		if (error != 0)
+			return (error);
+		data = &signum;
+		break;
+	case PROC_PDEATHSIG_STATUS:
+		data = &signum;
+		break;
+	default:
+		return (EINVAL);
+	}
+	error = kern_procctl(td, uap->idtype, uap->id, uap->com, data);
+	switch (uap->com) {
+	case PROC_REAP_STATUS:
+		if (error == 0)
+			error = copyout(&x.rs, USER_PTR(uap->data,
+			    sizeof(x.rs)), sizeof(x.rs));
+		break;
+	case PROC_REAP_KILL:
+		error1 = copyout(&x.rk, USER_PTR(uap->data, sizeof(x.rk)),
+		    sizeof(x.rk));
+		if (error == 0)
+			error = error1;
+		break;
+	case PROC_ASLR_STATUS:
+	case PROC_PROTMAX_STATUS:
+	case PROC_STACKGAP_STATUS:
+	case PROC_TRACE_STATUS:
+	case PROC_TRAPCAP_STATUS:
+	case PROC_NO_NEW_PRIVS_STATUS:
+	case PROC_WXMAP_STATUS:
+	case PROC_LOGSIGEXIT_STATUS:
+		if (error == 0)
+			error = copyout(&flags, USER_PTR(uap->data,
+			    sizeof(flags)), sizeof(flags));
+		break;
+	case PROC_PDEATHSIG_STATUS:
+		if (error == 0)
+			error = copyout(&signum, USER_PTR(uap->data,
+			    sizeof(signum)), sizeof(signum));
+		break;
+	}
+	return (error);
+}
+
+int
+freebsd64_nmount(struct thread *td, struct freebsd64_nmount_args *uap)
+{
+	return (kern_nmount(td, USER_PTR_ARRAY(uap->iovp, uap->iovcnt),
+	    uap->iovcnt, uap->flags, freebsd64_copyinuio));
+}
+
+int
+freebsd64_copyout_strings(struct image_params *imgp, uintptr_t *stack_base)
+{
+	int argc, envc;
+	uint64_t *vectp;
+	char *stringp;
+	uintptr_t destp, ustringp;
+	struct freebsd64_ps_strings *arginfo;
+	struct proc *p;
+	struct sysentvec *sysent;
+	size_t execpath_len, len;
+	int error, szsigcode;
+	char canary[sizeof(long) * 8];
+
+	p = imgp->proc;
+	sysent = p->p_sysent;
+
+	KASSERT(imgp->stack == imgp->strings,
+	    ("%s: stack != strings", __func__));
+
+	destp = (uintptr_t)imgp->strings;
+	destp = cheri_address_set(destp, PROC_PS_STRINGS(p));
+	arginfo = (struct freebsd64_ps_strings *)
+	    cheri_bounds_set_exact(destp, sizeof(*arginfo));
+	imgp->ps_strings = arginfo;
+
+	/*
+	 * Install sigcode.
+	 */
+	if (sysent->sv_shared_page_base == 0 && sysent->sv_szsigcode != NULL) {
+		szsigcode = *(sysent->sv_szsigcode);
+		destp -= szsigcode;
+		destp = rounddown2(destp, sizeof(uint64_t));
+		error = copyout(sysent->sv_sigcode, (void *)destp,
+		    szsigcode);
+		if (error != 0)
+			return (error);
+	}
+
+	/*
+	 * Copy the image path for the rtld.
+	 */
+	if (imgp->execpath != NULL && imgp->auxargs != NULL) {
+		execpath_len = strlen(imgp->execpath) + 1;
+		destp -= execpath_len;
+		destp = rounddown2(destp, sizeof(uint64_t));
+		imgp->execpathp = (void *)
+		    cheri_bounds_set_exact(destp, execpath_len);
+		error = copyout(imgp->execpath, imgp->execpathp, execpath_len);
+		if (error != 0)
+			return (error);
+	}
+
+	/*
+	 * Prepare the canary for SSP.
+	 */
+	arc4rand(canary, sizeof(canary), 0);
+	destp -= sizeof(canary);
+	imgp->canary = (void *)cheri_bounds_set_exact(destp,
+	    sizeof(canary));
+	error = copyout(canary, imgp->canary, sizeof(canary));
+	if (error != 0)
+		return (error);
+	imgp->canarylen = sizeof(canary);
+
+	/*
+	 * Prepare the pagesizes array.
+	 */
+	imgp->pagesizeslen = sizeof(pagesizes[0]) * MAXPAGESIZES;
+	destp -= imgp->pagesizeslen;
+	destp = rounddown2(destp, sizeof(uint64_t));
+	imgp->pagesizes = (void *)cheri_bounds_set_exact(destp,
+	    imgp->pagesizeslen);
+	error = copyout(pagesizes, imgp->pagesizes, imgp->pagesizeslen);
+	if (error != 0)
+		return (error);
+
+	/*
+	 * Allocate room for the argument and environment strings.
+	 */
+	destp -= ARG_MAX - imgp->args->stringspace;
+	destp = rounddown2(destp, sizeof(uint64_t));
+	ustringp = cheri_bounds_set(destp, ARG_MAX - imgp->args->stringspace);
+
+	if (imgp->auxargs) {
+		/*
+		 * Allocate room on the stack for the ELF auxargs
+		 * array.  It has up to AT_COUNT entries.
+		 */
+		destp -= AT_COUNT * sizeof(Elf64_Auxinfo);
+		destp = rounddown2(destp, sizeof(uint64_t));
+	}
+
+	vectp = (uint64_t *)destp;
+
+	/*
+	 * Allocate room for the argv[] and env vectors including the
+	 * terminating NULL pointers.
+	 */
+	vectp -= imgp->args->argc + 1 + imgp->args->envc + 1;
+
+	/*
+	 * vectp also becomes our initial stack base
+	 */
+	*stack_base = (uintptr_t)vectp; // XXX-AM: should bound?
+
+	stringp = imgp->args->begin_argv;
+	argc = imgp->args->argc;
+	envc = imgp->args->envc;
+
+	/*
+	 * Copy out strings - arguments and environment.
+	 */
+	error = copyout(stringp, (void *)ustringp,
+	    ARG_MAX - imgp->args->stringspace);
+	if (error != 0)
+		return (error);
+
+	/*
+	 * Fill in "ps_strings" struct for ps, w, etc.
+	 */
+	imgp->argv = cheri_bounds_set(vectp, (argc + 1) * sizeof(*vectp));
+	if (suword(&arginfo->ps_argvstr, (uint64_t)vectp) != 0 ||
+	    suword32(&arginfo->ps_nargvstr, argc) != 0)
+		return (EFAULT);
+
+	/*
+	 * Fill in argument portion of vector table.
+	 */
+	for (; argc > 0; --argc) {
+		len = strlen(stringp) + 1;
+		if (suword(vectp++, ustringp) != 0)
+			return (EFAULT);
+		stringp += len;
+		ustringp += len;
+	}
+
+	/* a null vector table pointer separates the argp's from the envp's */
+	if (suword(vectp++, 0) != 0)
+		return (EFAULT);
+
+	imgp->envv = cheri_bounds_set(vectp, (envc + 1) * sizeof(*vectp));
+	if (suword(&arginfo->ps_envstr, (uint64_t)vectp) != 0 ||
+	    suword32(&arginfo->ps_nenvstr, envc) != 0)
+		return (EFAULT);
+
+	/*
+	 * Fill in environment portion of vector table.
+	 */
+	for (; envc > 0; --envc) {
+		len = strlen(stringp) + 1;
+		if (suword(vectp++, ustringp) != 0)
+			return (EFAULT);
+		stringp += len;
+		ustringp += len;
+	}
+
+	/* end of vector table is a null pointer */
+	if (suword(vectp, 0) != 0)
+		return (EFAULT);
+
+	if (imgp->auxargs) {
+		vectp++;
+		imgp->auxv = cheri_bounds_set(vectp,
+		    AT_COUNT * sizeof(Elf64_Auxinfo));
+		error = imgp->sysent->sv_copyout_auxargs(imgp,
+		    (uintptr_t)imgp->auxv);
+		if (error != 0)
+			return (error);
+	}
+
+	return (0);
+}
+
+int
+freebsd64_mount(struct thread *td, struct freebsd64_mount_args *uap)
+{
+	/* XXX: probably need to fill this in... :-( */
+	return (ENOSYS);
+}
+
+int
+freebsd64_kenv(struct thread *td, struct freebsd64_kenv_args *uap)
+{
+	return (kern_kenv(td, uap->what, USER_PTR_STR(uap->name),
+	    USER_PTR_STR(uap->value), uap->len));
+}
+
+/*
+ * audit_syscalls.c
+ */
+int
+freebsd64_audit(struct thread *td, struct freebsd64_audit_args *uap)
+{
+#ifdef	AUDIT
+	return (kern_audit(td, USER_PTR(uap->record, uap->length),
+	    uap->length));
+#else
+	return (ENOSYS);
+#endif
+}
+
+int
+freebsd64_auditon(struct thread *td, struct freebsd64_auditon_args *uap)
+{
+#ifdef	AUDIT
+	return (kern_auditon(td, uap->cmd, USER_PTR(uap->data, uap->length),
+	    uap->length));
+#else
+	return (ENOSYS);
+#endif
+}
+
+int
+freebsd64_getauid(struct thread *td, struct freebsd64_getauid_args *uap)
+{
+#ifdef	AUDIT
+	return (kern_getauid(td, USER_PTR_OBJ(uap->auid)));
+#else
+	return (ENOSYS);
+#endif
+}
+
+int
+freebsd64_setauid(struct thread *td, struct freebsd64_setauid_args *uap)
+{
+#ifdef	AUDIT
+	return (kern_setauid(td, USER_PTR_OBJ(uap->auid)));
+#else
+	return (ENOSYS);
+#endif
+}
+
+int
+freebsd64_getaudit(struct thread *td, struct freebsd64_getaudit_args *uap)
+{
+#ifdef	AUDIT
+	return (kern_getaudit(td, USER_PTR_OBJ(uap->auditinfo)));
+#else
+	return (ENOSYS);
+#endif
+}
+
+int
+freebsd64_setaudit(struct thread *td, struct freebsd64_setaudit_args *uap)
+{
+#ifdef	AUDIT
+	return (kern_setaudit(td, USER_PTR_OBJ(uap->auditinfo)));
+#else
+	return (ENOSYS);
+#endif
+}
+
+int
+freebsd64_getaudit_addr(struct thread *td,
+    struct freebsd64_getaudit_addr_args *uap)
+{
+#ifdef	AUDIT
+	return (kern_getaudit_addr(td,
+	    USER_PTR(uap->auditinfo_addr, uap->length), uap->length));
+#else
+	return (ENOSYS);
+#endif
+}
+
+int
+freebsd64_setaudit_addr(struct thread *td,
+    struct freebsd64_setaudit_addr_args *uap)
+{
+#ifdef	AUDIT
+	return (kern_setaudit_addr(td,
+	    USER_PTR(uap->auditinfo_addr, uap->length), uap->length));
+#else
+	return (ENOSYS);
+#endif
+}
+
+int
+freebsd64_auditctl(struct thread *td, struct freebsd64_auditctl_args *uap)
+{
+#ifdef	AUDIT
+	return (kern_auditctl(td, USER_PTR_PATH(uap->path)));
+#else
+	return (ENOSYS);
+#endif
+}
+
+
+/*
+ * kern_acct.c
+ */
+
+int
+freebsd64_acct(struct thread *td, struct freebsd64_acct_args *uap)
+{
+	return (kern_acct(td, USER_PTR_PATH(uap->path)));
+}
+
+/*
+ * kern_fork.c
+ */
+int
+freebsd64_pdfork(struct thread *td, struct freebsd64_pdfork_args *uap)
+{
+	return (kern_pdfork(td, USER_PTR_OBJ(uap->fdp), uap->flags));
+}
+
+int
+freebsd64_pdrfork(struct thread *td, struct freebsd64_pdrfork_args *uap)
+{
+	return (kern_pdrfork(td, USER_PTR_OBJ(uap->fdp), uap->pdflags,
+	    uap->rfflags));
+}
+
+/*
+ * kern_cpuset.c
+ */
+int
+freebsd64_cpuset(struct thread *td, struct freebsd64_cpuset_args *uap)
+{
+	return (kern_cpuset(td, USER_PTR_OBJ(uap->setid)));
+}
+
+int
+freebsd64_cpuset_getid(struct thread *td,
+    struct freebsd64_cpuset_getid_args *uap)
+{
+	return (kern_cpuset_getid(td, uap->level, uap->which, uap->id,
+	    USER_PTR_OBJ(uap->setid)));
+}
+
+static int
+copyin64_set(const void *u, void *k, size_t size)
+{
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+	int rv;
+	struct bitset *kb = k;
+	int *p;
+
+	rv = copyin(u, k, size);
+	if (rv != 0)
+		return (rv);
+
+	p = (int *)kb->__bits;
+	/* Loop through swapping words.
+	 * `size' is in bytes, we need bits. */
+	for (int i = 0; i < __bitset_words(size * 8); i++) {
+		int tmp = p[0];
+		p[0] = p[1];
+		p[1] = tmp;
+		p += 2;
+	}
+	return (0);
+#else
+	return (copyin(u, k, size));
+#endif
+}
+
+static int
+copyout64_set(const void *k, void *u, size_t size)
+{
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+	const struct bitset *kb = k;
+	struct bitset *ub = u;
+	const int *kp = (const int *)kb->__bits;
+	int *up = (int *)ub->__bits;
+	int rv;
+
+	for (int i = 0; i < __bitset_words(CPU_SETSIZE); i++) {
+		/* `size' is in bytes, we need bits. */
+		for (int i = 0; i < __bitset_words(size * 8); i++) {
+			rv = suword32(up, kp[1]);
+			if (rv == 0)
+				rv = suword32(up + 1, kp[0]);
+			if (rv != 0)
+				return (EFAULT);
+		}
+	}
+	return (0);
+#else
+	return (copyout(k, u, size));
+#endif
+}
+
+static const struct cpuset_copy_cb cpuset_copy64_cb = {
+	.cpuset_copyin = copyin64_set,
+	.cpuset_copyout = copyout64_set
+};
+
+int
+freebsd64_cpuset_getaffinity(struct thread *td,
+    struct freebsd64_cpuset_getaffinity_args *uap)
+{
+	return (user_cpuset_getaffinity(td, uap->level, uap->which,
+	    uap->id, uap->cpusetsize, USER_PTR(uap->mask, uap->cpusetsize),
+	    &cpuset_copy64_cb));
+}
+
+int
+freebsd64_cpuset_setaffinity(struct thread *td,
+    struct freebsd64_cpuset_setaffinity_args *uap)
+{
+	return (user_cpuset_setaffinity(td, uap->level, uap->which, uap->id,
+	    uap->cpusetsize, USER_PTR(uap->mask, uap->cpusetsize),
+	    &cpuset_copy64_cb));
+}
+
+int
+freebsd64_cpuset_getdomain(struct thread *td,
+    struct freebsd64_cpuset_getdomain_args *uap)
+{
+	return (kern_cpuset_getdomain(td, uap->level, uap->which,
+	    uap->id, uap->domainsetsize,
+	    USER_PTR(uap->mask, uap->domainsetsize),
+	    USER_PTR_OBJ(uap->policy),
+	    &cpuset_copy64_cb));
+}
+
+int
+freebsd64_cpuset_setdomain(struct thread *td,
+    struct freebsd64_cpuset_setdomain_args *uap)
+{
+	return (kern_cpuset_setdomain(td, uap->level, uap->which,
+	    uap->id, uap->domainsetsize,
+	    USER_PTR(uap->mask, uap->domainsetsize), uap->policy,
+	    &cpuset_copy64_cb));
+}
+
+/*
+ * kern_descrip.c
+ */
+int
+freebsd64_fcntl(struct thread *td, struct freebsd64_fcntl_args *uap)
+{
+	intptr_t arg;
+
+	switch (uap->cmd) {
+	case F_GETLK:
+	case F_OGETLK:
+	case F_OSETLK:
+	case F_OSETLKW:
+	case F_SETLK:
+	case F_SETLKW:
+	case F_SETLK_REMOTE:
+		arg = (intptr_t)USER_PTR_UNBOUND(uap->arg);
+		break;
+	default:
+		arg = (intptr_t)uap->arg;
+	}
+
+	return (kern_fcntl_freebsd(td, uap->fd, uap->cmd, arg));
+}
+
+int
+freebsd64_fstat(struct thread *td, struct freebsd64_fstat_args *uap)
+{
+	return (user_fstat(td, uap->fd, USER_PTR_OBJ(uap->sb)));
+}
+
+/*
+ * kern_ktrace.c
+ */
+
+int
+freebsd64_ktrace(struct thread *td, struct freebsd64_ktrace_args *uap)
+{
+	return (kern_ktrace(td, USER_PTR_PATH(uap->fname), uap->ops,
+	    uap->facs, uap->pid));
+}
+
+int
+freebsd64_utrace(struct thread *td, struct freebsd64_utrace_args *uap)
+{
+	return (kern_utrace(td, USER_PTR(uap->addr, uap->len),
+	    uap->len));
+}
+
+/*
+ * kern_linker.c
+ */
+
+int
+freebsd64_kldload(struct thread *td, struct freebsd64_kldload_args *uap)
+{
+	return (user_kldload(td, USER_PTR_PATH(uap->file)));
+}
+
+int
+freebsd64_kldfind(struct thread *td, struct freebsd64_kldfind_args *uap)
+{
+	return (kern_kldfind(td, USER_PTR_PATH(uap->file)));
+}
+
+int
+freebsd64_kldstat(struct thread *td, struct freebsd64_kldstat_args *uap)
+{
+	struct kld_file_stat stat;
+	struct kld_file_stat64 stat64, *stat64p;
+	int error, version;
+
+	stat64p = USER_PTR_OBJ(uap->stat);
+	error = copyin(&stat64p->version, &version, sizeof(version));
+	if (error != 0)
+		return (error);
+	if (version != sizeof(struct kld_file_stat64))
+		return (EINVAL);
+
+	error = kern_kldstat(td, uap->fileid, &stat);
+	if (error != 0)
+		return (error);
+
+	bcopy(&stat.name[0], &stat64.name[0], sizeof(stat.name));
+	CP(stat, stat64, refs);
+	CP(stat, stat64, id);
+	stat64.address = (uint64_t)stat.address;
+	CP(stat, stat64, size);
+	bcopy(&stat.pathname[0], &stat64.pathname[0], sizeof(stat.pathname));
+	return (copyout(&stat64, USER_PTR(uap->stat, version), version));
+}
+
+int
+freebsd64_kldsym(struct thread *td, struct freebsd64_kldsym_args *uap)
+{
+	struct kld_sym_lookup64 lookup;
+	int error;
+	void *data = USER_PTR(uap->data, sizeof(lookup));
+
+	error = copyin(data, &lookup, sizeof(lookup));
+	if (error != 0)
+		return (error);
+	if (lookup.version != sizeof(lookup) ||
+	    uap->cmd != KLDSYM_LOOKUP)
+		return (EINVAL);
+	error = kern_kldsym(td, uap->fileid, uap->cmd,
+	    USER_PTR_STR(lookup.symname), &lookup.symvalue, &lookup.symsize);
+	if (error != 0)
+		return (error);
+	error = copyout(&lookup, data, sizeof(lookup));
+
+	return (error);
+}
+
+/*
+ * kern_loginclass.c
+ */
+int
+freebsd64_getloginclass(struct thread *td,
+    struct freebsd64_getloginclass_args *uap)
+{
+	return (kern_getloginclass(td, USER_PTR(uap->namebuf, uap->namelen),
+	    uap->namelen));
+}
+
+int
+freebsd64_setloginclass(struct thread *td,
+    struct freebsd64_setloginclass_args *uap)
+{
+	return (kern_setloginclass(td, USER_PTR_STR(uap->namebuf)));
+}
+
+int
+freebsd64_uuidgen(struct thread *td, struct freebsd64_uuidgen_args *uap)
+{
+	return (user_uuidgen(td, USER_PTR_ARRAY(uap->store, uap->count),
+	    uap->count));
+}
+
+/*
+ * kern_module.c
+ */
+int
+freebsd64_modfind(struct thread *td, struct freebsd64_modfind_args *uap)
+{
+	return (kern_modfind(td, USER_PTR_STR(uap->name)));
+}
+
+int
+freebsd64_modstat(struct thread *td, struct freebsd64_modstat_args *uap)
+{
+	return (kern_modstat(td, uap->modid, USER_PTR_OBJ(uap->stat)));
+}
+
+/*
+ * kern_prot.c
+ */
+#ifdef COMPAT_FREEBSD14
+int freebsd14_freebsd64_getgroups(struct thread *td, struct
+    freebsd14_freebsd64_getgroups_args *uap)
+{
+	return (kern_freebsd14_getgroups(td, uap->gidsetsize,
+	    USER_PTR_ARRAY(uap->gidset, uap->gidsetsize)));
+}
+#endif
+
+int
+freebsd64_getgroups(struct thread *td, struct freebsd64_getgroups_args *uap)
+{
+	return (kern_getgroups(td, uap->gidsetsize,
+	    USER_PTR_ARRAY(uap->gidset, uap->gidsetsize)));
+}
+
+#ifdef COMPAT_FREEBSD14
+int freebsd14_freebsd64_setgroups(struct thread *td,
+    struct freebsd14_freebsd64_setgroups_args *uap)
+{
+	return (user_freebsd14_setgroups(td, uap->gidsetsize,
+	    USER_PTR_ARRAY(uap->gidset, uap->gidsetsize)));
+}
+#endif
+
+int
+freebsd64_setgroups(struct thread *td, struct freebsd64_setgroups_args *uap)
+{
+	return (user_setgroups(td, uap->gidsetsize,
+	    USER_PTR_ARRAY(uap->gidset, uap->gidsetsize)));
+}
+
+int
+freebsd64_getresuid(struct thread *td, struct freebsd64_getresuid_args *uap)
+{
+	return (kern_getresuid(td, USER_PTR_OBJ(uap->ruid),
+	    USER_PTR_OBJ(uap->euid), USER_PTR_OBJ(uap->suid)));
+}
+
+int
+freebsd64_getresgid(struct thread *td, struct freebsd64_getresgid_args *uap)
+{
+	return (kern_getresgid(td, USER_PTR_OBJ(uap->rgid),
+	    USER_PTR_OBJ(uap->egid), USER_PTR_OBJ(uap->sgid)));
+}
+
+int
+freebsd64_getlogin(struct thread *td, struct freebsd64_getlogin_args *uap)
+{
+	return (kern_getlogin(td, USER_PTR(uap->namebuf, uap->namelen),
+	    uap->namelen));
+}
+
+int
+freebsd64_setlogin(struct thread *td, struct freebsd64_setlogin_args *uap)
+{
+	return (kern_setlogin(td, USER_PTR_STR(uap->namebuf)));
+}
+
+int
+freebsd64_setcred(struct thread *td, struct freebsd64_setcred_args *uap)
+{
+	struct setcred wcred;
+	struct setcred64 wcred64;
+	int error;
+
+	if (uap->size != sizeof(wcred64))
+		return (EINVAL);
+	error = copyin(USER_PTR_OBJ(uap->wcred), &wcred64, sizeof(wcred64));
+	if (error != 0)
+		return (error);
+	CP(wcred64, wcred, sc_uid);
+	CP(wcred64, wcred, sc_ruid);
+	CP(wcred64, wcred, sc_svuid);
+	CP(wcred64, wcred, sc_gid);
+	CP(wcred64, wcred, sc_rgid);
+	CP(wcred64, wcred, sc_svgid);
+	CP(wcred64, wcred, sc_supp_groups_nb);
+	wcred.sc_supp_groups = USER_PTR(wcred64.sc_supp_groups,
+	    wcred64.sc_supp_groups_nb * sizeof(gid_t));
+	wcred.sc_label = USER_PTR(wcred64.sc_label, sizeof(struct mac64));
+	return (user_setcred(td, uap->flags, &wcred));
+}
+
+
+/*
+ * kern_rctl.c
+ */
+int
+freebsd64_rctl_get_racct(struct thread *td,
+    struct freebsd64_rctl_get_racct_args *uap)
+{
+
+#ifdef RCTL
+	return (kern_rctl_get_racct(td, USER_PTR(uap->inbufp, uap->inbuflen),
+	    uap->inbuflen, USER_PTR(uap->outbufp, uap->outbuflen),
+	    uap->outbuflen));
+#else
+	return (ENOSYS);
+#endif
+}
+
+int
+freebsd64_rctl_get_rules(struct thread *td,
+    struct freebsd64_rctl_get_rules_args *uap)
+{
+#ifdef RCTL
+	return (kern_rctl_get_rules(td, USER_PTR(uap->inbufp, uap->inbuflen),
+	    uap->inbuflen, USER_PTR(uap->outbufp, uap->outbuflen),
+	    uap->outbuflen));
+#else
+	return (ENOSYS);
+#endif
+}
+
+int
+freebsd64_rctl_get_limits(struct thread *td,
+    struct freebsd64_rctl_get_limits_args *uap)
+{
+#ifdef RCTL
+	return (kern_rctl_get_limits(td, USER_PTR(uap->inbufp, uap->inbuflen),
+	    uap->inbuflen, USER_PTR(uap->outbufp, uap->outbuflen),
+	    uap->outbuflen));
+#else
+	return (ENOSYS);
+#endif
+}
+
+int
+freebsd64_rctl_add_rule(struct thread *td,
+    struct freebsd64_rctl_add_rule_args *uap)
+{
+#ifdef RCTL
+	return (kern_rctl_add_rule(td, USER_PTR(uap->inbufp, uap->inbuflen),
+	    uap->inbuflen, USER_PTR(uap->outbufp, uap->outbuflen),
+	    uap->outbuflen));
+#else
+	return (ENOSYS);
+#endif
+}
+
+int
+freebsd64_rctl_remove_rule(struct thread *td,
+    struct freebsd64_rctl_remove_rule_args *uap)
+{
+#ifdef RCTL
+	return (kern_rctl_remove_rule(td,
+	    USER_PTR(uap->inbufp, uap->inbuflen), uap->inbuflen,
+	    USER_PTR(uap->outbufp, uap->outbuflen), uap->outbuflen));
+#else
+	return (ENOSYS);
+#endif
+}
+
+/*
+ * kern_resource.h
+ */
+int
+freebsd64_rtprio_thread(struct thread *td,
+    struct freebsd64_rtprio_thread_args *uap)
+{
+	return (kern_rtprio_thread(td, uap->function, uap->lwpid,
+	    USER_PTR_OBJ(uap->rtp)));
+}
+
+int
+freebsd64_rtprio(struct thread *td, struct freebsd64_rtprio_args *uap)
+{
+	return (kern_rtprio(td, uap->function, uap->pid,
+	    USER_PTR_OBJ(uap->rtp)));
+}
+
+int
+freebsd64_setrlimit(struct thread *td, struct freebsd64_setrlimit_args *uap)
+{
+	struct rlimit alim;
+	int error;
+
+	error = copyin(USER_PTR_OBJ(uap->rlp), &alim, sizeof(struct rlimit));
+	if (error != 0)
+		return (error);
+	return (kern_setrlimit(td, uap->which, &alim));
+}
+
+int
+freebsd64_getrlimit(struct thread *td, struct freebsd64_getrlimit_args *uap)
+{
+	struct rlimit rlim;
+	int error;
+
+	if (uap->which >= RLIM_NLIMITS)
+		return (EINVAL);
+	lim_rlimit(td, uap->which, &rlim);
+	error = copyout(&rlim, USER_PTR_OBJ(uap->rlp), sizeof(struct rlimit));
+	return (error);
+}
+
+int
+freebsd64_getrlimitusage(struct thread *td,
+    struct freebsd64_getrlimitusage_args *uap)
+{
+	return (user_getrlimitusage(td, uap->which, uap->flags,
+	    USER_PTR_OBJ(uap->res)));
+}
+
+int
+freebsd64_getrusage(struct thread *td, struct freebsd64_getrusage_args *uap)
+{
+	struct rusage ru;
+	int error;
+
+	error = kern_getrusage(td, uap->who, &ru);
+	if (error == 0)
+		error = copyout(&ru, USER_PTR_OBJ(uap->rusage),
+		    sizeof(struct rusage));
+	return (error);
+}
+
+/*
+ * kern_sysctl.c
+ */
+
+int
+freebsd64___sysctl(struct thread *td, struct freebsd64___sysctl_args *uap)
+{
+	size_t oldlen;
+
+	/*
+	 * Fetch the oldlen so we can bound the old capability.
+	 * While there is a race between here and kern_sysctl's use,
+	 * the caller will get what they deserve if they increase the
+	 * value at uap->oldlenp between now its later use.
+	 */
+	if (uap->oldlenp == NULL)
+		oldlen = 0;
+	else
+		if (fueword(USER_PTR_OBJ(uap->oldlenp), &oldlen) == -1)
+			return (EFAULT);
+
+	return (kern_sysctl(td, USER_PTR_ARRAY(uap->name, uap->namelen),
+	    uap->namelen, USER_PTR(uap->old, oldlen),
+	    USER_PTR_OBJ(uap->oldlenp), USER_PTR(uap->new, uap->newlen),
+	    uap->newlen, SCTL_MASK64));
+}
+
+int
+freebsd64___sysctlbyname(struct thread *td, struct
+    freebsd64___sysctlbyname_args *uap)
+{
+	size_t rv, oldlen;
+	int error;
+
+	/*
+	 * Fetch the oldlen so we can bound the old capability.
+	 * This avoids a race between here and kern_sysctl's use, if the
+	 * caller increases the value at uap->oldlenp between now its later use.
+	 */
+	if (uap->oldlenp == NULL)
+		oldlen = 0;
+	else
+		if (fueword(USER_PTR_OBJ(uap->oldlenp), &oldlen) == -1)
+			return (EFAULT);
+
+	error = kern___sysctlbyname(td, USER_PTR(uap->name, uap->namelen),
+	    uap->namelen, USER_PTR(uap->old, oldlen),
+	    &oldlen, USER_PTR(uap->new, uap->newlen),
+	    uap->newlen, &rv, SCTL_MASK64, 1);
+	if (error != 0)
+		return (error);
+	if (uap->oldlenp != NULL)
+		error = copyout(&rv, USER_PTR(uap->oldlenp, sizeof(rv)),
+		    sizeof(rv));
+
+	return (error);
+}
+
+/*
+ * kern_thr.c
+ */
+
+struct thr_create_initthr_args64 {
+	ucontext64_t ctx;
+	long *tid;
+};
+
+static int
+freebsd64_thr_create_initthr(struct thread *td, void *thunk)
+{
+	struct thr_create_initthr_args64 *args;
+
+	args = thunk;
+	if (args->tid != NULL &&
+	    suword(USER_PTR_OBJ(args->tid), td->td_tid) != 0)
+		return (EFAULT);
+
+	return (freebsd64_set_mcontext(td, &args->ctx.uc_mcontext));
+}
+
+int
+freebsd64_thr_create(struct thread *td, struct freebsd64_thr_create_args *uap)
+{
+	struct thr_create_initthr_args64 args;
+	int error;
+
+	if ((error = copyin(USER_PTR_OBJ(uap->ctx), &args.ctx, sizeof(args.ctx))))
+		return (error);
+	args.tid = uap->id;
+	return (thread_create(td, NULL, freebsd64_thr_create_initthr, &args));
+}
+
+int
+freebsd64_thr_self(struct thread *td, struct freebsd64_thr_self_args *uap)
+{
+	int error;
+
+	error = suword(USER_PTR_OBJ(uap->id), td->td_tid);
+	if (error == -1)
+		return (EFAULT);
+	return (0);
+}
+
+int
+freebsd64_thr_exit(struct thread *td, struct freebsd64_thr_exit_args *uap)
+{
+	umtx_thread_exit(td);
+
+	/* Signal userland that it can free the stack. */
+	if (uap->state != NULL) {
+		(void)suword(USER_PTR_OBJ(uap->state), 1);
+		(void)kern_umtx_wake(td, USER_PTR_OBJ(uap->state), INT_MAX,
+		    0);
+	}
+
+	return (kern_thr_exit(td));
+}
+
+int
+freebsd64_thr_suspend(struct thread *td, struct freebsd64_thr_suspend_args *uap)
+{
+	struct timespec ts, *tsp;
+	int error;
+
+	tsp = NULL;
+	if (uap->timeout != NULL) {
+		error = umtx_copyin_timeout(USER_PTR_OBJ(uap->timeout), &ts);
+		if (error != 0)
+			return (error);
+		tsp = &ts;
+	}
+
+	return (kern_thr_suspend(td, tsp));
+}
+
+int
+freebsd64_thr_set_name(struct thread *td,
+    struct freebsd64_thr_set_name_args *uap)
+{
+	return (kern_thr_set_name(td, uap->id, USER_PTR_STR(uap->name)));
+}
+
+static int
+freebsd64_thr_new_initthr(struct thread *td, void *thunk)
+{
+	stack_t stack;
+	struct thr_param64 *param = thunk;
+	long *child_tid = USER_PTR(param->child_tid,
+	    sizeof(long));
+	long *parent_tid = USER_PTR(param->parent_tid,
+	    sizeof(long));
+
+	if ((child_tid != NULL && suword(child_tid, td->td_tid)) ||
+	    (parent_tid != NULL && suword(parent_tid, td->td_tid)))
+		return (EFAULT);
+	stack.ss_sp = USER_PTR_UNBOUND(param->stack_base);
+	stack.ss_size = param->stack_size;
+	cpu_set_upcall(td,
+	    (void (*)(void *))(uintptr_t)param->start_func,
+	    (void *)(uintptr_t)param->arg, &stack);
+	return (cpu_set_user_tls(td,
+		(void *)(uintptr_t)param->tls_base, 0));
+}
+
+int
+freebsd64_thr_new(struct thread *td, struct freebsd64_thr_new_args *uap)
+{
+	struct thr_param64 param64;
+	struct rtprio rtp, *rtpp;
+	int error;
+
+	if (uap->param_size != sizeof(struct thr_param64))
+		return (EINVAL);
+
+	error = copyin(USER_PTR_OBJ(uap->param), &param64, uap->param_size);
+	if (error != 0)
+		return (error);
+
+	if (param64.rtp != 0) {
+		error = copyin(USER_PTR(param64.rtp, sizeof(struct rtprio)),
+		    &rtp, sizeof(struct rtprio));
+		if (error)
+			return (error);
+		rtpp = &rtp;
+	} else
+		rtpp = NULL;
+	return (thread_create(td, rtpp, freebsd64_thr_new_initthr, &param64));
+}
+
+#ifdef _KPOSIX_PRIORITY_SCHEDULING
+/*
+ * p1003_1b.c
+ */
+int
+freebsd64_sched_setparam(struct thread *td,
+    struct freebsd64_sched_setparam_args * uap)
+{
+	return (user_sched_setparam(td, uap->pid,
+	    USER_PTR_OBJ(uap->param)));
+}
+
+int
+freebsd64_sched_getparam(struct thread *td,
+    struct freebsd64_sched_getparam_args *uap)
+{
+	return (user_sched_getparam(td, uap->pid,
+	    USER_PTR_OBJ(uap->param)));
+}
+
+int
+freebsd64_sched_setscheduler(struct thread *td,
+    struct freebsd64_sched_setscheduler_args *uap)
+{
+	return (user_sched_setscheduler(td, uap->pid, uap->policy,
+	    USER_PTR_OBJ(uap->param)));
+}
+
+int
+freebsd64_sched_rr_get_interval(struct thread *td,
+    struct freebsd64_sched_rr_get_interval_args *uap)
+{
+	return (user_sched_rr_get_interval(td, uap->pid,
+	    USER_PTR_OBJ(uap->interval)));
+}
+
+#else /* !_KPOSIX_PRIORITY_SCHEDULING */
+FREEBSD64_SYSCALL_NOT_PRESENT_GEN(sched_setparam)
+FREEBSD64_SYSCALL_NOT_PRESENT_GEN(sched_getparam)
+FREEBSD64_SYSCALL_NOT_PRESENT_GEN(sched_setscheduler)
+FREEBSD64_SYSCALL_NOT_PRESENT_GEN(sched_rr_get_interval)
+#endif /* !_KPOSIX_PRIORITY_SCHEDULING */
+
+/*
+ * subr_profil.c
+ */
+
+int
+freebsd64_profil(struct thread *td, struct freebsd64_profil_args *uap)
+{
+	return (kern_profil(td, USER_PTR(uap->samples, uap->size), uap->size,
+	    uap->offset, uap->scale));
+}
+
+/*
+ * vm/swap_pager.c
+ */
+
+int
+freebsd64_swapon(struct thread *td, struct freebsd64_swapon_args *uap)
+{
+	return (kern_swapon(td, USER_PTR_PATH(uap->name)));
+}
+
+int
+freebsd64_swapoff(struct thread *td, struct freebsd64_swapoff_args *uap)
+{
+	return (kern_swapoff(td, USER_PTR_PATH(uap->name), UIO_USERSPACE,
+	    uap->flags));
+}
+
+#ifdef COMPAT_FREEBSD13
+int
+freebsd13_freebsd64_swapoff(struct thread *td,
+    struct freebsd13_freebsd64_swapoff_args *uap)
+{
+	return (kern_swapoff(td, USER_PTR_PATH(uap->name), UIO_USERSPACE, 0));
+}
+#endif
+
+/*
+ * sys_capability.c
+ */
+#ifdef CAPABILITIES
+int
+freebsd64_cap_getmode(struct thread *td, struct freebsd64_cap_getmode_args *uap)
+{
+	return (kern_cap_getmode(td, USER_PTR_OBJ(uap->modep)));
+}
+
+int
+freebsd64_cap_rights_limit(struct thread *td,
+   struct freebsd64_cap_rights_limit_args *uap)
+{
+	return (user_cap_rights_limit(td, uap->fd,
+	    USER_PTR_OBJ(uap->rightsp)));
+}
+
+int
+freebsd64___cap_rights_get(struct thread *td,
+    struct freebsd64___cap_rights_get_args *uap)
+{
+	return (kern___cap_rights_get(td, uap->version, uap->fd,
+	    USER_PTR_OBJ(uap->rightsp)));
+}
+
+int
+freebsd64_cap_ioctls_limit(struct thread *td,
+    struct freebsd64_cap_ioctls_limit_args *uap)
+{
+	return (user_cap_ioctls_limit(td, uap->fd,
+	    USER_PTR_ARRAY(uap->cmds, uap->ncmds), uap->ncmds));
+}
+
+int
+freebsd64_cap_ioctls_get(struct thread *td,
+    struct freebsd64_cap_ioctls_get_args *uap)
+{
+	return (kern_cap_ioctls_get(td, uap->fd,
+	    USER_PTR_ARRAY(uap->cmds, uap->maxcmds), uap->maxcmds));
+}
+
+int
+freebsd64_cap_fcntls_get(struct thread *td,
+   struct freebsd64_cap_fcntls_get_args *uap)
+{
+	return (kern_cap_fcntls_get(td, uap->fd,
+	    USER_PTR_OBJ(uap->fcntlrightsp)));
+}
+#else /* !CAPABILITIES */
+int
+freebsd64_cap_getmode(struct thread *td, struct freebsd64_cap_getmode_args *uap)
+{
+	return (ENOSYS);
+}
+
+int
+freebsd64_cap_rights_limit(struct thread *td,
+   struct freebsd64_cap_rights_limit_args *uap)
+{
+	return (ENOSYS);
+}
+
+int
+freebsd64___cap_rights_get(struct thread *td,
+    struct freebsd64___cap_rights_get_args *uap)
+{
+	return (ENOSYS);
+}
+
+int
+freebsd64_cap_ioctls_limit(struct thread *td,
+    struct freebsd64_cap_ioctls_limit_args *uap)
+{
+	return (ENOSYS);
+}
+
+int
+freebsd64_cap_ioctls_get(struct thread *td,
+    struct freebsd64_cap_ioctls_get_args *uap)
+{
+	return (ENOSYS);
+}
+
+int
+freebsd64_cap_fcntls_get(struct thread *td,
+   struct freebsd64_cap_fcntls_get_args *uap)
+{
+	return (ENOSYS);
+}
+#endif /* !CAPABILITIES */
+
+/*
+ * sys_getrandom.c
+ */
+int
+freebsd64_getrandom(struct thread *td, struct freebsd64_getrandom_args *uap)
+{
+	return (kern_getrandom(td, USER_PTR(uap->buf, uap->buflen),
+	    uap->buflen, uap->flags));
+}
+
+int
+freebsd64_pipe2(struct thread *td, struct freebsd64_pipe2_args *uap)
+{
+	return (kern_pipe2(td, USER_PTR_ARRAY(uap->fildes, 2), uap->flags));
+}
+
+/*
+ * sys_procdesc.c
+ */
+
+int
+freebsd64_pdgetpid(struct thread *td, struct freebsd64_pdgetpid_args *uap)
+{
+	return (user_pdgetpid(td, uap->fd, USER_PTR_OBJ(uap->pidp)));
+}
+
+/*
+ * System call registration helpers.
+ */
+
+int
+freebsd64_syscall_helper_register(struct syscall_helper_data *sd, int flags)
+{
+	return (kern_syscall_helper_register(freebsd64_sysent, sd, flags));
+}
+
+int
+freebsd64_syscall_helper_unregister(struct syscall_helper_data *sd)
+{
+	return (kern_syscall_helper_unregister(freebsd64_sysent, sd));
+}

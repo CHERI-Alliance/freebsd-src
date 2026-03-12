@@ -451,6 +451,20 @@ struct msghdr {
 	int		 msg_flags;		/* flags on received message */
 };
 
+#ifdef _KERNEL
+#ifdef COMPAT_FREEBSD64
+struct msghdr64 {
+	uint64_t	msg_name;	/* (void *) optional address */
+	socklen_t	msg_namelen;	/* size of address */
+	uint64_t	msg_iov;	/* (struct iovec64 *) scatter/gather array */
+	int		msg_iovlen;	/* # elements in msg_iov */
+	uint64_t	msg_control;	/* (void *) ancillary data, see below */
+	socklen_t	msg_controllen;	/* ancillary data buffer len */
+	int		msg_flags;	/* flags on received message */
+};
+#endif
+#endif /* _KERNEL */
+
 #define	MSG_OOB		 0x00000001	/* process out-of-band data */
 #define	MSG_PEEK	 0x00000002	/* peek at incoming message */
 #define	MSG_DONTROUTE	 0x00000004	/* send without using routing tables */
