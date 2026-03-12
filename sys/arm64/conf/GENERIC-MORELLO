@@ -10,6 +10,8 @@ makeoptions WITHOUT_MODULES="acpi dtrace ena hyperv ipfilter iscsi iwlwifi linux
 
 ident	GENERIC-MORELLO
 
+options	COMPAT_FREEBSD64
+
 # Doesn't build with Morello LLVM and doesn't make sense with CHERI
 nooptions 	PAC
 
