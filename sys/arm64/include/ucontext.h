@@ -135,6 +135,27 @@ typedef struct __mcontext32_vfp {
 
 #endif /* COMPAT_FREEBSD32 */
 
+#ifdef COMPAT_FREEBSD64
+#include <compat/freebsd64/freebsd64_signal.h>
+typedef struct __mcontext64 {
+	struct gpregs	mc_gpregs;
+	struct fpregs	mc_fpregs;
+	int		mc_flags;
+	int		mc_pad;		/* Padding */
+	__uint64_t	mc_spare[7];	/* Space for expansion, set to zero */
+	__uint64_t	mc_capregs;
+} mcontext64_t;
+
+typedef struct __ucontext64 {
+	sigset_t		uc_sigmask;
+	mcontext64_t		uc_mcontext;
+	uint64_t		uc_link;
+	struct sigaltstack64	uc_stack;
+	int			uc_flags;
+	int			__spare__[4];
+} ucontext64_t;
+#endif
+
 #endif	/* !_MACHINE_UCONTEXT_H_ */
 
 #endif /* !__arm__ */

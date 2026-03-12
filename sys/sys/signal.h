@@ -293,6 +293,39 @@ struct __siginfo32 {
 };
 #endif
 
+#if defined(_WANT_LWPINFO64) || (defined(_KERNEL) && defined(COMPAT_FREEBSD64))
+struct __siginfo64 {
+	int	si_signo;		/* signal number */
+	int	si_errno;		/* errno association */
+	int	si_code;		/* signal code */
+	__pid_t	si_pid;			/* sending process */
+	__uid_t	si_uid;			/* sender's ruid */
+	int	si_status;		/* exit value */
+	uint64_t si_addr;		/* faulting instruction */
+	union sigval64 si_value;
+	union	{
+		struct {
+			int	_trapno;/* machine specific trap code */
+			int	_capreg;/* only for SIGPROT */
+		} _fault;
+		struct {
+			int	_timerid;
+			int	_overrun;
+		} _timer;
+		struct {
+			int	_mqd;
+		} _mesgq;
+		struct {
+			long	_band;		/* band event for SIGPOLL */
+		} _poll;			/* was this ever used ? */
+		struct {
+			long	__spare1__;
+			int	__spare2__[7];
+		} __spare__;
+	} _reason;
+};
+#endif
+
 /** si_code **/
 /* codes for SIGILL */
 #define ILL_ILLOPC 	1	/* Illegal opcode.			*/

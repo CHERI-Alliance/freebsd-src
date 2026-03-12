@@ -56,6 +56,13 @@ union sigval32 {
 	__uint32_t sigval_ptr;
 };
 #endif
+
+#if defined(_WANT_LWPINFO64) || (defined(_KERNEL) && defined(COMPAT_FREEBSD64))
+union sigval64 {
+	int	sival_int;
+	__uint64_t sival_ptr;
+};
+#endif
 #endif
 
 #endif	/* __SYS__SIGVAL_H */

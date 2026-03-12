@@ -82,6 +82,13 @@ struct sigframe32 {
 };
 #endif /* COMPAT_FREEBSD32 */
 
+#ifdef COMPAT_FREEBSD64
+struct sigframe64 {
+	struct __siginfo64	sf_si;
+	ucontext64_t		sf_uc;
+};
+#endif
+
 #endif /* !LOCORE */
 
 #endif /* !_MACHINE_FRAME_H_ */

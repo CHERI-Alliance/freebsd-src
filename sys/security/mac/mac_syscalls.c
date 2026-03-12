@@ -79,13 +79,6 @@
 
 FEATURE(security_mac, "Mandatory Access Control Framework support");
 
-#ifdef COMPAT_FREEBSD32
-struct mac32 {
-	uint32_t	m_buflen;	/* size_t */
-	uint32_t	m_string;	/* char * */
-};
-#endif
-
 static int
 mac_label_copyin_string(struct mac *const mac, char **const u_string,
     int flag)
