@@ -293,6 +293,7 @@ struct aiocb_ops {
 	int	(*store_status)(struct aiocb *ujob, long status);
 	int	(*store_error)(struct aiocb *ujob, long error);
 	int	(*store_aiocb)(struct aiocb **ujobp, struct aiocb *ujob);
+	size_t	(*size)(void);
 };
 
 static TAILQ_HEAD(,aioproc) aio_freeproc;		/* (c) Idle daemons */
@@ -1476,6 +1477,12 @@ aiocb_store_aiocb(struct aiocb **ujobp, struct aiocb *ujob)
 	return (suptr(ujobp, (intptr_t)ujob));
 }
 
+static size_t
+aiocb_size(void)
+{
+	return (sizeof(struct aiocb));
+}
+
 static struct aiocb_ops aiocb_ops = {
 	.aio_copyin = aiocb_copyin,
 	.fetch_status = aiocb_fetch_status,
@@ -1483,6 +1490,7 @@ static struct aiocb_ops aiocb_ops = {
 	.store_status = aiocb_store_status,
 	.store_error = aiocb_store_error,
 	.store_aiocb = aiocb_store_aiocb,
+	.size = aiocb_size,
 };
 
 #ifdef COMPAT_FREEBSD6
@@ -1493,6 +1501,7 @@ static struct aiocb_ops aiocb_ops_osigevent = {
 	.store_status = aiocb_store_status,
 	.store_error = aiocb_store_error,
 	.store_aiocb = aiocb_store_aiocb,
+	.size = aiocb_size,
 };
 #endif
 
@@ -1914,6 +1923,12 @@ kern_aio_return(struct thread *td, struct aiocb *ujob, struct aiocb_ops *ops)
 	struct kaioinfo *ki;
 	long status, error;
 
+#ifdef __CHERI__
+	if (!cheri_can_access(ujob, CHERI_PERM_LOAD | CHERI_PERM_STORE,
+	    ops->size()))
+		return (EINVAL);
+#endif
+
 	ki = p->p_aioinfo;
 	if (ki == NULL)
 		return (EINVAL);
@@ -2088,6 +2103,13 @@ kern_aio_cancel(struct thread *td, int fd, struct aiocb *ujob,
 	memset(&marker, 0, sizeof(marker));
 	marker.jobflags = KAIOCB_MARKER;
 
+#ifdef __CHERI__
+	if (ujob != NULL && !cheri_can_access(ujob,
+	    CHERI_PERM_LOAD | CHERI_PERM_STORE, ops->size())) {
+		td->td_retval[0] = AIO_NOTCANCELED;
+		return (0);
+	}
+#endif
 	AIO_LOCK(ki);
 	TAILQ_FOREACH_SAFE(job, &ki->kaio_jobqueue, plist, jobn) {
 		if (fd == job->uaiocb.aio_fildes &&
@@ -2151,6 +2173,14 @@ kern_aio_error(struct thread *td, struct aiocb *ujob, struct aiocb_ops *ops)
 		td->td_retval[0] = EINVAL;
 		return (0);
 	}
+
+#ifdef __CHERI__
+	if (!cheri_can_access(ujob, CHERI_PERM_LOAD | CHERI_PERM_STORE,
+	    ops->size())) {
+		td->td_retval[0] = EINVAL;
+		return (0);
+	}
+#endif
 
 	AIO_LOCK(ki);
 	TAILQ_FOREACH(job, &ki->kaio_all, allist) {
@@ -2930,6 +2960,12 @@ aiocb32_store_aiocb(struct aiocb **ujobp, struct aiocb *ujob)
 	return (suword32(ujobp, (long)ujob));
 }
 
+static size_t
+aiocb32_size(void)
+{
+	return (sizeof(struct aiocb32));
+}
+
 static struct aiocb_ops aiocb32_ops = {
 	.aio_copyin = aiocb32_copyin,
 	.fetch_status = aiocb32_fetch_status,
@@ -2937,6 +2973,7 @@ static struct aiocb_ops aiocb32_ops = {
 	.store_status = aiocb32_store_status,
 	.store_error = aiocb32_store_error,
 	.store_aiocb = aiocb32_store_aiocb,
+	.size = aiocb32_size,
 };
 
 #ifdef COMPAT_FREEBSD6
@@ -2947,6 +2984,7 @@ static struct aiocb_ops aiocb32_ops_osigevent = {
 	.store_status = aiocb32_store_status,
 	.store_error = aiocb32_store_error,
 	.store_aiocb = aiocb32_store_aiocb,
+	.size = aiocb32_size,
 };
 #endif
 
