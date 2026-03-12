@@ -204,6 +204,19 @@ struct xucred32 {
 };
 #endif
 
+struct setcred64 {
+	uid_t	sc_uid;
+	uid_t	sc_ruid;
+	uid_t	sc_svuid;
+	gid_t	sc_gid;
+	gid_t	sc_rgid;
+	gid_t	sc_svgid;
+	u_int	sc_pad;
+	u_int	sc_supp_groups_nb;
+	uint64_t sc_supp_groups;        /* gid_t [*] */
+	uint64_t sc_label;              /* struct mac64 [*] */
+};
+
 struct thread;
 
 /* Common native and 32-bit compatibility entry point. */

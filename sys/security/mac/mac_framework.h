@@ -94,6 +94,20 @@ struct vop_setlabel_args;
 struct in_addr;
 struct in6_addr;
 
+#ifdef COMPAT_FREEBSD32
+struct mac32 {
+	uint32_t	m_buflen;	/* size_t */
+	uint32_t	m_string;	/* char * */
+};
+#endif
+
+#ifdef COMPAT_FREEBSD64
+struct mac64 {
+	size_t		m_buflen;
+	uint64_t	m_string;	/* void * */
+};
+#endif
+
 #include <sys/acl.h>			/* XXX acl_type_t */
 #include <sys/types.h>			/* accmode_t */
 
