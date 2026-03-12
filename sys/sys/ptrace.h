@@ -166,6 +166,21 @@ struct ptrace_lwpinfo32 {
 };
 #endif
 
+#if defined(_WANT_LWPINFO64) || (defined(_KERNEL) && defined(COMPAT_FREEBSD64))
+struct ptrace_lwpinfo64 {
+	lwpid_t		pl_lwpid;	/* LWP described. */
+	int		pl_event;	/* Event that stopped the LWP. */
+	int		pl_flags;	/* LWP flags. */
+	sigset_t	pl_sigmask;	/* LWP signal mask */
+	sigset_t	pl_siglist;	/* LWP pending signal */
+	struct __siginfo64 pl_siginfo;	/* siginfo for signal */
+	char		pl_tdname[MAXCOMLEN + 1]; /* LWP name. */
+	pid_t		pl_child_pid;	/* New child pid */
+	u_int		pl_syscall_code;
+	u_int		pl_syscall_narg;
+};
+#endif
+
 /* Argument structure for PT_GET_SC_RET. */
 struct ptrace_sc_ret {
 	syscallarg_t	sr_retval[2];	/* Only valid if sr_error == 0. */

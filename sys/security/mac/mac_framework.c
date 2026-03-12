@@ -744,13 +744,6 @@ mac_check_structmac_consistent(const struct mac *mac)
 	return (0);
 }
 
-#ifdef COMPAT_FREEBSD32
-struct mac32 {
-	uint32_t	m_buflen;	/* size_t */
-	uint32_t	m_string;	/* char * */
-};
-#endif
-
 int
 copyin_mac(const void *mac_p, struct mac *mac)
 {
