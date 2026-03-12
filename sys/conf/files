@@ -407,6 +407,19 @@ compat/freebsd32/freebsd32_misc.c	optional compat_freebsd32
 compat/freebsd32/freebsd32_signal.c	optional compat_freebsd32
 compat/freebsd32/freebsd32_syscalls.c	optional compat_freebsd32
 compat/freebsd32/freebsd32_sysent.c	optional compat_freebsd32
+compat/freebsd64/freebsd64_abort2.c	optional compat_freebsd64
+compat/freebsd64/freebsd64_generic.c	optional compat_freebsd64
+compat/freebsd64/freebsd64_jail.c	optional compat_freebsd64
+compat/freebsd64/freebsd64_mac.c	optional compat_freebsd64
+compat/freebsd64/freebsd64_mmap.c	optional compat_freebsd64
+compat/freebsd64/freebsd64_misc.c	optional compat_freebsd64
+compat/freebsd64/freebsd64_process.c	optional compat_freebsd64
+compat/freebsd64/freebsd64_signal.c	optional compat_freebsd64
+compat/freebsd64/freebsd64_syscalls.c	optional compat_freebsd64
+compat/freebsd64/freebsd64_sysent.c	optional compat_freebsd64
+compat/freebsd64/freebsd64_time.c	optional compat_freebsd64
+compat/freebsd64/freebsd64_uipc.c	optional compat_freebsd64
+compat/freebsd64/freebsd64_vfs.c	optional compat_freebsd64
 contrib/ck/src/ck_array.c				standard compile-with "${NORMAL_C} -I$S/contrib/ck/include"
 contrib/ck/src/ck_barrier_centralized.c			standard compile-with "${NORMAL_C} -I$S/contrib/ck/include"
 contrib/ck/src/ck_barrier_combining.c			standard compile-with "${NORMAL_C} -I$S/contrib/ck/include"
@@ -3854,6 +3867,7 @@ kern/device_if.m		standard
 kern/imgact_binmisc.c		optional imgact_binmisc
 kern/imgact_elf.c		standard
 kern/imgact_elf32.c		optional compat_freebsd32
+kern/imgact_elf64.c		optional compat_freebsd64
 kern/imgact_shell.c		standard
 kern/init_main.c		standard
 kern/init_sysent.c		standard
