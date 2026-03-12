@@ -1412,7 +1412,7 @@ aiocb_copyin_old_sigevent(struct aiocb *ujob, struct kaiocb *kjob,
 	int error;
 
 	bzero(kcb, sizeof(struct aiocb));
-	error = copyin(ujob, kcb, sizeof(struct oaiocb));
+	error = copyinptr(ujob, kcb, sizeof(struct oaiocb));
 	if (error)
 		return (error);
 	/* No need to copyin aio_iov, because it did not exist in FreeBSD 6 */
@@ -1427,7 +1427,7 @@ aiocb_copyin(struct aiocb *ujob, struct kaiocb *kjob, int type)
 	struct aiocb *kcb = &kjob->uaiocb;
 	int error;
 
-	error = copyin(ujob, kcb, sizeof(struct aiocb));
+	error = copyinptr(ujob, kcb, sizeof(struct aiocb));
 	if (error)
 		return (error);
 	if (type == LIO_NOP)
@@ -1473,7 +1473,7 @@ static int
 aiocb_store_aiocb(struct aiocb **ujobp, struct aiocb *ujob)
 {
 
-	return (suword(ujobp, (long)ujob));
+	return (suptr(ujobp, (intptr_t)ujob));
 }
 
 static struct aiocb_ops aiocb_ops = {
@@ -2030,7 +2030,8 @@ sys_aio_suspend(struct thread *td, struct aio_suspend_args *uap)
 		tsp = NULL;
 
 	ujoblist = malloc(uap->nent * sizeof(ujoblist[0]), M_AIO, M_WAITOK);
-	error = copyin(uap->aiocbp, ujoblist, uap->nent * sizeof(ujoblist[0]));
+	error = copyinptr(uap->aiocbp, ujoblist,
+	    uap->nent * sizeof(ujoblist[0]));
 	if (error == 0)
 		error = kern_aio_suspend(td, uap->nent, ujoblist, tsp);
 	free(ujoblist, M_AIO);
@@ -2417,7 +2418,7 @@ freebsd6_lio_listio(struct thread *td, struct freebsd6_lio_listio_args *uap)
 		sigp = NULL;
 
 	acb_list = malloc(sizeof(struct aiocb *) * nent, M_LIO, M_WAITOK);
-	error = copyin(uap->acb_list, acb_list, nent * sizeof(acb_list[0]));
+	error = copyinptr(uap->acb_list, acb_list, nent * sizeof(acb_list[0]));
 	if (error == 0)
 		error = kern_lio_listio(td, uap->mode,
 		    (struct aiocb * const *)uap->acb_list, acb_list, nent, sigp,
@@ -2443,7 +2444,7 @@ sys_lio_listio(struct thread *td, struct lio_listio_args *uap)
 		return (EINVAL);
 
 	if (uap->sig && (uap->mode == LIO_NOWAIT)) {
-		error = copyin(uap->sig, &sig, sizeof(sig));
+		error = copyinptr(uap->sig, &sig, sizeof(sig));
 		if (error)
 			return (error);
 		sigp = &sig;
@@ -2451,7 +2452,7 @@ sys_lio_listio(struct thread *td, struct lio_listio_args *uap)
 		sigp = NULL;
 
 	acb_list = malloc(sizeof(struct aiocb *) * nent, M_LIO, M_WAITOK);
-	error = copyin(uap->acb_list, acb_list, nent * sizeof(acb_list[0]));
+	error = copyinptr(uap->acb_list, acb_list, nent * sizeof(acb_list[0]));
 	if (error == 0)
 		error = kern_lio_listio(td, uap->mode, uap->acb_list, acb_list,
 		    nent, sigp, &aiocb_ops);
