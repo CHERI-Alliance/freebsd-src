@@ -142,8 +142,8 @@
  */
 ENTRY(fpe_state_save)
 	/* Get pointer to PCB */
-	ld	a0, TD_PCB(a0)
-	__fpe_state_save a0
+	L_PTR	PTR(a0), TD_PCB(PTR(a0))
+	__fpe_state_save PTR(a0)
 	ret
 END(fpe_state_save)
 
@@ -205,10 +205,10 @@ END(fpe_state_clear)
  */
 ENTRY(cpu_throw)
 	/* Activate the new thread's pmap. */
-	mv	s0, a1
-	mv	a0, a1
+	MV_PTR	PTR(s0), PTR(a1)
+	MV_PTR	PTR(a0), PTR(a1)
 	call	_C_LABEL(pmap_activate_sw)
-	mv	a0, s0
+	MV_PTR	PTR(a0), PTR(s0)
 
 	/* Is VS enabled for new thread? */
 	ld	t0, TD_FRAME(a0)
@@ -222,38 +222,39 @@ ENTRY(cpu_throw)
 
 1:
 	/* Store the new curthread */
-	sd	a0, PC_CURTHREAD(tp)
+	S_PTR	PTR(a0), PC_CURTHREAD(PTR(tp))
 	/* And the new pcb */
-	ld	x13, TD_PCB(a0)
-	sd	x13, PC_CURPCB(tp)
+	L_PTR	PTRN(13), TD_PCB(PTR(a0))
+	S_PTR	PTRN(13), PC_CURPCB(PTR(tp))
 
 	/* Load registers */
-	ld	ra, (PCB_RA)(x13)
-	ld	sp, (PCB_SP)(x13)
+	L_PTR	PTR(ra), (PCB_RA)(PTRN(13))
+	L_PTR	PTR(sp), (PCB_SP)(PTRN(13))
 
 	/* s[0-11] */
-	ld	s0, (PCB_S + 0 * 8)(x13)
-	ld	s1, (PCB_S + 1 * 8)(x13)
-	ld	s2, (PCB_S + 2 * 8)(x13)
-	ld	s3, (PCB_S + 3 * 8)(x13)
-	ld	s4, (PCB_S + 4 * 8)(x13)
-	ld	s5, (PCB_S + 5 * 8)(x13)
-	ld	s6, (PCB_S + 6 * 8)(x13)
-	ld	s7, (PCB_S + 7 * 8)(x13)
-	ld	s8, (PCB_S + 8 * 8)(x13)
-	ld	s9, (PCB_S + 9 * 8)(x13)
-	ld	s10, (PCB_S + 10 * 8)(x13)
-	ld	s11, (PCB_S + 11 * 8)(x13)
+	L_PTR	PTR(s0), (PCB_S + 0 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s1), (PCB_S + 1 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s2), (PCB_S + 2 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s3), (PCB_S + 3 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s4), (PCB_S + 4 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s5), (PCB_S + 5 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s6), (PCB_S + 6 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s7), (PCB_S + 7 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s8), (PCB_S + 8 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s9), (PCB_S + 9 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s10), (PCB_S + 10 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s11), (PCB_S + 11 * PTR_WIDTH)(PTRN(13))
 
 	/* Is FPE enabled for new thread? */
-	ld	t0, TD_FRAME(a0)
-	ld	t1, (TF_SSTATUS)(t0)
+	L_PTR	PTR(t0), TD_FRAME(PTR(a0))
+	ld	t1, (TF_SSTATUS)(PTR(t0))
+
 	li	t2, SSTATUS_FS_MASK
 	and	t3, t1, t2
 	beqz	t3, 1f		/* No, skip. */
 
 	/* Restore registers. */
-	__fpe_state_load x13
+	__fpe_state_load PTRN(13)
 1:
 	ret
 END(cpu_throw)
@@ -268,38 +269,38 @@ END(cpu_throw)
  */
 ENTRY(cpu_switch)
 	/* Store the new curthread */
-	sd	a1, PC_CURTHREAD(tp)
+	S_PTR	PTR(a1), PC_CURTHREAD(PTR(tp))
 	/* And the new pcb */
-	ld	x13, TD_PCB(a1)
-	sd	x13, PC_CURPCB(tp)
+	L_PTR	PTRN(13), TD_PCB(PTR(a1))
+	S_PTR	PTRN(13), PC_CURPCB(PTR(tp))
 
 	/* Save the old context. */
-	ld	x13, TD_PCB(a0)
+	L_PTR	PTRN(13), TD_PCB(PTR(a0))
 
 	/* Store ra, sp and the callee-saved registers */
-	sd	ra, (PCB_RA)(x13)
-	sd	sp, (PCB_SP)(x13)
+	S_PTR	PTR(ra), (PCB_RA)(PTRN(13))
+	S_PTR	PTR(sp), (PCB_SP)(PTRN(13))
 
 	/* s[0-11] */
-	sd	s0, (PCB_S + 0 * 8)(x13)
-	sd	s1, (PCB_S + 1 * 8)(x13)
-	sd	s2, (PCB_S + 2 * 8)(x13)
-	sd	s3, (PCB_S + 3 * 8)(x13)
-	sd	s4, (PCB_S + 4 * 8)(x13)
-	sd	s5, (PCB_S + 5 * 8)(x13)
-	sd	s6, (PCB_S + 6 * 8)(x13)
-	sd	s7, (PCB_S + 7 * 8)(x13)
-	sd	s8, (PCB_S + 8 * 8)(x13)
-	sd	s9, (PCB_S + 9 * 8)(x13)
-	sd	s10, (PCB_S + 10 * 8)(x13)
-	sd	s11, (PCB_S + 11 * 8)(x13)
+	S_PTR	PTR(s0), (PCB_S + 0 * PTR_WIDTH)(PTRN(13))
+	S_PTR	PTR(s1), (PCB_S + 1 * PTR_WIDTH)(PTRN(13))
+	S_PTR	PTR(s2), (PCB_S + 2 * PTR_WIDTH)(PTRN(13))
+	S_PTR	PTR(s3), (PCB_S + 3 * PTR_WIDTH)(PTRN(13))
+	S_PTR	PTR(s4), (PCB_S + 4 * PTR_WIDTH)(PTRN(13))
+	S_PTR	PTR(s5), (PCB_S + 5 * PTR_WIDTH)(PTRN(13))
+	S_PTR	PTR(s6), (PCB_S + 6 * PTR_WIDTH)(PTRN(13))
+	S_PTR	PTR(s7), (PCB_S + 7 * PTR_WIDTH)(PTRN(13))
+	S_PTR	PTR(s8), (PCB_S + 8 * PTR_WIDTH)(PTRN(13))
+	S_PTR	PTR(s9), (PCB_S + 9 * PTR_WIDTH)(PTRN(13))
+	S_PTR	PTR(s10), (PCB_S + 10 * PTR_WIDTH)(PTRN(13))
+	S_PTR	PTR(s11), (PCB_S + 11 * PTR_WIDTH)(PTRN(13))
 
 	/*
 	 * Is FPE enabled and is it in dirty state
 	 * for the old thread?
 	 */
-	ld	t0, TD_FRAME(a0)
-	ld	t1, (TF_SSTATUS)(t0)
+	L_PTR	PTR(t0), TD_FRAME(PTR(a0))
+	ld	t1, (TF_SSTATUS)(PTR(t0))
 	li	t2, SSTATUS_FS_MASK
 	and	t3, t1, t2
 	li	t2, SSTATUS_FS_DIRTY
@@ -310,9 +311,9 @@ ENTRY(cpu_switch)
 	and	t3, t1, t2
 	li	t2, SSTATUS_FS_CLEAN
 	or	t3, t3, t2
-	sd	t3, (TF_SSTATUS)(t0)
+	sd	t3, (TF_SSTATUS)(PTR(t0))
 
-	__fpe_state_save x13
+	__fpe_state_save PTRN(13)
 1:
 
 	/*
@@ -343,68 +344,71 @@ ENTRY(cpu_switch)
 1:
 
 	/* Activate the new thread's pmap */
-	mv	s0, a0
-	mv	s1, a1
-	mv	s2, a2
-	mv	a0, a1
+	MV_PTR	PTR(s0), PTR(a0)
+	MV_PTR	PTR(s1), PTR(a1)
+	MV_PTR	PTR(s2), PTR(a2)
+	MV_PTR	PTR(a0), PTR(a1)
 	call	_C_LABEL(pmap_activate_sw)
-	mv	a1, s1
+	MV_PTR	PTR(a1), PTR(s1)
 
 	/* Release the old thread */
-	sd	s2, TD_LOCK(s0)
+	S_PTR	PTR(s2), TD_LOCK(PTR(s0))
+
 #if defined(SMP)
 	/* Spin if TD_LOCK points to a blocked_lock */
-	la	s2, _C_LABEL(blocked_lock)
+	LA_PTR	PTR(s2), _C_LABEL(blocked_lock)
 1:
-	ld	t0, TD_LOCK(a1)
+	L_PTR	PTR(t0), TD_LOCK(PTR(a1))
 	beq	t0, s2, 1b
 #endif
 
 	/* Is VS enabled for new thread? */
-	ld	t0, TD_FRAME(a1)
-	ld	t1, (TF_SSTATUS)(t0)
+	L_PTR	PTR(to), TD_FRAME(PTR(a0))
+	ld	t1, (TF_SSTATUS)(PTR(t0))
+
 	li	t2, SSTATUS_VS_MASK
 	and	t3, t1, t2
 	beqz	t3, 1f		/* No, skip. */
 
 	/* Restore vector registers. */
-	mv	a0, a1
+	MV_PTR	PTR(a0), PTR(a1)
 	call	_C_LABEL(vector_state_restore)
-	mv	a1, s1
+	MV_PTR	PTR(a1), PTR(s1)
 1:
 
 	/*
 	 * Restore the saved context.
 	 */
-	ld	x13, TD_PCB(a1)
+	L_PTR	PTRN(13), TD_PCB(PTR(a1))
 
 	/* Restore the registers */
-	ld	ra, (PCB_RA)(x13)
-	ld	sp, (PCB_SP)(x13)
+	L_PTR	PTR(ra), (PCB_RA)(PTRN(13))
+	L_PTR	PTR(sp), (PCB_SP)(PTRN(13))
 
 	/* s[0-11] */
-	ld	s0, (PCB_S + 0 * 8)(x13)
-	ld	s1, (PCB_S + 1 * 8)(x13)
-	ld	s2, (PCB_S + 2 * 8)(x13)
-	ld	s3, (PCB_S + 3 * 8)(x13)
-	ld	s4, (PCB_S + 4 * 8)(x13)
-	ld	s5, (PCB_S + 5 * 8)(x13)
-	ld	s6, (PCB_S + 6 * 8)(x13)
-	ld	s7, (PCB_S + 7 * 8)(x13)
-	ld	s8, (PCB_S + 8 * 8)(x13)
-	ld	s9, (PCB_S + 9 * 8)(x13)
-	ld	s10, (PCB_S + 10 * 8)(x13)
-	ld	s11, (PCB_S + 11 * 8)(x13)
+	L_PTR	PTR(s0), (PCB_S + 0 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s1), (PCB_S + 1 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s2), (PCB_S + 2 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s3), (PCB_S + 3 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s4), (PCB_S + 4 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s5), (PCB_S + 5 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s6), (PCB_S + 6 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s7), (PCB_S + 7 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s8), (PCB_S + 8 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s9), (PCB_S + 9 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s10), (PCB_S + 10 * PTR_WIDTH)(PTRN(13))
+	L_PTR	PTR(s11), (PCB_S + 11 * PTR_WIDTH)(PTRN(13))
 
 	/* Is FPE enabled for new thread? */
-	ld	t0, TD_FRAME(a1)
-	ld	t1, (TF_SSTATUS)(t0)
+	L_PTR	PTR(t0), TD_FRAME(PTR(a1))
+	ld	t1, (TF_SSTATUS)(PTR(t0))
+
 	li	t2, SSTATUS_FS_MASK
 	and	t3, t1, t2
 	beqz	t3, 1f		/* No, skip. */
 
 	/* Restore registers. */
-	__fpe_state_load x13
+	__fpe_state_load PTRN(13)
 1:
 	ret
 END(cpu_switch)
@@ -415,96 +419,105 @@ END(cpu_switch)
  */
 
 ENTRY(fork_trampoline)
-	mv	a0, s0
-	mv	a1, s1
-	mv	a2, sp
+	MV_PTR	PTR(a0), PTR(s0)
+	MV_PTR	PTR(a1), PTR(s1)
+	MV_PTR	PTR(a2), PTR(sp)
 	call	_C_LABEL(fork_exit)
 
 	/* Restore sstatus */
-	ld	t0, (TF_SSTATUS)(sp)
+	ld	t0, (TF_SSTATUS)(PTR(sp))
 	/* Ensure interrupts disabled */
 	li	t1, ~SSTATUS_SIE
 	and	t0, t0, t1
 	csrw	sstatus, t0
 
+#ifdef __CHERI__
+	/*
+	 * Switch to user DDC.  After this point, all stack accesses
+	 * must use 'csp' instead of 'sp'.
+	 */
+	L_PTR	PTR(t0), (TF_DDC)(PTR(sp))
+	csrw	ddc, PTR(t0)
+#endif
+
 	/* Restore exception program counter */
-	ld	t0, (TF_SEPC)(sp)
-	csrw	sepc, t0
+	L_PTR	PTR(t0), (TF_SEPC)(PTR(sp))
+	csrw	PTR_CSR(sepc), PTR(t0)
 
 	/* Restore the registers */
-	ld	t0, (TF_T + 0 * 8)(sp)
-	ld	t1, (TF_T + 1 * 8)(sp)
-	ld	t2, (TF_T + 2 * 8)(sp)
-	ld	t3, (TF_T + 3 * 8)(sp)
-	ld	t4, (TF_T + 4 * 8)(sp)
-	ld	t5, (TF_T + 5 * 8)(sp)
-	ld	t6, (TF_T + 6 * 8)(sp)
+	L_PTR	PTR(t0), (TF_T + 0 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(t1), (TF_T + 1 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(t2), (TF_T + 2 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(t3), (TF_T + 3 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(t4), (TF_T + 4 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(t5), (TF_T + 5 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(t6), (TF_T + 6 * PTR_WIDTH)(PTR(sp))
 
-	ld	s0, (TF_S + 0 * 8)(sp)
-	ld	s1, (TF_S + 1 * 8)(sp)
-	ld	s2, (TF_S + 2 * 8)(sp)
-	ld	s3, (TF_S + 3 * 8)(sp)
-	ld	s4, (TF_S + 4 * 8)(sp)
-	ld	s5, (TF_S + 5 * 8)(sp)
-	ld	s6, (TF_S + 6 * 8)(sp)
-	ld	s7, (TF_S + 7 * 8)(sp)
-	ld	s8, (TF_S + 8 * 8)(sp)
-	ld	s9, (TF_S + 9 * 8)(sp)
-	ld	s10, (TF_S + 10 * 8)(sp)
-	ld	s11, (TF_S + 11 * 8)(sp)
+	L_PTR	PTR(s0), (TF_S + 0 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s1), (TF_S + 1 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s2), (TF_S + 2 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s3), (TF_S + 3 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s4), (TF_S + 4 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s5), (TF_S + 5 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s6), (TF_S + 6 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s7), (TF_S + 7 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s8), (TF_S + 8 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s9), (TF_S + 9 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s10), (TF_S + 10 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s11), (TF_S + 11 * PTR_WIDTH)(PTR(sp))
 
-	ld	a0, (TF_A + 0 * 8)(sp)
-	ld	a1, (TF_A + 1 * 8)(sp)
-	ld	a2, (TF_A + 2 * 8)(sp)
-	ld	a3, (TF_A + 3 * 8)(sp)
-	ld	a4, (TF_A + 4 * 8)(sp)
-	ld	a5, (TF_A + 5 * 8)(sp)
-	ld	a6, (TF_A + 6 * 8)(sp)
-	ld	a7, (TF_A + 7 * 8)(sp)
+	L_PTR	PTR(a0), (TF_A + 0 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(a1), (TF_A + 1 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(a2), (TF_A + 2 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(a3), (TF_A + 3 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(a4), (TF_A + 4 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(a5), (TF_A + 5 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(a6), (TF_A + 6 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(a7), (TF_A + 7 * PTR_WIDTH)(PTR(sp))
 
 	/* Load user ra and gp */
-	ld	ra, (TF_RA)(sp)
-	ld	gp, (TF_GP)(sp)
+	L_PTR	PTR(ra), (TF_RA)(PTR(sp))
+	L_PTR	PTR(gp), (TF_GP)(PTR(sp))
 
 	/*
 	 * Store our pcpup on stack, we will load it back
 	 * on kernel mode trap.
 	 */
-	sd	tp, (TF_SIZE + KF_TP)(sp)
-	ld	tp, (TF_TP)(sp)
+	S_PTR	PTR(tp), (TF_SIZE + KF_TP)(PTR(sp))
+	L_PTR	PTR(tp), (TF_TP)(PTR(sp))
 
 	/* Save kernel stack so we can use it doing a user trap */
-	addi	sp, sp, TF_SIZE
-	csrw	sscratch, sp
+	ADDI_PTR	PTR(sp), PTR(sp), TF_SIZE
+	csrw	PTR_CSR(sscratch), PTR(sp)
 
 	/* Load user stack */
-	ld	sp, (TF_SP - TF_SIZE)(sp)
+	L_PTR	PTR(sp), (TF_SP - TF_SIZE)(PTR(sp))
 
 	sret
 END(fork_trampoline)
 
 ENTRY(savectx)
 	/* Store ra, sp and the callee-saved registers */
-	sd	ra, (PCB_RA)(a0)
-	sd	sp, (PCB_SP)(a0)
-	sd	tp, (PCB_TP)(a0)
-	sd	gp, (PCB_GP)(a0)
+	S_PTR	PTR(ra), (PCB_RA)(PTR(a0))
+	S_PTR	PTR(sp), (PCB_SP)(PTR(a0))
+	S_PTR	PTR(tp), (PCB_TP)(PTR(a0))
+	S_PTR	PTR(gp), (PCB_GP)(PTR(a0))
 
 	/* s[0-11] */
-	sd	s0, (PCB_S + 0 * 8)(a0)
-	sd	s1, (PCB_S + 1 * 8)(a0)
-	sd	s2, (PCB_S + 2 * 8)(a0)
-	sd	s3, (PCB_S + 3 * 8)(a0)
-	sd	s4, (PCB_S + 4 * 8)(a0)
-	sd	s5, (PCB_S + 5 * 8)(a0)
-	sd	s6, (PCB_S + 6 * 8)(a0)
-	sd	s7, (PCB_S + 7 * 8)(a0)
-	sd	s8, (PCB_S + 8 * 8)(a0)
-	sd	s9, (PCB_S + 9 * 8)(a0)
-	sd	s10, (PCB_S + 10 * 8)(a0)
-	sd	s11, (PCB_S + 11 * 8)(a0)
+	S_PTR	PTR(s0), (PCB_S + 0 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s1), (PCB_S + 1 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s2), (PCB_S + 2 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s3), (PCB_S + 3 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s4), (PCB_S + 4 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s5), (PCB_S + 5 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s6), (PCB_S + 6 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s7), (PCB_S + 7 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s8), (PCB_S + 8 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s9), (PCB_S + 9 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s10), (PCB_S + 10 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s11), (PCB_S + 11 * PTR_WIDTH)(PTR(a0))
 
-	__fpe_state_save a0
+	__fpe_state_save PTR(a0)
 	call	_C_LABEL(vector_state_store_savectx)
 	ret
 END(savectx)
