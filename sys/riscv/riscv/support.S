@@ -37,12 +37,12 @@
 #include <machine/riscvreg.h>
 
 #include "assym.inc"
-
+    
 /*
  * One of the fu* or su* functions failed, return -1.
  */
 ENTRY(fsu_fault)
-	SET_FAULT_HANDLER(x0, a1)	/* Reset the handler function */
+	SET_FAULT_HANDLER(PTR_NULL, PTR(a1))	/* Reset the handler function */
 	EXIT_USER_ACCESS(a1)
 fsu_fault_nopcb:
 	li	a0, -1
@@ -55,17 +55,20 @@ END(fsu_fault)
 ENTRY(casueword32)
 	li	a4, (VM_MAXUSER_ADDRESS-3)
 	bgeu	a0, a4, fsu_fault_nopcb
-	la	a6, fsu_fault		/* Load the fault handler */
-	SET_FAULT_HANDLER(a6, a4)	/* And set it */
+	LA_PTR	PTR(a6), fsu_fault	/* Load the fault handler */
+	SET_FAULT_HANDLER(PTR(a6), PTR(a4))	/* And set it */
 	ENTER_USER_ACCESS(a4)
-	lr.w	a4, 0(a0)		/* Load-exclusive the data */
+
+	lr.w	a4, 0(PTR(a0))		/* Load-exclusive the data */
 	bne	a4, a1, 1f		/* If not equal then exit */
-	sc.w	a5, a3, 0(a0)		/* Store the new data */
+	sc.w	a5, a3, 0(PTR(a0))	/* Store the new data */
 	beqz	a5, 2f			/* Success */
+
 1:	li	a5, 1			/* Normalize failure result */
-2:	EXIT_USER_ACCESS(a6)
-	SET_FAULT_HANDLER(x0, a6)	/* Reset the fault handler */
-	sw	a4, 0(a2)		/* Store the read data */
+2:
+	EXIT_USER_ACCESS(a6)
+	SET_FAULT_HANDLER(PTR_NULL, PTR(a6))	/* Reset the fault handler */
+	sw	a4, 0(PTR(a2))		/* Store the read data */
 	mv	a0, a5			/* Success indicator */
 	ret				/* Return */
 END(casueword32)
@@ -76,17 +79,19 @@ END(casueword32)
 ENTRY(casueword)
 	li	a4, (VM_MAXUSER_ADDRESS-7)
 	bgeu	a0, a4, fsu_fault_nopcb
-	la	a6, fsu_fault		/* Load the fault handler */
-	SET_FAULT_HANDLER(a6, a4)	/* And set it */
+	LA_PTR	PTR(a6), fsu_fault	/* Load the fault handler */
+	SET_FAULT_HANDLER(PTR(a6), PTR(a4))	/* And set it */
 	ENTER_USER_ACCESS(a4)
-	lr.d	a4, 0(a0)		/* Load-exclusive the data */
+
+	lr.d	a4, 0(PTR(a0))		/* Load-exclusive the data */
 	bne	a4, a1, 1f		/* If not equal then exit */
-	sc.d	a5, a3, 0(a0)		/* Store the new data */
+	sc.d	a5, a3, 0(PTR(a0))	/* Store the new data */
 	beqz	a5, 2f			/* Success */
 1:	li	a5, 1			/* Normalize failure result */
-2:	EXIT_USER_ACCESS(a6)
-	SET_FAULT_HANDLER(x0, a6)	/* Reset the fault handler */
-	sd	a4, 0(a2)		/* Store the read data */
+2:
+	EXIT_USER_ACCESS(a6)
+	SET_FAULT_HANDLER(PTR_NULL, PTR(a6))	/* Reset the fault handler */
+	sd	a4, 0(PTR(a2))		/* Store the read data */
 	mv	a0, a5			/* Success indicator */
 	ret				/* Return */
 END(casueword)
@@ -97,12 +102,12 @@ END(casueword)
 ENTRY(fubyte)
 	li	a1, VM_MAXUSER_ADDRESS
 	bgeu	a0, a1, fsu_fault_nopcb
-	la	a6, fsu_fault		/* Load the fault handler */
-	SET_FAULT_HANDLER(a6, a1)	/* And set it */
+	LA_PTR	PTR(a6), fsu_fault	/* Load the fault handler */
+	SET_FAULT_HANDLER(PTR(a6), PTR(a1))	/* And set it */
 	ENTER_USER_ACCESS(a1)
-	lbu	a0, 0(a0)		/* Try loading the data */
+	lbu	a0, 0(PTR(a0))		/* Try loading the data */
 	EXIT_USER_ACCESS(a1)
-	SET_FAULT_HANDLER(x0, a1)	/* Reset the fault handler */
+	SET_FAULT_HANDLER(PTR_NULL, PTR(a1))	/* Reset the fault handler */
 	ret				/* Return */
 END(fubyte)
 
@@ -112,12 +117,12 @@ END(fubyte)
 ENTRY(fuword16)
 	li	a1, (VM_MAXUSER_ADDRESS-1)
 	bgeu	a0, a1, fsu_fault_nopcb
-	la	a6, fsu_fault		/* Load the fault handler */
-	SET_FAULT_HANDLER(a6, a1)	/* And set it */
+	LA_PTR	PTR(a6), fsu_fault	/* Load the fault handler */
+	SET_FAULT_HANDLER(PTR(a6), PTR(a1))	/* And set it */
 	ENTER_USER_ACCESS(a1)
-	lhu	a0, 0(a0)		/* Try loading the data */
+	lhu	a0, 0(PTR(a0))		/* Try loading the data */
 	EXIT_USER_ACCESS(a1)
-	SET_FAULT_HANDLER(x0, a1)	/* Reset the fault handler */
+	SET_FAULT_HANDLER(PTR_NULL, PTR(a1))	/* Reset the fault handler */
 	ret				/* Return */
 END(fuword16)
 
@@ -127,13 +132,13 @@ END(fuword16)
 ENTRY(fueword32)
 	li	a2, (VM_MAXUSER_ADDRESS-3)
 	bgeu	a0, a2, fsu_fault_nopcb
-	la	a6, fsu_fault		/* Load the fault handler */
-	SET_FAULT_HANDLER(a6, a2)	/* And set it */
+	LA_PTR	PTR(a6), fsu_fault	/* Load the fault handler */
+	SET_FAULT_HANDLER(PTR(a6), PTR(a2))	/* And set it */
 	ENTER_USER_ACCESS(a2)
-	lw	a0, 0(a0)		/* Try loading the data */
+	lw	a0, 0(PTR(a0))		/* Try loading the data */
 	EXIT_USER_ACCESS(a2)
-	SET_FAULT_HANDLER(x0, a2)	/* Reset the fault handler */
-	sw	a0, 0(a1)		/* Save the data in kernel space */
+	SET_FAULT_HANDLER(PTR_NULL, PTR(a2))	/* Reset the fault handler */
+	sw	a0, 0(PTR(a1))		/* Save the data in kernel space */
 	li	a0, 0			/* Success */
 	ret				/* Return */
 END(fueword32)
@@ -146,30 +151,49 @@ ENTRY(fueword)
 EENTRY(fueword64)
 	li	a2, (VM_MAXUSER_ADDRESS-7)
 	bgeu	a0, a2, fsu_fault_nopcb
-	la	a6, fsu_fault		/* Load the fault handler */
-	SET_FAULT_HANDLER(a6, a2)	/* And set it */
+	LA_PTR	PTR(a6), fsu_fault	/* Load the fault handler */
+	SET_FAULT_HANDLER(PTR(a6), PTR(a2))	/* And set it */
 	ENTER_USER_ACCESS(a2)
-	ld	a0, 0(a0)		/* Try loading the data */
+	ld	a0, 0(PTR(a0))		/* Try loading the data */
 	EXIT_USER_ACCESS(a2)
-	SET_FAULT_HANDLER(x0, a2)	/* Reset the fault handler */
-	sd	a0, 0(a1)		/* Save the data in kernel space */
+	SET_FAULT_HANDLER(PTR_NULL, PTR(a2))	/* Reset the fault handler */
+	sd	a0, 0(PTR(a1))		/* Save the data in kernel space */
 	li	a0, 0			/* Success */
 	ret				/* Return */
 EEND(fueword64)
 END(fueword)
 
+#ifdef __CHERI__
 /*
- * int subyte(volatile void *, int)
+ * int fueptr(volatile const void __capability *, intcap_t *)
+ */
+ENTRY(fueptr)
+	li	a2, (VM_MAXUSER_ADDRESS-7)
+	bgeu	a0, a2, fsu_fault_nopcb
+	LA_PTR	PTR(a6), fsu_fault	/* Load the fault handler */
+	SET_FAULT_HANDLER(PTR(a6), PTR(a2))	/* And set it */
+	ENTER_USER_ACCESS(a2)
+	lc	PTR(a0), 0(PTR(a0))	/* Try loading the data */
+	EXIT_USER_ACCESS(a2)
+	SET_FAULT_HANDLER(PTR_NULL, PTR(a2))	/* Reset the fault handler */
+	sc	PTR(a0), 0(PTR(a1))		/* Save the data in kernel space */
+	li	a0, 0			/* Success */
+	ret				/* Return */
+END(fueptr)
+#endif
+
+/*
+ * int subyte(volatile void * __capability, int)
  */
 ENTRY(subyte)
 	li	a2, VM_MAXUSER_ADDRESS
 	bgeu	a0, a2, fsu_fault_nopcb
-	la	a6, fsu_fault		/* Load the fault handler */
-	SET_FAULT_HANDLER(a6, a2)	/* And set it */
+	LA_PTR	PTR(a6), fsu_fault	/* Load the fault handler */
+	SET_FAULT_HANDLER(PTR(a6), PTR(a2))	/* And set it */
 	ENTER_USER_ACCESS(a2)
-	sb	a1, 0(a0)		/* Try storing the data */
+	sb	a1, 0(PTR(a0))		/* Try storing the data */
 	EXIT_USER_ACCESS(a2)
-	SET_FAULT_HANDLER(x0, a2)	/* Reset the fault handler */
+	SET_FAULT_HANDLER(PTR_NULL, PTR(a2))	/* Reset the fault handler */
 	li	a0, 0			/* Success */
 	ret				/* Return */
 END(subyte)
@@ -180,12 +204,12 @@ END(subyte)
 ENTRY(suword16)
 	li	a2, (VM_MAXUSER_ADDRESS-1)
 	bgeu	a0, a2, fsu_fault_nopcb
-	la	a6, fsu_fault		/* Load the fault handler */
-	SET_FAULT_HANDLER(a6, a2)	/* And set it */
+	LA_PTR	PTR(a6), fsu_fault	/* Load the fault handler */
+	SET_FAULT_HANDLER(PTR(a6), PTR(a2))	/* And set it */
 	ENTER_USER_ACCESS(a2)
-	sh	a1, 0(a0)		/* Try storing the data */
+	sh	a1, 0(PTR(a0))		/* Try storing the data */
 	EXIT_USER_ACCESS(a2)
-	SET_FAULT_HANDLER(x0, a2)	/* Reset the fault handler */
+	SET_FAULT_HANDLER(PTR_NULL, PTR(a2))	/* Reset the fault handler */
 	li	a0, 0			/* Success */
 	ret				/* Return */
 END(suword16)
@@ -196,12 +220,12 @@ END(suword16)
 ENTRY(suword32)
 	li	a2, (VM_MAXUSER_ADDRESS-3)
 	bgeu	a0, a2, fsu_fault_nopcb
-	la	a6, fsu_fault		/* Load the fault handler */
-	SET_FAULT_HANDLER(a6, a2)	/* And set it */
+	LA_PTR	PTR(a6), fsu_fault	/* Load the fault handler */
+	SET_FAULT_HANDLER(PTR(a6), PTR(a2))	/* And set it */
 	ENTER_USER_ACCESS(a2)
-	sw	a1, 0(a0)		/* Try storing the data */
+	sw	a1, 0(PTR(a0))		/* Try storing the data */
 	EXIT_USER_ACCESS(a2)
-	SET_FAULT_HANDLER(x0, a2)	/* Reset the fault handler */
+	SET_FAULT_HANDLER(PTR_NULL, PTR(a2))	/* Reset the fault handler */
 	li	a0, 0			/* Success */
 	ret				/* Return */
 END(suword32)
@@ -213,36 +237,54 @@ ENTRY(suword)
 EENTRY(suword64)
 	li	a2, (VM_MAXUSER_ADDRESS-7)
 	bgeu	a0, a2, fsu_fault_nopcb
-	la	a6, fsu_fault		/* Load the fault handler */
-	SET_FAULT_HANDLER(a6, a2)	/* And set it */
+	LA_PTR	PTR(a6), fsu_fault	/* Load the fault handler */
+	SET_FAULT_HANDLER(PTR(a6), PTR(a2))	/* And set it */
 	ENTER_USER_ACCESS(a2)
-	sd	a1, 0(a0)		/* Try storing the data */
+	sd	a1, 0(PTR(a0))		/* Try storing the data */
 	EXIT_USER_ACCESS(a2)
-	SET_FAULT_HANDLER(x0, a2)	/* Reset the fault handler */
+	SET_FAULT_HANDLER(PTR_NULL, PTR(a2))	/* Reset the fault handler */
 	li	a0, 0			/* Success */
 	ret				/* Return */
 EEND(suword64)
 END(suword)
 
+#ifdef __CHERI__
+/*
+ * int suptr(volatile void * __capability, intcap_t)
+ */
+ENTRY(suptr)
+	li	a2, (VM_MAXUSER_ADDRESS-3)
+	bgeu	a0, a2, fsu_fault_nopcb
+	LA_PTR	PTR(a6), fsu_fault	/* Load the fault handler */
+	SET_FAULT_HANDLER(PTR(a6), PTR(a2))	/* And set it */
+	ENTER_USER_ACCESS(a2)
+	sc	PTR(a1), 0(PTR(a0))	/* Try storing the data */
+	EXIT_USER_ACCESS(a2)
+	SET_FAULT_HANDLER(PTR_NULL, PTR(a2))	/* Reset the fault handler */
+	li	a0, 0			/* Success */
+	ret				/* Return */
+END(suptr)
+#endif
+
 ENTRY(setjmp)
 	/* Store the stack pointer */
-	sd	sp, 0(a0)
-	addi	a0, a0, 8
+	S_PTR	PTR(sp), 0(PTR(a0))
+	ADDI_PTR	PTR(a0), PTR(a0), PTR_WIDTH
 
 	/* Store the general purpose registers and ra */
-	sd	s0, (0 * 8)(a0)
-	sd	s1, (1 * 8)(a0)
-	sd	s2, (2 * 8)(a0)
-	sd	s3, (3 * 8)(a0)
-	sd	s4, (4 * 8)(a0)
-	sd	s5, (5 * 8)(a0)
-	sd	s6, (6 * 8)(a0)
-	sd	s7, (7 * 8)(a0)
-	sd	s8, (8 * 8)(a0)
-	sd	s9, (9 * 8)(a0)
-	sd	s10, (10 * 8)(a0)
-	sd	s11, (11 * 8)(a0)
-	sd	ra, (12 * 8)(a0)
+	S_PTR	PTR(s0), (0 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s1), (1 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s2), (2 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s3), (3 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s4), (4 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s5), (5 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s6), (6 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s7), (7 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s8), (8 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s9), (9 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s10), (10 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(s11), (11 * PTR_WIDTH)(PTR(a0))
+	S_PTR	PTR(ra), (12 * PTR_WIDTH)(PTR(a0))
 
 	/* Return value */
 	li	a0, 0
@@ -251,23 +293,23 @@ END(setjmp)
 
 ENTRY(longjmp)
 	/* Restore the stack pointer */
-	ld	sp, 0(a0)
-	addi	a0, a0, 8
+	L_PTR	PTR(sp), 0(PTR(a0))
+	ADDI_PTR	PTR(a0), PTR(a0), PTR_WIDTH
 
 	/* Restore the general purpose registers and ra */
-	ld	s0, (0 * 8)(a0)
-	ld	s1, (1 * 8)(a0)
-	ld	s2, (2 * 8)(a0)
-	ld	s3, (3 * 8)(a0)
-	ld	s4, (4 * 8)(a0)
-	ld	s5, (5 * 8)(a0)
-	ld	s6, (6 * 8)(a0)
-	ld	s7, (7 * 8)(a0)
-	ld	s8, (8 * 8)(a0)
-	ld	s9, (9 * 8)(a0)
-	ld	s10, (10 * 8)(a0)
-	ld	s11, (11 * 8)(a0)
-	ld	ra, (12 * 8)(a0)
+	L_PTR	PTR(s0), (0 * PTR_WIDTH)(PTR(a0))
+	L_PTR	PTR(s1), (1 * PTR_WIDTH)(PTR(a0))
+	L_PTR	PTR(s2), (2 * PTR_WIDTH)(PTR(a0))
+	L_PTR	PTR(s3), (3 * PTR_WIDTH)(PTR(a0))
+	L_PTR	PTR(s4), (4 * PTR_WIDTH)(PTR(a0))
+	L_PTR	PTR(s5), (5 * PTR_WIDTH)(PTR(a0))
+	L_PTR	PTR(s6), (6 * PTR_WIDTH)(PTR(a0))
+	L_PTR	PTR(s7), (7 * PTR_WIDTH)(PTR(a0))
+	L_PTR	PTR(s8), (8 * PTR_WIDTH)(PTR(a0))
+	L_PTR	PTR(s9), (9 * PTR_WIDTH)(PTR(a0))
+	L_PTR	PTR(s10), (10 * PTR_WIDTH)(PTR(a0))
+	L_PTR	PTR(s11), (11 * PTR_WIDTH)(PTR(a0))
+	L_PTR	PTR(ra), (12 * PTR_WIDTH)(PTR(a0))
 
 	/* Load the return value */
 	mv	a0, a1
