@@ -43,7 +43,7 @@
  * Fault handler for the copy{in,out} functions below.
  */
 ENTRY(copyio_fault)
-	SET_FAULT_HANDLER(x0, a1) /* Clear the handler */
+	SET_FAULT_HANDLER(PTR_NULL, PTR(a1)) /* Clear the handler */
 	EXIT_USER_ACCESS(a1)
 copyio_fault_nopcb:
 	li	a0, EFAULT
@@ -58,8 +58,8 @@ END(copyio_fault)
  * a2 - Size of copy
  */
 	.macro copycommon
-	la	a6, copyio_fault	/* Get the handler address */
-	SET_FAULT_HANDLER(a6, a7)	/* Set the handler */
+	LA_PTR	PTR(a6), copyio_fault	/* Get the handler address */
+	SET_FAULT_HANDLER(PTR(a6), PTR(a7))	/* Set the handler */
 	ENTER_USER_ACCESS(a7)
 
 	li	t2, XLEN_BYTES
@@ -75,20 +75,22 @@ END(copyio_fault)
 	beqz	t0, 2f			/* Already word-aligned, skip ahead */
 
 	/* Byte copy until the first word-aligned address */
-1:	lb	a4, 0(a0)		/* Load byte from src */
-	addi	a0, a0, 1
-	sb	a4, 0(a1)		/* Store byte in dest */
-	addi	a1, a1, 1
+1:
+	lb	a4, 0(PTR(a0))		/* Load byte from src */
+	ADDI_PTR	PTR(a0), PTR(a0), 1
+	sb	a4, 0(PTR(a1))		/* Store byte in dest */
+	ADDI_PTR	PTR(a1), PTR(a1), 1
 	addi	a2, a2, -1		/* len-- */
 	andi	t0, a0, (XLEN_BYTES-1)
 	bnez	t0, 1b
 	j	3f
 
 	/* Copy words */
-2:	ld	a4, 0(a0)		/* Load word from src */
-	addi	a0, a0, XLEN_BYTES
-	sd	a4, 0(a1)		/* Store word in dest */
-	addi	a1, a1, XLEN_BYTES
+2:
+	ld	a4, 0(PTR(a0))		/* Load word from src */
+	ADDI_PTR	PTR(a0), PTR(a0), XLEN_BYTES
+	sd	a4, 0(PTR(a1))		/* Store word in dest */
+	ADDI_PTR	PTR(a1), PTR(a1), XLEN_BYTES
 	addi	a2, a2, -XLEN_BYTES	/* len -= XLEN_BYTES */
 3:	bgeu	a2, t2, 2b		/* Again if len >= XLEN_BYTES */
 
@@ -96,15 +98,17 @@ END(copyio_fault)
 	beqz	a2, 5f
 
 	/* Copy any remaining bytes */
-4:	lb	a4, 0(a0)		/* Load byte from src */
-	addi	a0, a0, 1
-	sb	a4, 0(a1)		/* Store byte in dest */
-	addi	a1, a1, 1
+4:
+	lb	a4, 0(PTR(a0))		/* Load byte from src */
+	ADDI_PTR	PTR(a0), PTR(a0), 1
+	sb	a4, 0(PTR(a1))		/* Store byte in dest */
+	ADDI_PTR	PTR(a1), PTR(a1), 1
 	addi	a2, a2, -1		/* len-- */
 	bnez	a2, 4b
 
-5:	EXIT_USER_ACCESS(a7)
-	SET_FAULT_HANDLER(x0, a7)	/* Clear the handler */
+5:
+	EXIT_USER_ACCESS(a7)
+	SET_FAULT_HANDLER(PTR_NULL, PTR(a7))	/* Clear the handler */
 	.endm
 
 /*
@@ -152,27 +156,28 @@ ENTRY(copyinstr)
 	mv	a5, x0		/* count = 0 */
 	beqz	a2, 3f		/* If len == 0 then skip loop */
 
-	la	a6, copyio_fault /* Get the handler address */
-	SET_FAULT_HANDLER(a6, a7) /* Set the handler */
+	LA_PTR	PTR(a6), copyio_fault /* Get the handler address */
+	SET_FAULT_HANDLER(PTR(a6), PTR(a7)) /* Set the handler */
 	ENTER_USER_ACCESS(a7)
 
 	li	a7, VM_MAXUSER_ADDRESS
 1:	bgeu	a0, a7, copyio_fault
-	lb	a4, 0(a0)	/* Load from uaddr */
-	addi	a0, a0, 1
-	sb	a4, 0(a1)	/* Store in kaddr */
-	addi	a1, a1, 1
+	lb	a4, 0(PTR(a0))	/* Load from uaddr */
+	ADDI_PTR	PTR(a0), PTR(a0), 1
+	sb	a4, 0(PTR(a1))	/* Store in kaddr */
+	ADDI_PTR	PTR(a1), PTR(a1), 1
 	beqz	a4, 2f
 	addi	a2, a2, -1	/* len-- */
 	addi	a5, a5, 1	/* count++ */
 	bnez	a2, 1b
 
-2:	EXIT_USER_ACCESS(a7)
-	SET_FAULT_HANDLER(x0, a7) /* Clear the handler */
+2:
+	EXIT_USER_ACCESS(a7)
+	SET_FAULT_HANDLER(PTR_NULL, PTR(a7)) /* Clear the handler */
 
 3:	beqz	a3, 4f		/* Check if done != NULL */
 	addi	a5, a5, 1	/* count++ */
-	sd	a5, 0(a3)	/* done = count */
+	sd	a5, 0(PTR(a3))	/* done = count */
 
 4:	mv	a0, x0		/* return 0 */
 	beqz	a4, 5f
@@ -180,3 +185,102 @@ ENTRY(copyinstr)
 5:
 	ret
 END(copyinstr)
+
+#ifdef __CHERI__
+/*
+ * copycapcommon - common capcopy routine
+ *
+ * ca0 - Source address
+ * ca1 - Destination address
+ * a2 - Size of copy
+ */
+	.macro copycapcommon
+	LA_PTR	PTR(a6), copyio_fault	/* Get the handler address */
+	SET_FAULT_HANDLER(PTR(a6), PTR(a7))	/* Set the handler */
+	ENTER_USER_ACCESS(a7)
+
+	li	t2, CLEN_BYTES
+	blt	a2, t2, 4f		/* Byte-copy if len < CLEN_BYTES */
+
+	/*
+	 * Compare lower bits of src and dest.
+	 * If they are aligned with each other, we can do capability copy.
+	 */
+	andi	t0, a0, (CLEN_BYTES-1)	/* Low bits of src */
+	andi	t1, a1, (CLEN_BYTES-1)	/* Low bits of dest */
+	bne	t0, t1, 4f		/* Misaligned. Go to byte copy */
+	beqz	t0, 2f			/* Already cap-aligned, skip ahead */
+
+	/* Byte copy until the first capability-aligned address */
+1:
+	lb	a4, 0(PTR(a0))		/* Load byte from src */
+	caddi	PTR(a0), PTR(a0), 1
+	sb	a4, 0(PTR(a1))		/* Store byte in dest */
+	caddi	PTR(a1), PTR(a1), 1
+	addi	a2, a2, -1		/* len-- */
+	andi	t0, a0, (CLEN_BYTES-1)
+	bnez	t0, 1b
+	j	3f
+
+	/* Copy capabilities */
+2:
+	lc	PTR(a4), 0(PTR(a0))	/* Load capability from src */
+	caddi	PTR(a0), PTR(a0), CLEN_BYTES
+	sc	PTR(a4), 0(PTR(a1))	/* Store capability in dest */
+	caddi	PTR(a1), PTR(a1), CLEN_BYTES
+	addi	a2, a2, -CLEN_BYTES	/* len -= CLEN_BYTES */
+3:	bgeu	a2, t2, 2b		/* Again if len >= CLEN_BYTES */
+
+	/* Check if we're finished */
+	beqz	a2, 5f
+
+	/* Copy any remaining bytes */
+4:
+	lb	a4, 0(PTR(a0))		/* Load byte from src */
+	caddi	PTR(a0), PTR(a0), 1
+	sb	a4, 0(ca1)		/* Store byte in dest */
+	caddi	PTR(a1), PTR(a1), 1
+	addi	a2, a2, -1		/* len-- */
+	bnez	a2, 4b
+
+5:
+	EXIT_USER_ACCESS(a7)
+	SET_FAULT_HANDLER(PTR_NULL, PTR(a7)) /* Clear the handler */
+	.endm
+
+/*
+ * Copies from a kernel to user address preserving tags
+ *
+ * int copyoutptr(const void *kaddr, void * __capability udaddr, size_t len)
+ */
+ENTRY(copyoutptr)
+	beqz	a2, copyoutptr_end	/* If len == 0 then skip loop */
+	add	a3, a1, a2
+	li	a4, VM_MAXUSER_ADDRESS
+	bgeu	a3, a4, copyio_fault_nopcb
+
+	copycapcommon
+
+copyoutptr_end:
+	li	a0, 0		/* return 0 */
+	ret
+END(copyoutptr)
+
+/*
+ * Copies from a user to kernel address preserving tags
+ *
+ * int copyinptr(const void * __capability uaddr, void *kaddr, size_t len)
+ */
+ENTRY(copyinptr)
+	beqz	a2, copyinptr_end	/* If len == 0 then skip loop */
+	add	a3, a0, a2
+	li	a4, VM_MAXUSER_ADDRESS
+	bgeu	a3, a4, copyio_fault_nopcb
+
+	copycapcommon
+
+copyinptr_end:
+	li	a0, 0		/* return 0 */
+	ret
+END(copyinptr)
+#endif
