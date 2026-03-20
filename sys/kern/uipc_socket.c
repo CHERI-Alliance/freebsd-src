@@ -3873,6 +3873,17 @@ sooptcopyinmac(struct sockopt *sopt, struct mac *mac)
 		PTRIN_CP(m32, *mac, m_string);
 	} else
 #endif
+#ifdef COMPAT_FREEBSD64
+	if (SV_CURPROC_FLAG(SV_CHERI | SV_LP64) == SV_LP64) {
+		struct mac64 m64;
+
+		error = sooptcopyin(sopt, &m64, sizeof(m64), sizeof(m64));
+		if (error)
+			return (error);
+		CP(m64, *mac, m_buflen);
+		mac->m_string = USER_PTR_STR(m64.m_string);
+	} else
+#endif
 		error = sooptcopyinptr(sopt, mac, sizeof(*mac), sizeof(*mac));
 
 	return (error);
