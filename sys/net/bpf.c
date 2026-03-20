@@ -40,6 +40,7 @@
 #include "opt_netgraph.h"
 
 #include <sys/param.h>
+#include <sys/abi_compat.h>
 #include <sys/conf.h>
 #include <sys/fcntl.h>
 #include <sys/jail.h>
@@ -210,6 +211,23 @@ struct bpf_dltlist32 {
 #define	BIOCGDLTLIST32	_IOWR('B', 121, struct bpf_dltlist32)
 #define	BIOCSETWF32	_IOW('B', 123, struct bpf_program32)
 #define	BIOCSETFNR32	_IOW('B', 130, struct bpf_program32)
+#endif
+
+#ifdef COMPAT_FREEBSD64
+struct bpf_program64 {
+	u_int		bf_len;
+	uint64_t	bf_insns;	/* (struct bpf_insn *) */
+};
+
+struct bpf_dltlist64 {
+	u_int		bfl_len;
+	uint64_t	bfl_list;	/* (u_int *) */
+};
+
+#define	BIOCSETF64	_IOW('B', 103, struct bpf_program64)
+#define	BIOCGDLTLIST64	_IOWR('B', 121, struct bpf_dltlist64)
+#define	BIOCSETWF64	_IOW('B', 123, struct bpf_program64)
+#define	BIOCSETFNR64	_IOW('B', 130, struct bpf_program64)
 #endif
 
 #define BPF_LOCK()		sx_xlock(&bpf_sx)
@@ -1164,7 +1182,7 @@ bpfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags,
 #ifdef COMPAT_FREEBSD32
 		case BIOCGDLTLIST32:
 #endif
-		case BIOCGETIF:
+		case CASE_IOC_IFREQ(BIOCGETIF):
 		case BIOCGRTIMEOUT:
 #if defined(COMPAT_FREEBSD32) && defined(__amd64__)
 		case BIOCGRTIMEOUT32:
@@ -1281,6 +1299,11 @@ bpfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags,
 	case BIOCSETFNR32:
 	case BIOCSETWF32:
 #endif
+#ifdef COMPAT_FREEBSD64
+	case BIOCSETF64:
+	case BIOCSETFNR64:
+	case BIOCSETWF64:
+#endif
 		error = bpf_setf(d, (struct bpf_program *)addr, cmd);
 		break;
 
@@ -1348,6 +1371,28 @@ bpfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags,
 			break;
 		}
 #endif
+#ifdef COMPAT_FREEBSD64
+	case BIOCGDLTLIST64:
+		{
+			struct bpf_dltlist64 *list64;
+			struct bpf_dltlist dltlist;
+
+			list64 = (struct bpf_dltlist64 *)addr;
+			dltlist.bfl_len = list64->bfl_len;
+			dltlist.bfl_list = USER_PTR(list64->bfl_list,
+			    list64->bfl_len);
+			BPF_LOCK();
+			if (d->bd_bif == NULL)
+				error = EINVAL;
+			else {
+				error = bpf_getdltlist(d, &dltlist);
+				if (error == 0)
+					list64->bfl_len = dltlist.bfl_len;
+			}
+			BPF_UNLOCK();
+			break;
+		}
+#endif
 
 	case BIOCGDLTLIST:
 		BPF_LOCK();
@@ -1373,7 +1418,7 @@ bpfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags,
 	/*
 	 * Get interface name.
 	 */
-	case BIOCGETIF:
+	case CASE_IOC_IFREQ(BIOCGETIF):
 		BPF_LOCK();
 		if (d->bd_bif == NULL)
 			error = EINVAL;
@@ -1390,7 +1435,7 @@ bpfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags,
 	/*
 	 * Set interface.
 	 */
-	case BIOCSETIF: {
+	case CASE_IOC_IFREQ(BIOCSETIF): {
 		struct ifreq *const ifr = (struct ifreq *)addr;
 		struct bpf_if *bp;
 
@@ -1781,9 +1826,14 @@ bpf_getiflist(struct bpf_iflist *bi)
 static int
 bpf_setf(struct bpf_d *d, struct bpf_program *fp, u_long cmd)
 {
-#ifdef COMPAT_FREEBSD32
+#if defined(COMPAT_FREEBSD32) || defined(COMPAT_FREEBSD64)
 	struct bpf_program fp_swab;
+#endif
+#ifdef COMPAT_FREEBSD32
 	struct bpf_program32 *fp32;
+#endif
+#ifdef COMPAT_FREEBSD64
+	struct bpf_program64 *fp64;
 #endif
 	struct bpf_program_buffer *fcode;
 	struct bpf_insn *filter;
@@ -1809,6 +1859,27 @@ bpf_setf(struct bpf_d *d, struct bpf_program *fp, u_long cmd)
 			cmd = BIOCSETF;
 			break;
 		case BIOCSETWF32:
+			cmd = BIOCSETWF;
+			break;
+		}
+		break;
+	}
+#endif
+#ifdef COMPAT_FREEBSD64
+	switch (cmd) {
+	case BIOCSETF64:
+	case BIOCSETWF64:
+	case BIOCSETFNR64:
+		fp64 = (struct bpf_program64 *)fp;
+		fp_swab.bf_len = fp64->bf_len;
+		fp_swab.bf_insns = USER_PTR(fp64->bf_insns,
+		    sizeof(struct bpf_insn));
+		fp = &fp_swab;
+		switch (cmd) {
+		case BIOCSETF64:
+			cmd = BIOCSETF;
+			break;
+		case BIOCSETWF64:
 			cmd = BIOCSETWF;
 			break;
 		}
