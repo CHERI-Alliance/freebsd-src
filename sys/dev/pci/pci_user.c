@@ -31,6 +31,7 @@
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/systm.h>
+#include <sys/abi_compat.h>
 #include <sys/malloc.h>
 #include <sys/module.h>
 #include <sys/linker.h>
@@ -42,6 +43,7 @@
 #include <sys/queue.h>
 #include <sys/rwlock.h>
 #include <sys/sglist.h>
+#include <sys/sysent.h>
 
 #include <vm/vm.h>
 #include <vm/pmap.h>
@@ -50,6 +52,8 @@
 #include <vm/vm_object.h>
 #include <vm/vm_page.h>
 #include <vm/vm_pager.h>
+
+#include <cheri/cheric.h>
 
 #include <sys/bus.h>
 #include <machine/bus.h>
@@ -109,6 +113,47 @@ struct pci_conf_io32 {
 };
 
 #define	PCIOCGETCONF32	_IOC_NEWTYPE(PCIOCGETCONF, struct pci_conf_io32)
+#endif
+
+#ifdef COMPAT_FREEBSD64
+struct pci_conf_io64 {
+	uint32_t		pat_buf_len;	/* pattern buffer length */
+	uint32_t		num_patterns;	/* number of patterns */
+	uint64_t		patterns;	/* struct pci_match_conf ptr */
+	uint32_t		match_buf_len;	/* match buffer length */
+	uint32_t		num_matches;	/* number of matches returned */
+	uint64_t		matches;	/* match buffer */
+	uint32_t		offset;		/* offset into device list */
+	uint32_t		generation;	/* device list generation */
+	uint32_t		status;		/* request status */
+};
+
+struct pci_list_vpd_io64 {
+	struct pcisel	plvi_sel;	/* device to operate on */
+	uint64_t	plvi_len;	/* size of the data area */
+	uint64_t	plvi_data;
+};
+
+struct pci_bar_mmap64 {
+	uint64_t	pbm_map_base;	/* (void *) (sometimes IN)/OUT mmaped base */
+	uint64_t	pbm_map_length; /* (size_t) mapped length of the BAR, multiple
+					   of pages */
+	uint64_t	pbm_bar_length;	/* actual length of the BAR */
+	int		pbm_bar_off;	/* offset from the mapped base to the
+					   start of BAR */
+	struct pcisel	pbm_sel;	/* device to operate on */
+	int		pbm_reg;	/* starting address of BAR */
+	int		pbm_flags;
+	int		pbm_memattr;
+};
+
+#define	PCIOCGETCONF64	_IOC_NEWTYPE(PCIOCGETCONF, struct pci_conf_io64)
+#define	PCIOCLISTVPD64	_IOC_NEWTYPE(PCIOCLISTVPD, struct pci_list_vpd_io64)
+/*
+ * We don't support PCIOCGETCONF_OLD64 because the earliest
+ * COMPAT_FREEBSD64 architecture didn't exist until 11.0 (aarch64).
+ */
+#define	PCIOCBARMMAP64	_IOC_NEWTYPE(PCIOCBARMMAP, struct pci_bar_mmap64)
 #endif
 
 /*
@@ -577,6 +622,9 @@ pci_conf_match(u_long cmd, struct pci_match_conf *matches, int num_matches,
 #ifdef COMPAT_FREEBSD14
 	case PCIOCGETCONF_FREEBSD14:
 #endif
+#ifdef COMPAT_FREEBSD64
+	case PCIOCGETCONF64:
+#endif
 		return (pci_conf_match_native(
 		    (struct pci_match_conf *)matches, num_matches, match_buf));
 #ifdef COMPAT_FREEBSD32
@@ -706,6 +754,9 @@ pci_match_conf_size(u_long cmd)
 #ifdef COMPAT_FREEBSD14
 	case PCIOCGETCONF_FREEBSD14:
 #endif
+#ifdef COMPAT_FREEBSD64
+	case COMPAT_FREEBSD64:
+#endif
 		return (sizeof(struct pci_match_conf));
 #ifdef COMPAT_FREEBSD32
 	case PCIOCGETCONF32:
@@ -734,6 +785,9 @@ pci_conf_size(u_long cmd)
 
 	switch (cmd) {
 	case PCIOCGETCONF:
+#ifdef COMPAT_FREEBSD64
+	case PCIOCGETCONF64:
+#endif
 		return (sizeof(struct pci_conf));
 #ifdef COMPAT_FREEBSD32
 	case PCIOCGETCONF32:
@@ -766,6 +820,9 @@ pci_conf_io_init(struct pci_conf_io *cio, caddr_t data, u_long cmd)
 {
 #ifdef COMPAT_FREEBSD32
 	struct pci_conf_io32 *cio32;
+#endif
+#ifdef COMPAT_FREEBSD64
+	struct pci_conf_io64 *cio64;
 #endif
 
 	switch (cmd) {
@@ -800,6 +857,21 @@ pci_conf_io_init(struct pci_conf_io *cio, caddr_t data, u_long cmd)
 		return;
 #endif
 
+#ifdef COMPAT_FREEBSD64
+	case PCIOCGETCONF64:
+		cio64 = (struct pci_conf_io64 *)data;
+		cio->pat_buf_len = cio64->pat_buf_len;
+		cio->num_patterns = cio64->num_patterns;
+		cio->patterns = USER_PTR(cio64->patterns, cio64->pat_buf_len);
+		cio->match_buf_len = cio64->match_buf_len;
+		cio->num_matches = cio64->num_matches;
+		cio->matches = USER_PTR(cio64->matches, cio64->match_buf_len);
+		cio->offset = cio64->offset;
+		cio->generation = cio64->generation;
+		cio->status = cio64->status;
+		return;
+#endif
+
 	default:
 		/* programmer error */
 		return;
@@ -813,6 +885,9 @@ pci_conf_io_update_data(const struct pci_conf_io *cio, caddr_t data,
 	struct pci_conf_io *d_cio;
 #ifdef COMPAT_FREEBSD32
 	struct pci_conf_io32 *cio32;
+#endif
+#ifdef COMPAT_FREEBSD64
+	struct pci_conf_io64 *cio64;
 #endif
 
 	switch (cmd) {
@@ -846,6 +921,16 @@ pci_conf_io_update_data(const struct pci_conf_io *cio, caddr_t data,
 		cio32->num_matches = cio->num_matches;
 		return;
 #endif
+#ifdef COMPAT_FREEBSD64
+	case PCIOCGETCONF64:
+		cio64 = (struct pci_conf_io64 *)data;
+
+		cio64->status = cio->status;
+		cio64->generation = cio->generation;
+		cio64->offset = cio->offset;
+		cio64->num_matches = cio->num_matches;
+		return;
+#endif
 
 	default:
 		/* programmer error */
@@ -862,6 +947,9 @@ pci_conf_for_copyout(const struct pci_conf *pcp, union pci_conf_union *pcup,
 
 	switch (cmd) {
 	case PCIOCGETCONF:
+#ifdef COMPAT_FREEBSD64
+	case PCIOCGETCONF64:
+#endif
 		pcup->pc = *pcp;
 		return;
 
@@ -987,6 +1075,25 @@ pci_bar_mmap(device_t pcidev, struct pci_bar_mmap *pbm)
 	prot = VM_PROT_READ | (((pbm->pbm_flags & PCIIO_BAR_MMAP_RW) != 0) ?
 	    VM_PROT_WRITE : 0);
 
+	flags = MAP_SHARED;
+#ifdef __CHERI__
+	if (SV_CURPROC_FLAG(SV_CHERI)) {
+		/* Enforce the same policy as for sys_mmap() */
+		if (cheri_tag_get(pbm->pbm_map_base)) {
+			if ((pbm->pbm_flags & PCIIO_BAR_MMAP_FIXED) == 0)
+				return (EPROT);
+			if ((cheri_perms_get(pbm->pbm_map_base) &
+			    CHERI_PERM_SW_VMEM) == 0)
+				return (EACCES);
+		} else {
+			if (!cheri_is_null_derived(pbm->pbm_map_base))
+				return (EINVAL);
+			flags |= MAP_RESERVATION_CREATE;
+			if (pbm->pbm_flags & PCIIO_BAR_MMAP_FIXED)
+				pbm->pbm_flags |= PCIIO_BAR_MMAP_EXCL;
+		}
+	}
+#endif
 	/* Create vm structures and mmap. */
 	sg = sglist_alloc(1, M_WAITOK);
 	error = sglist_append_phys(sg, pbase, plen);
@@ -998,7 +1105,6 @@ pci_bar_mmap(device_t pcidev, struct pci_bar_mmap *pbm)
 		goto out;
 	}
 	obj->memattr = pbm->pbm_memattr;
-	flags = MAP_SHARED;
 	addr = 0;
 	if ((pbm->pbm_flags & PCIIO_BAR_MMAP_FIXED) != 0) {
 		addr = (uintptr_t)pbm->pbm_map_base;
@@ -1120,9 +1226,17 @@ pci_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag, struct thread *t
 	struct pci_bar_ioreq *pbi;
 	struct pci_bar_io *bio;
 	struct pci_list_vpd_io *lvio;
+#ifdef COMPAT_FREEBSD64
+	struct pci_list_vpd_io64 *lvio64;
+	struct pci_list_vpd_io lvios;
+#endif
 	struct pci_match_conf *pattern_buf;
 	struct pci_map *pm;
 	struct pci_bar_mmap *pbm;
+#ifdef COMPAT_FREEBSD64
+	struct pci_bar_mmap64 *pbm64;
+	struct pci_bar_mmap pbms;
+#endif
 	size_t confsz, iolen;
 	int domain, error, ionum, i, num_patterns;
 	union pci_conf_union pcu;
@@ -1144,6 +1258,9 @@ pci_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag, struct thread *t
 #ifdef COMPAT_FREEBSD32
 		case PCIOCGETCONF32:
 #endif
+#ifdef COMPAT_FREEBSD64
+		case PCIOCGETCONF64:
+#endif
 #ifdef COMPAT_FREEBSD14
 		case PCIOCGETCONF_FREEBSD14:
 #ifdef COMPAT_FREEBSD32
@@ -1158,6 +1275,9 @@ pci_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag, struct thread *t
 #endif
 		case PCIOCGETBAR:
 		case PCIOCLISTVPD:
+#ifdef COMPAT_FREEBSD64
+		case PCIOCLISTVPD64:
+#endif
 			break;
 		default:
 			return (EPERM);
@@ -1174,6 +1294,9 @@ pci_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag, struct thread *t
 	case PCIOCGETCONF:
 #ifdef COMPAT_FREEBSD32
 	case PCIOCGETCONF32:
+#endif
+#ifdef COMPAT_FREEBSD64
+	case PCIOCGETCONF64:
 #endif
 #ifdef COMPAT_FREEBSD14
 	case PCIOCGETCONF_FREEBSD14:
@@ -1514,7 +1637,18 @@ getconfexit:
 			error = ENODEV;
 		break;
 	case PCIOCLISTVPD:
-		lvio = (struct pci_list_vpd_io *)data;
+#ifdef COMPAT_FREEBSD64
+	case PCIOCLISTVPD64:
+		if (cmd == PCIOCLISTVPD64) {
+			lvio64 = (struct pci_list_vpd_io64 *)data;
+			lvio = &lvios;
+			lvio->plvi_sel = lvio64->plvi_sel;
+			lvio->plvi_len = lvio64->plvi_len;
+			lvio->plvi_data = USER_PTR(lvio64->plvi_data,
+			    lvio64->plvi_len);
+		} else
+#endif
+			lvio = (struct pci_list_vpd_io *)data;
 
 		/*
 		 * Assume that the user-level bus number is
@@ -1528,10 +1662,31 @@ getconfexit:
 			break;
 		}
 		error = pci_list_vpd(pcidev, lvio);
+#ifdef COMPAT_FREEBSD64
+		if (cmd == PCIOCLISTVPD64)
+			lvio64->plvi_len = lvio->plvi_len;
+#endif
 		break;
 
 	case PCIOCBARMMAP:
-		pbm = (struct pci_bar_mmap *)data;
+#ifdef COMPAT_FREEBSD64
+	case PCIOCBARMMAP64:
+		if (cmd == PCIOCBARMMAP64) {
+			pbm64 = (struct pci_bar_mmap64 *)data;
+			pbm = &pbms;
+			/* Copy as NULL-derived */
+			pbms.pbm_map_base =
+			    (void *)(uintptr_t)pbm64->pbm_map_base;
+			CP(*pbm64, pbms, pbm_map_length);
+			CP(*pbm64, pbms, pbm_bar_length);
+			CP(*pbm64, pbms, pbm_bar_off);
+			CP(*pbm64, pbms, pbm_sel);
+			CP(*pbm64, pbms, pbm_reg);
+			CP(*pbm64, pbms, pbm_flags);
+			CP(*pbm64, pbms, pbm_memattr);
+		}
+#endif
+			pbm = (struct pci_bar_mmap *)data;
 		if ((flag & FWRITE) == 0 &&
 		    (pbm->pbm_flags & PCIIO_BAR_MMAP_RW) != 0) {
 			error = EPERM;
@@ -1541,6 +1696,14 @@ getconfexit:
 		    pbm->pbm_sel.pc_bus, pbm->pbm_sel.pc_dev,
 		    pbm->pbm_sel.pc_func);
 		error = pcidev == NULL ? ENODEV : pci_bar_mmap(pcidev, pbm);
+#ifdef COMPAT_FREEBSD64
+		if (cmd == PCIOCBARMMAP64) {
+			pbm64->pbm_map_base = (ptraddr_t)pbm->pbm_map_base;
+			CP(pbms, *pbm64, pbm_map_length);
+			CP(pbms, *pbm64, pbm_bar_length);
+			CP(pbms, *pbm64, pbm_bar_off);
+		}
+#endif
 		break;
 
 	case PCIOCBARIO:
