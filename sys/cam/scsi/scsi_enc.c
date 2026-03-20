@@ -359,6 +359,10 @@ enc_ioctl(struct cdev *dev, u_long cmd, caddr_t arg_addr, int flag,
 	if (SV_PROC_FLAG(td->td_proc, SV_ILP32))
 		return (ENOTTY);
 #endif
+#ifdef	COMPAT_FREEBSD64
+	if (!SV_PROC_FLAG(td->td_proc, SV_CHERI))
+		return (ENOTTY);
+#endif
 
 	if (arg_addr)
 		addr = *((caddr_t *) arg_addr);
