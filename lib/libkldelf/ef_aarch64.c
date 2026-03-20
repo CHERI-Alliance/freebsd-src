@@ -46,6 +46,7 @@ ef_aarch64_reloc(struct elf_file *ef, const void *reldata, Elf_Type reltype,
 	GElf_Addr addr, addend;
 	GElf_Size rtype, symidx;
 	const GElf_Rela *rela;
+	Elf64_Addr *fragment;
 
 	switch (reltype) {
 	case ELF_T_RELA:
@@ -64,10 +65,20 @@ ef_aarch64_reloc(struct elf_file *ef, const void *reldata, Elf_Type reltype,
 
 	switch (rtype) {
 	case R_AARCH64_RELATIVE:
+	case R_AARCH64_FUNC_RELATIVE:
 		addr = relbase + addend;
 		le64enc(where, addr);
 		break;
 	case R_AARCH64_ABS64:
+		addr = EF_SYMADDR(ef, symidx) + addend;
+		le64enc(where, addr);
+		break;
+	case R_MORELLO_RELATIVE:
+	case R_MORELLO_FUNC_RELATIVE:
+		fragment = (Elf64_Addr *)where;
+		le64enc(where, fragment[0] + relbase + addend);
+		break;
+	case R_MORELLO_CAPINIT:
 		addr = EF_SYMADDR(ef, symidx) + addend;
 		le64enc(where, addr);
 		break;

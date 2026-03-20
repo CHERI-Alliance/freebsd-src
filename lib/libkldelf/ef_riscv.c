@@ -73,7 +73,12 @@ ef_riscv_reloc(struct elf_file *ef, const void *reldata, Elf_Type reltype,
 		le64enc(where, addr);
 		break;
 	case R_RISCV_RELATIVE:	/* B + A */
+	case R_RISCV_FUNC_RELATIVE:
 		addr = relbase + addend;
+		le64enc(where, addr);
+		break;
+	case R_RISCV_CHERI_CAPABILITY:
+		addr = EF_SYMADDR(ef, symidx) + addend;
 		le64enc(where, addr);
 		break;
 	default:
@@ -83,3 +88,20 @@ ef_riscv_reloc(struct elf_file *ef, const void *reldata, Elf_Type reltype,
 }
 
 ELF_RELOC(ELFCLASS64, ELFDATA2LSB, EM_RISCV, ef_riscv_reloc);
+
+int
+ef_riscv_capreloc(struct elf_file *ef, const Gcapreloc *cr,
+    GElf_Addr relbase, GElf_Addr dataoff, size_t len, void *dest)
+{
+	char *where;
+
+	where = (char *)dest + relbase + cr->capability_location - dataoff;
+
+	if (where < (char *)dest || where >= (char *)dest + len)
+		return (0);
+
+	le64enc(where, relbase + cr->object + cr->offset);
+	return (0);
+}
+
+ELF_CAPRELOC(ELFCLASS64, ELFDATA2LSB, EM_RISCV, ef_riscv_capreloc);

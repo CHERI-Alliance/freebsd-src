@@ -35,6 +35,7 @@
 #include <sys/param.h>
 #include <sys/endian.h>
 
+#include <assert.h>
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -47,6 +48,7 @@
 #include "kldelf.h"
 
 SET_DECLARE(elf_reloc, struct elf_reloc_data);
+SET_DECLARE(elf_capreloc, struct elf_capreloc_data);
 
 static elf_reloc_t *
 elf_find_reloc(const GElf_Ehdr *hdr)
@@ -60,6 +62,32 @@ elf_find_reloc(const GElf_Ehdr *hdr)
 			return ((*erd)->reloc);
 	}
 	return (NULL);
+}
+
+static elf_capreloc_t *
+elf_find_capreloc(const GElf_Ehdr *hdr)
+{
+	struct elf_capreloc_data **ecd;
+
+	SET_FOREACH(ecd, elf_capreloc) {
+		if (hdr->e_ident[EI_CLASS] == (*ecd)->class &&
+		    hdr->e_ident[EI_DATA] == (*ecd)->data &&
+		    hdr->e_machine == (*ecd)->machine)
+			return ((*ecd)->capreloc);
+	}
+	return (NULL);
+}
+
+static bool
+elf_is_cheriabi(const GElf_Ehdr *hdr)
+{
+	if (hdr->e_machine == EM_AARCH64 &&
+	    (hdr->e_flags & EF_AARCH64_CHERI_PURECAP) != 0)
+		return (true);
+	if (hdr->e_machine == EM_RISCV &&
+	    (hdr->e_flags & EF_RISCV_CHERIABI) != 0)
+		return (true);
+	return (false);
 }
 
 int
@@ -105,6 +133,7 @@ elf_open_file(struct elf_file *efile, const char *filename, int verbose)
 		elf_close_file(efile);
 		return (EFTYPE);
 	}
+	efile->ef_capreloc = elf_find_capreloc(&efile->ef_hdr);
 
 	error = ef_open(efile, verbose);
 	if (error != 0) {
@@ -118,7 +147,10 @@ elf_open_file(struct elf_file *efile, const char *filename, int verbose)
 		}
 	}
 
+	efile->ef_cheriabi = elf_is_cheriabi(&efile->ef_hdr);
 	efile->ef_pointer_size = elf_object_size(efile, ELF_T_ADDR);
+	if (efile->ef_cheriabi)
+		efile->ef_pointer_size *= 2;
 
 	return (0);
 }
@@ -145,6 +177,8 @@ elf_compatible(struct elf_file *efile, const GElf_Ehdr *hdr)
 	if (efile->ef_hdr.e_ident[EI_CLASS] != hdr->e_ident[EI_CLASS] ||
 	    efile->ef_hdr.e_ident[EI_DATA] != hdr->e_ident[EI_DATA] ||
 	    efile->ef_hdr.e_machine != hdr->e_machine)
+		return (false);
+	if (efile->ef_cheriabi != elf_is_cheriabi(hdr))
 		return (false);
 	return (true);
 }
@@ -502,6 +536,73 @@ elf_read_rela(struct elf_file *efile, int section_index, long *nrelap,
 	return (0);
 }
 
+int
+elf_read_capreloc(struct elf_file *efile, off_t offset, size_t len,
+    long *ncaprelocp, Gcapreloc **caprelocp)
+{
+	void *data;
+	Gcapreloc *capreloc;
+	long i, ncapreloc;
+	size_t capsize;
+	int error;
+
+	/*
+	 * NB: A capreloc is effectively a struct of 5 ELF_T_ADDR
+	 * objects.
+	 */
+	capsize = 5 * elf_object_size(efile, ELF_T_ADDR);
+	if (len % capsize != 0)
+		return (EINVAL);
+
+	error = elf_read_data(efile, ELF_T_ADDR, offset, len, &data);
+	if (error != 0)
+		return (error);
+
+	ncapreloc = len / capsize;
+	capreloc = calloc(ncapreloc, sizeof(*capreloc));
+	if (capreloc == NULL) {
+		free(data);
+		return (ENOMEM);
+	}
+
+	switch (elf_class(efile)) {
+	case ELFCLASS32:
+	{
+		Elf32_Addr *buf = data;
+
+		for (i = 0; i < ncapreloc; i++) {
+			capreloc[i].capability_location = buf[0];
+			capreloc[i].object = buf[1];
+			capreloc[i].offset = buf[2];
+			capreloc[i].size = buf[3];
+			capreloc[i].permissions = buf[4];
+			buf += 5;
+		}
+		break;
+	}
+	case ELFCLASS64:
+	{
+		Elf64_Addr *buf = data;
+
+		for (i = 0; i < ncapreloc; i++) {
+			capreloc[i].capability_location = buf[0];
+			capreloc[i].object = buf[1];
+			capreloc[i].offset = buf[2];
+			capreloc[i].size = buf[3];
+			capreloc[i].permissions = buf[4];
+			buf += 5;
+		}
+		break;
+	}
+	default:
+		__builtin_unreachable();
+	}
+
+	*ncaprelocp = ncapreloc;
+	*caprelocp = capreloc;
+	return (0);
+}
+
 size_t
 elf_pointer_size(struct elf_file *efile)
 {
@@ -520,6 +621,12 @@ elf_int(struct elf_file *efile, const void *p)
 GElf_Addr
 elf_address_from_pointer(struct elf_file *efile, const void *p)
 {
+	/*
+	 * For big-endian CHERI architectures p would need to be
+	 * advanced to the address field.
+	 */
+	if (efile->ef_cheriabi)
+		assert(elf_encoding(efile) == ELFDATA2LSB);
 	switch (elf_class(efile)) {
 	case ELFCLASS32:
 		if (elf_encoding(efile) == ELFDATA2LSB)
@@ -684,6 +791,15 @@ elf_reloc(struct elf_file *efile, const void *reldata, Elf_Type reltype,
     GElf_Addr relbase, GElf_Addr dataoff, size_t len, void *dest)
 {
 	return (efile->ef_reloc(efile, reldata, reltype, relbase, dataoff, len,
+	    dest));
+}
+
+int
+elf_capreloc(struct elf_file *efile, const Gcapreloc *capreloc,
+    GElf_Addr relbase, GElf_Addr dataoff, size_t len, void *dest)
+{
+	assert (efile->ef_capreloc != NULL);
+	return (efile->ef_capreloc(efile, capreloc, relbase, dataoff, len,
 	    dest));
 }
 
