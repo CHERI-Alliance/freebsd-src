@@ -4986,7 +4986,7 @@ iflib_if_ioctl(if_t ifp, u_long command, caddr_t data)
 		err = IFDI_GET_RSS_HASH(ctx, (struct ifrsshash *)data);
 		CTX_UNLOCK(ctx);
 		break;
-	case SIOCGPRIVATE_0:
+	case CASE_IOC_IFREQ(SIOCGPRIVATE_0):
 	case SIOCSDRVSPEC:
 	case SIOCGDRVSPEC:
 		CTX_LOCK(ctx);

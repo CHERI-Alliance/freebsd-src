@@ -2308,7 +2308,7 @@ vlan_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		VLAN_UNLOCK();
 		break;
 
-	case SIOCSETVLAN:
+	case CASE_IOC_IFREQ(SIOCSETVLAN):
 #ifdef VIMAGE
 		/*
 		 * XXXRW/XXXBZ: The goal in these checks is to allow a VLAN
@@ -2360,7 +2360,7 @@ vlan_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 			if_notifymtu(ifp);
 		break;
 
-	case SIOCGETVLAN:
+	case CASE_IOC_IFREQ(SIOCGETVLAN):
 #ifdef VIMAGE
 		if (ifp->if_vnet != ifp->if_home_vnet) {
 			error = EPERM;
