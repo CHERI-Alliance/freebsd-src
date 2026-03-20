@@ -765,11 +765,11 @@ ipsec_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		else
 			sc->fibnum = ifr->ifr_fib;
 		break;
-	case IPSECGREQID:
+	case CASE_IOC_IFREQ(IPSECGREQID):
 		reqid = sc->reqid;
 		error = copyout(&reqid, ifr_data_get_ptr(ifr), sizeof(reqid));
 		break;
-	case IPSECSREQID:
+	case CASE_IOC_IFREQ(IPSECSREQID):
 		if ((error = priv_check(curthread, PRIV_NET_SETIFCAP)) != 0)
 			break;
 		error = copyin(ifr_data_get_ptr(ifr), &reqid, sizeof(reqid));
