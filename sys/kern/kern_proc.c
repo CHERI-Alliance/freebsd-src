@@ -103,6 +103,11 @@
 #include <compat/freebsd32/freebsd32_util.h>
 #endif
 
+#ifdef COMPAT_FREEBSD64
+#include <compat/freebsd64/freebsd64.h>
+#include <compat/freebsd64/freebsd64_util.h>
+#endif
+
 SDT_PROVIDER_DEFINE(proc);
 
 MALLOC_DEFINE(M_SESSION, "session", "session header");
@@ -176,6 +181,9 @@ SYSCTL_INT(_kern, OID_AUTO, proc_vmmap_skip_resident_count, CTLFLAG_RW,
 CTASSERT(sizeof(struct kinfo_proc) == KINFO_PROC_SIZE);
 #ifdef COMPAT_FREEBSD32
 CTASSERT(sizeof(struct kinfo_proc32) == KINFO_PROC32_SIZE);
+#endif
+#ifdef COMPAT_FREEBSD64
+CTASSERT(sizeof(struct kinfo_proc64) == KINFO_PROC64_SIZE);
 #endif
 
 /*
@@ -1514,7 +1522,121 @@ freebsd32_kinfo_proc_out(const struct kinfo_proc *ki, struct kinfo_proc32 *ki32)
 	CP(*ki, *ki32, ki_tdflags);
 	PTRTRIM_CP(*ki, *ki32, ki_uerrmsg);
 }
-#endif
+#undef PTRTRIM_CP
+#endif	/* COMPAT_FREEBSD32 */
+
+#ifdef COMPAT_FREEBSD64
+
+/*
+ * This function is typically used to copy out the kernel address, so
+ * it can be replaced by assignment of zero.
+ */
+static inline uint64_t
+ptr64_trim(const void *ptr)
+{
+	return ((uint64_t)ptr);
+}
+
+#define PTRTRIM_CP(src,dst,fld) \
+	do { (dst).fld = ptr64_trim((src).fld); } while (0)
+
+static void
+freebsd64_kinfo_proc_out(const struct kinfo_proc *ki, struct kinfo_proc64 *ki64)
+{
+	int i;
+
+	bzero(ki64, sizeof(struct kinfo_proc64));
+	ki64->ki_structsize = sizeof(struct kinfo_proc64);
+	CP(*ki, *ki64, ki_layout);
+	PTRTRIM_CP(*ki, *ki64, ki_args);
+	PTRTRIM_CP(*ki, *ki64, ki_paddr);
+	PTRTRIM_CP(*ki, *ki64, ki_addr);
+	PTRTRIM_CP(*ki, *ki64, ki_tracep);
+	PTRTRIM_CP(*ki, *ki64, ki_textvp);
+	PTRTRIM_CP(*ki, *ki64, ki_fd);
+	PTRTRIM_CP(*ki, *ki64, ki_vmspace);
+	PTRTRIM_CP(*ki, *ki64, ki_wchan);
+	CP(*ki, *ki64, ki_pid);
+	CP(*ki, *ki64, ki_ppid);
+	CP(*ki, *ki64, ki_pgid);
+	CP(*ki, *ki64, ki_tpgid);
+	CP(*ki, *ki64, ki_sid);
+	CP(*ki, *ki64, ki_tsid);
+	CP(*ki, *ki64, ki_jobc);
+	CP(*ki, *ki64, ki_tdev);
+	CP(*ki, *ki64, ki_tdev_freebsd11);
+	CP(*ki, *ki64, ki_siglist);
+	CP(*ki, *ki64, ki_sigmask);
+	CP(*ki, *ki64, ki_sigignore);
+	CP(*ki, *ki64, ki_sigcatch);
+	CP(*ki, *ki64, ki_uid);
+	CP(*ki, *ki64, ki_ruid);
+	CP(*ki, *ki64, ki_svuid);
+	CP(*ki, *ki64, ki_rgid);
+	CP(*ki, *ki64, ki_svgid);
+	CP(*ki, *ki64, ki_ngroups);
+	for (i = 0; i < KI_NGROUPS; i++)
+		CP(*ki, *ki64, ki_groups[i]);
+	CP(*ki, *ki64, ki_size);
+	CP(*ki, *ki64, ki_rssize);
+	CP(*ki, *ki64, ki_swrss);
+	CP(*ki, *ki64, ki_tsize);
+	CP(*ki, *ki64, ki_dsize);
+	CP(*ki, *ki64, ki_ssize);
+	CP(*ki, *ki64, ki_xstat);
+	CP(*ki, *ki64, ki_acflag);
+	CP(*ki, *ki64, ki_pctcpu);
+	CP(*ki, *ki64, ki_estcpu);
+	CP(*ki, *ki64, ki_slptime);
+	CP(*ki, *ki64, ki_swtime);
+	CP(*ki, *ki64, ki_cow);
+	CP(*ki, *ki64, ki_runtime);
+	CP(*ki, *ki64, ki_start);
+	CP(*ki, *ki64, ki_childtime);
+	CP(*ki, *ki64, ki_flag);
+	CP(*ki, *ki64, ki_kiflag);
+	CP(*ki, *ki64, ki_traceflag);
+	CP(*ki, *ki64, ki_stat);
+	CP(*ki, *ki64, ki_nice);
+	CP(*ki, *ki64, ki_lock);
+	CP(*ki, *ki64, ki_rqindex);
+	CP(*ki, *ki64, ki_oncpu);
+	CP(*ki, *ki64, ki_lastcpu);
+
+	/* XXX TODO: wrap cpu value as appropriate */
+	CP(*ki, *ki64, ki_oncpu_old);
+	CP(*ki, *ki64, ki_lastcpu_old);
+
+	bcopy(ki->ki_tdname, ki64->ki_tdname, TDNAMLEN + 1);
+	bcopy(ki->ki_wmesg, ki64->ki_wmesg, WMESGLEN + 1);
+	bcopy(ki->ki_login, ki64->ki_login, LOGNAMELEN + 1);
+	bcopy(ki->ki_lockname, ki64->ki_lockname, LOCKNAMELEN + 1);
+	bcopy(ki->ki_comm, ki64->ki_comm, COMMLEN + 1);
+	bcopy(ki->ki_emul, ki64->ki_emul, KI_EMULNAMELEN + 1);
+	bcopy(ki->ki_loginclass, ki64->ki_loginclass, LOGINCLASSLEN + 1);
+	bcopy(ki->ki_moretdname, ki64->ki_moretdname, MAXCOMLEN - TDNAMLEN + 1);
+	CP(*ki, *ki64, ki_tracer);
+	CP(*ki, *ki64, ki_flag2);
+	CP(*ki, *ki64, ki_fibnum);
+	CP(*ki, *ki64, ki_cr_flags);
+	CP(*ki, *ki64, ki_jid);
+	CP(*ki, *ki64, ki_numthreads);
+	CP(*ki, *ki64, ki_tid);
+	CP(*ki, *ki64, ki_pri);
+	CP(*ki, *ki64, ki_rusage);
+	CP(*ki, *ki64, ki_rusage_ch);
+	PTRTRIM_CP(*ki, *ki64, ki_pcb);
+	PTRTRIM_CP(*ki, *ki64, ki_kstack);
+	PTRTRIM_CP(*ki, *ki64, ki_udata);
+	PTRTRIM_CP(*ki, *ki64, ki_tdaddr);
+	PTRTRIM_CP(*ki, *ki64, ki_pd);
+	CP(*ki, *ki64, ki_sflag);
+	CP(*ki, *ki64, ki_tdflags);
+	PTRTRIM_CP(*ki, *ki64, ki_uerrmsg);
+}
+
+#undef PTRTRIM_CP
+#endif	/* COMPAT_FREEBSD64 */
 
 static ssize_t
 kern_proc_out_size(struct proc *p, int flags)
@@ -1529,11 +1651,21 @@ kern_proc_out_size(struct proc *p, int flags)
 			size += sizeof(struct kinfo_proc32);
 		} else
 #endif
+#ifdef COMPAT_FREEBSD64
+		if ((flags & KERN_PROC_MASK64) != 0) {
+			size += sizeof(struct kinfo_proc64);
+		} else
+#endif
 			size += sizeof(struct kinfo_proc);
 	} else {
 #ifdef COMPAT_FREEBSD32
 		if ((flags & KERN_PROC_MASK32) != 0)
 			size += sizeof(struct kinfo_proc32) * p->p_numthreads;
+		else
+#endif
+#ifdef COMPAT_FREEBSD64
+		if ((flags & KERN_PROC_MASK64) != 0)
+			size += sizeof(struct kinfo_proc64) * p->p_numthreads;
 		else
 #endif
 			size += sizeof(struct kinfo_proc) * p->p_numthreads;
@@ -1550,6 +1682,9 @@ kern_proc_out(struct proc *p, struct sbuf *sb, int flags)
 #ifdef COMPAT_FREEBSD32
 	struct kinfo_proc32 ki32;
 #endif
+#ifdef COMPAT_FREEBSD64
+	struct kinfo_proc64 ki64;
+#endif
 	int error;
 
 	PROC_LOCK_ASSERT(p, MA_OWNED);
@@ -1565,6 +1700,13 @@ kern_proc_out(struct proc *p, struct sbuf *sb, int flags)
 				error = ENOMEM;
 		} else
 #endif
+#ifdef COMPAT_FREEBSD64
+		if ((flags & KERN_PROC_MASK64) != 0) {
+			freebsd64_kinfo_proc_out(&ki, &ki64);
+			if (sbuf_bcat(sb, &ki64, sizeof(ki64)) != 0)
+				error = ENOMEM;
+		} else
+#endif
 			if (sbuf_bcat(sb, &ki, sizeof(ki)) != 0)
 				error = ENOMEM;
 	} else {
@@ -1574,6 +1716,13 @@ kern_proc_out(struct proc *p, struct sbuf *sb, int flags)
 			if ((flags & KERN_PROC_MASK32) != 0) {
 				freebsd32_kinfo_proc_out(&ki, &ki32);
 				if (sbuf_bcat(sb, &ki32, sizeof(ki32)) != 0)
+					error = ENOMEM;
+			} else
+#endif
+#ifdef COMPAT_FREEBSD64
+			if ((flags & KERN_PROC_MASK64) != 0) {
+				freebsd64_kinfo_proc_out(&ki, &ki64);
+				if (sbuf_bcat(sb, &ki64, sizeof(ki64)) != 0)
 					error = ENOMEM;
 			} else
 #endif
@@ -1751,6 +1900,10 @@ sysctl_kern_proc(SYSCTL_HANDLER_ARGS)
 #ifdef COMPAT_FREEBSD32
 	if (req->flags & SCTL_MASK32)
 		flags |= KERN_PROC_MASK32;
+#endif
+#ifdef COMPAT_FREEBSD64
+	if (req->flags & SCTL_MASK64)
+		flags |= KERN_PROC_MASK64;
 #endif
 	if (oid_number == KERN_PROC_PID) {
 		if (namelen != 1)
@@ -1937,6 +2090,84 @@ done:
 }
 #endif
 
+#ifdef COMPAT_FREEBSD64
+static int
+get_proc_vector64(struct thread *td, struct proc *p, struct vmspace *vm,
+    char ***proc_vectorp,
+    size_t *vsizep, enum proc_vector_type type)
+{
+	struct freebsd64_ps_strings pss;
+	Elf64_Auxinfo aux;
+	vm_offset_t vptr, ptr;
+	uint64_t *proc_vector64;
+	char **proc_vector;
+	size_t vsize, size;
+	int i, error;
+
+	error = 0;
+	if (vmspace_iop(td, vm, (vm_offset_t)PROC_PS_STRINGS(p), &pss,
+	    sizeof(pss), UIO_READ) != sizeof(pss))
+		return (ENOMEM);
+	switch (type) {
+	case PROC_ARG:
+		vptr = (vm_offset_t)pss.ps_argvstr;
+		vsize = pss.ps_nargvstr;
+		if (vsize > ARG_MAX)
+			return (ENOEXEC);
+		size = vsize * sizeof(int64_t);
+		break;
+	case PROC_ENV:
+		vptr = (vm_offset_t)pss.ps_envstr;
+		vsize = pss.ps_nenvstr;
+		if (vsize > ARG_MAX)
+			return (ENOEXEC);
+		size = vsize * sizeof(int64_t);
+		break;
+	case PROC_AUX:
+		vptr = (vm_offset_t)pss.ps_envstr +
+		    (pss.ps_nenvstr + 1) * sizeof(int64_t);
+		if (vptr % 4 != 0)
+			return (ENOEXEC);
+		for (ptr = vptr, i = 0; i < PROC_AUXV_MAX; i++) {
+			if (vmspace_iop(td, vm, ptr, &aux, sizeof(aux),
+			    UIO_READ) != sizeof(aux))
+				return (ENOMEM);
+			if (aux.a_type == AT_NULL)
+				break;
+			ptr += sizeof(aux);
+		}
+		if (aux.a_type != AT_NULL)
+			return (ENOEXEC);
+		vsize = i + 1;
+		size = vsize * sizeof(aux);
+		break;
+	default:
+		KASSERT(0, ("Wrong proc vector type: %d", type));
+		return (EINVAL);
+	}
+	proc_vector64 = malloc(size, M_TEMP, M_WAITOK);
+	if (vmspace_iop(td, vm, vptr, proc_vector64, size, UIO_READ) != size) {
+		error = ENOMEM;
+		goto done;
+	}
+	if (type == PROC_AUX) {
+		*proc_vectorp = (char **)(uintptr_t)proc_vector64;
+		*vsizep = vsize;
+		return (0);
+	}
+	proc_vector = malloc(vsize * sizeof(char *), M_TEMP,
+	    M_WAITOK);
+	for (i = 0; i < (int)vsize; i++)
+		proc_vector[i] =
+		    (char *)(uintptr_t)proc_vector64[i];
+	*proc_vectorp = proc_vector;
+	*vsizep = vsize;
+done:
+	free(proc_vector64, M_TEMP);
+	return (error);
+}
+#endif
+
 static int
 get_proc_vector(struct thread *td, struct proc *p, struct vmspace *vm,
     char ***proc_vectorp, size_t *vsizep, enum proc_vector_type type)
@@ -1951,6 +2182,12 @@ get_proc_vector(struct thread *td, struct proc *p, struct vmspace *vm,
 #ifdef COMPAT_FREEBSD32
 	if (SV_PROC_FLAG(p, SV_ILP32) != 0) {
 		return (get_proc_vector32(td, p, vm, proc_vectorp,
+		    vsizep, type));
+	}
+#endif
+#ifdef COMPAT_FREEBSD64
+	if (SV_PROC_FLAG(p, SV_LP64 | SV_CHERI) == SV_LP64) {
+		return (get_proc_vector64(td, p, vm, proc_vectorp,
 		    vsizep, type));
 	}
 #endif
@@ -2119,6 +2356,11 @@ proc_getauxv(struct thread *td, struct proc *p, struct sbuf *sb)
 #ifdef COMPAT_FREEBSD32
 		if (SV_PROC_FLAG(p, SV_ILP32) != 0)
 			size = vsize * sizeof(Elf32_Auxinfo);
+		else
+#endif
+#ifdef COMPAT_FREEBSD64
+		if (SV_PROC_FLAG(p, SV_LP64 | SV_CHERI) == SV_LP64)
+			size = vsize * sizeof(Elf64_Auxinfo);
 		else
 #endif
 			size = vsize * sizeof(Elf_Auxinfo);
@@ -3075,6 +3317,9 @@ sysctl_kern_proc_ps_strings(SYSCTL_HANDLER_ARGS)
 #ifdef COMPAT_FREEBSD32
 	uint32_t ps_strings32;
 #endif
+#ifdef COMPAT_FREEBSD64
+	uint64_t ps_strings64;
+#endif
 
 	if (namelen != 1)
 		return (EINVAL);
@@ -3092,6 +3337,19 @@ sysctl_kern_proc_ps_strings(SYSCTL_HANDLER_ARGS)
 		    PTROUT(PROC_PS_STRINGS(p)) : 0;
 		PROC_UNLOCK(p);
 		error = SYSCTL_OUT(req, &ps_strings32, sizeof(ps_strings32));
+		return (error);
+	}
+#endif
+#ifdef COMPAT_FREEBSD64
+	if ((req->flags & SCTL_MASK64) != 0) {
+		/*
+		 * We return 0 if the 64 bit emulation request is for a CHERI
+		 * process.
+		 */
+		ps_strings64 = SV_PROC_FLAG(p, SV_CHERI) != 0 ?
+		    (uintptr_t)PROC_PS_STRINGS(p) : 0;
+		PROC_UNLOCK(p);
+		error = SYSCTL_OUT(req, &ps_strings64, sizeof(ps_strings64));
 		return (error);
 	}
 #endif
@@ -3192,6 +3450,9 @@ sysctl_kern_proc_sigtramp(SYSCTL_HANDLER_ARGS)
 #ifdef COMPAT_FREEBSD32
 	struct kinfo_sigtramp32 kst32;
 #endif
+#ifdef COMPAT_FREEBSD64
+	struct kinfo_sigtramp64 kst64;
+#endif
 
 	if (namelen != 1)
 		return (EINVAL);
@@ -3221,12 +3482,33 @@ sysctl_kern_proc_sigtramp(SYSCTL_HANDLER_ARGS)
 		return (error);
 	}
 #endif
+#ifdef COMPAT_FREEBSD64
+	if ((req->flags & SCTL_MASK64) != 0) {
+		bzero(&kst64, sizeof(kst64));
+		if (!SV_PROC_FLAG(p, SV_CHERI)) {
+			if (PROC_HAS_SHP(p)) {
+				kst64.ksigtramp_start = PROC_SIGCODE(p);
+				kst64.ksigtramp_end = kst64.ksigtramp_start +
+				    ((sv->sv_flags & SV_DSO_SIG) == 0 ?
+				     *sv->sv_szsigcode :
+				     (uintptr_t)sv->sv_szsigcode);
+			} else {
+				kst64.ksigtramp_start = PROC_PS_STRINGS(p) -
+				    *sv->sv_szsigcode;
+				kst64.ksigtramp_end = PROC_PS_STRINGS(p);
+			}
+		}
+		PROC_UNLOCK(p);
+		error = SYSCTL_OUT(req, &kst64, sizeof(kst64));
+		return (error);
+	}
+#endif
 	bzero(&kst, sizeof(kst));
 	if (PROC_HAS_SHP(p)) {
 		kst.ksigtramp_start = (char *)PROC_SIGCODE(p);
 		kst.ksigtramp_end = (char *)kst.ksigtramp_start +
 		    ((sv->sv_flags & SV_DSO_SIG) == 0 ? *sv->sv_szsigcode :
-		    (uintptr_t)sv->sv_szsigcode);
+		    (ptraddr_t)sv->sv_szsigcode);
 	} else {
 		kst.ksigtramp_start = (char *)(uintptr_t)PROC_PS_STRINGS(p) -
 		    *sv->sv_szsigcode;
@@ -3248,6 +3530,9 @@ sysctl_kern_proc_sigfastblk(SYSCTL_HANDLER_ARGS)
 	uintptr_t addr;
 #ifdef COMPAT_FREEBSD32
 	uint32_t addr32;
+#endif
+#ifdef COMPAT_FREEBSD64
+	uint64_t addr64;
 #endif
 	int error;
 
@@ -3302,6 +3587,12 @@ errlocked:
 	if (SV_CURPROC_FLAG(SV_ILP32)) {
 		addr32 = addr;
 		error = SYSCTL_OUT(req, &addr32, sizeof(addr32));
+	} else
+#endif
+#ifdef COMPAT_FREEBSD64
+	if (!SV_CURPROC_FLAG(SV_CHERI)) {
+		addr64 = addr;
+		error = SYSCTL_OUT(req, &addr64, sizeof(addr64));
 	} else
 #endif
 		error = SYSCTL_OUT(req, &addr, sizeof(addr));
