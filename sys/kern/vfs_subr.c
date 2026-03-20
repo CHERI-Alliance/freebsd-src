@@ -43,6 +43,7 @@
 
 #include <sys/param.h>
 #include <sys/systm.h>
+#include <sys/abi_compat.h>
 #include <sys/asan.h>
 #include <sys/bio.h>
 #include <sys/buf.h>
@@ -5000,6 +5001,31 @@ vfsconf2x32(struct sysctl_req *req, struct vfsconf *vfsp)
 }
 #endif
 
+#ifdef COMPAT_FREEBSD64
+struct xvfsconf64 {
+	uint64_t	vfc_vfsops;
+	char		vfc_name[MFSNAMELEN];
+	int32_t		vfc_typenum;
+	int32_t		vfc_refcount;
+	int32_t		vfc_flags;
+	uint64_t	vfc_next;
+};
+
+static int
+vfsconf2x64(struct sysctl_req *req, struct vfsconf *vfsp)
+{
+	struct xvfsconf64 xvfsp;
+
+	bzero(&xvfsp, sizeof(xvfsp));
+	strcpy(xvfsp.vfc_name, vfsp->vfc_name);
+	xvfsp.vfc_typenum = vfsp->vfc_typenum;
+	xvfsp.vfc_refcount = vfsp->vfc_refcount;
+	xvfsp.vfc_flags = vfsp->vfc_flags;
+	return (SYSCTL_OUT(req, &xvfsp, sizeof(xvfsp)));
+}
+#endif
+
+
 /*
  * Top level filesystem related information gathering.
  */
@@ -5017,6 +5043,12 @@ sysctl_vfs_conflist(SYSCTL_HANDLER_ARGS)
 			error = vfsconf2x32(req, vfsp);
 		else
 #endif
+#ifdef COMPAT_FREEBSD64
+		if (req->flags & SCTL_MASK64)
+			error = vfsconf2x64(req, vfsp);
+		else
+#endif
+
 			error = vfsconf2x(req, vfsp);
 		if (error)
 			break;
@@ -5067,6 +5099,11 @@ vfs_sysctl(SYSCTL_HANDLER_ARGS)
 #ifdef COMPAT_FREEBSD32
 		if (req->flags & SCTL_MASK32)
 			return (vfsconf2x32(req, vfsp));
+		else
+#endif
+#ifdef COMPAT_FREEBSD64
+		if (req->flags & SCTL_MASK64)
+			return (vfsconf2x64(req, vfsp));
 		else
 #endif
 			return (vfsconf2x(req, vfsp));
