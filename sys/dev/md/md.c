@@ -61,6 +61,7 @@
 #include "opt_md.h"
 
 #include <sys/systm.h>
+#include <sys/abi_compat.h>
 #include <sys/bio.h>
 #include <sys/buf.h>
 #include <sys/bus.h>
@@ -159,6 +160,28 @@ CTASSERT((sizeof(struct md_ioctl32)) == 436);
 #define	MDIOCQUERY_32	_IOC_NEWTYPE(MDIOCQUERY, struct md_ioctl32)
 #define	MDIOCRESIZE_32	_IOC_NEWTYPE(MDIOCRESIZE, struct md_ioctl32)
 #endif /* COMPAT_FREEBSD32 */
+
+#ifdef COMPAT_FREEBSD64
+struct md_ioctl64 {
+	unsigned	md_version;
+	unsigned	md_unit;
+	enum md_types	md_type;
+	uint64_t	md_file;	/* (void *) */
+	off_t		md_mediasize;
+	unsigned	md_sectorsize;
+	unsigned	md_options;
+	uint64_t	md_base;
+	int		md_fwheads;
+	int		md_fwsectors;
+	uint64_t	md_label;	/* (char *) */
+	int		md_pad[MDNPAD];
+};
+
+#define	MDIOCATTACH_64	_IOC_NEWTYPE(MDIOCATTACH, struct md_ioctl64)
+#define	MDIOCDETACH_64	_IOC_NEWTYPE(MDIOCDETACH, struct md_ioctl64)
+#define	MDIOCQUERY_64	_IOC_NEWTYPE(MDIOCQUERY, struct md_ioctl64)
+#define	MDIOCRESIZE_64	_IOC_NEWTYPE(MDIOCRESIZE, struct md_ioctl64)
+#endif /* COMPAT_FREEBSD64 */
 
 static MALLOC_DEFINE(M_MD, "md_disk", "Memory Disk");
 static MALLOC_DEFINE(M_MDSECT, "md_sectors", "Memory Disk Sectors");
@@ -1978,6 +2001,21 @@ mdctlioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags,
 		break;
 	}
 #endif
+#ifdef COMPAT_FREEBSD64
+	case MDIOCATTACH_64:
+	case MDIOCDETACH_64:
+	case MDIOCRESIZE_64:
+	case MDIOCQUERY_64: {
+		struct md_ioctl64 *mdio = (struct md_ioctl64 *)addr;
+		if (mdio->md_version != MDIOVERSION)
+			return (EINVAL);
+		MD_IOCTL2REQ(mdio, &mdr);
+		mdr.md_file = USER_PTR_PATH(mdio->md_file);
+		mdr.md_file_seg = UIO_USERSPACE;
+		mdr.md_label = USER_PTR_STR(mdio->md_label);
+		break;
+	}
+#endif
 	default:
 		/* Fall through to handler switch. */
 		break;
@@ -1989,11 +2027,17 @@ mdctlioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags,
 #ifdef COMPAT_FREEBSD32
 	case MDIOCATTACH_32:
 #endif
+#ifdef COMPAT_FREEBSD64
+	case MDIOCATTACH_64:
+#endif
 		error = kern_mdattach(td, &mdr);
 		break;
 	case MDIOCDETACH:
 #ifdef COMPAT_FREEBSD32
 	case MDIOCDETACH_32:
+#endif
+#ifdef COMPAT_FREEBSD64
+	case MDIOCDETACH_64:
 #endif
 		error = kern_mddetach(td, &mdr);
 		break;
@@ -2001,11 +2045,17 @@ mdctlioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags,
 #ifdef COMPAT_FREEBSD32
 	case MDIOCRESIZE_32:
 #endif
+#ifdef COMPAT_FREEBSD64
+	case MDIOCRESIZE_64:
+#endif
 		error = kern_mdresize(&mdr);
 		break;
 	case MDIOCQUERY:
 #ifdef COMPAT_FREEBSD32
 	case MDIOCQUERY_32:
+#endif
+#ifdef COMPAT_FREEBSD64
+	case MDIOCQUERY_64:
 #endif
 		error = kern_mdquery(&mdr);
 		break;
@@ -2024,6 +2074,14 @@ mdctlioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags,
 	case MDIOCATTACH_32:
 	case MDIOCQUERY_32: {
 		struct md_ioctl32 *mdio = (struct md_ioctl32 *)addr;
+		MD_REQ2IOCTL(&mdr, mdio);
+		break;
+	}
+#endif
+#ifdef COMPAT_FREEBSD64
+	case MDIOCATTACH_64:
+	case MDIOCQUERY_64: {
+		struct md_ioctl64 *mdio = (struct md_ioctl64 *)addr;
 		MD_REQ2IOCTL(&mdr, mdio);
 		break;
 	}
