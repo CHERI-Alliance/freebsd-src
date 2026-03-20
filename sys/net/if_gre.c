@@ -528,12 +528,12 @@ gre_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 	case SIOCADDMULTI:
 	case SIOCDELMULTI:
 		return (0);
-	case GRESADDRS:
-	case GRESADDRD:
-	case GREGADDRS:
-	case GREGADDRD:
-	case GRESPROTO:
-	case GREGPROTO:
+	case CASE_IOC_IFREQ(GRESADDRS):
+	case CASE_IOC_IFREQ(GRESADDRD):
+	case CASE_IOC_IFREQ(GREGADDRS):
+	case CASE_IOC_IFREQ(GREGADDRD):
+	case CASE_IOC_IFREQ(GRESPROTO):
+	case CASE_IOC_IFREQ(GREGPROTO):
 		return (EOPNOTSUPP);
 	}
 	sx_xlock(&gre_ioctl_sx);
@@ -574,7 +574,7 @@ gre_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		else
 			sc->gre_fibnum = ifr->ifr_fib;
 		break;
-	case GRESKEY:
+	case CASE_IOC_IFREQ(GRESKEY):
 	case GRESOPTS:
 	case GRESPORT:
 		if ((error = priv_check(curthread, PRIV_NET_GRE)) != 0)
@@ -589,11 +589,11 @@ gre_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		else if (cmd == GRESPORT)
 			error = gre_set_udp_sport(sc, opt);
 		break;
-	case GREGKEY:
+	case CASE_IOC_IFREQ(GREGKEY):
 		error = copyout(&sc->gre_key, ifr_data_get_ptr(ifr),
 		    sizeof(sc->gre_key));
 		break;
-	case GREGOPTS:
+	case CASE_IOC_IFREQ(GREGOPTS):
 		error = copyout(&sc->gre_options, ifr_data_get_ptr(ifr),
 		    sizeof(sc->gre_options));
 		break;
