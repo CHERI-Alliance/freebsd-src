@@ -307,7 +307,7 @@ CLANG_OPT_SMALL+= -mllvm -simplifycfg-dup-ret
 CLANG_OPT_SMALL+= -mllvm -enable-load-pre=false
 CFLAGS.clang+=	 -Qunused-arguments
 
-.if ${MK_SSP} != "no"
+.if ${MK_SSP} != "no" && !${MACHINE_ABI:Mpurecap}
 # Don't use -Wstack-protector as it breaks world with -Werror.
 .if ${COMPILER_FEATURES:Mstackclash}
 SSP_CFLAGS?=	-fstack-protector-strong -fstack-clash-protection
