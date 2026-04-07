@@ -98,14 +98,19 @@ struct xchan_buf {
 	vm_size_t			size;
 };
 
+typedef union {
+	uintptr_t		vaddr;
+	bus_addr_t		bus_addr;
+} xdma_request_addr_t;
+
 struct xdma_request {
 	struct mbuf			*m;
 	struct bio			*bp;
 	enum xdma_operation_type	operation;
 	enum xdma_request_type		req_type;
 	enum xdma_direction		direction;
-	bus_addr_t			src_addr;
-	bus_addr_t			dst_addr;
+	xdma_request_addr_t		src;
+	xdma_request_addr_t		dst;
 	uint8_t				src_width;
 	uint8_t				dst_width;
 	bus_size_t			block_num;
@@ -117,8 +122,8 @@ struct xdma_request {
 };
 
 struct xdma_sglist {
-	bus_addr_t			src_addr;
-	bus_addr_t			dst_addr;
+	xdma_request_addr_t		src;
+	xdma_request_addr_t		dst;
 	size_t				len;
 	uint8_t				src_width;
 	uint8_t				dst_width;
@@ -284,8 +289,10 @@ void xdma_callback(struct xdma_channel *xchan, xdma_transfer_status_t *status);
 /* Sglist */
 int xchan_sglist_alloc(xdma_channel_t *xchan);
 void xchan_sglist_free(xdma_channel_t *xchan);
-int xdma_sglist_add(struct xdma_sglist *sg, struct bus_dma_segment *seg,
+int xdma_sglist_add_busdma(struct xdma_sglist *sg, struct bus_dma_segment *seg,
     uint32_t nsegs, struct xdma_request *xr);
+int xdma_sglist_add(struct xdma_sglist *sg, xdma_request_addr_t seg_addr,
+    size_t len, struct xdma_request *xr);
 
 /* Requests bank */
 void xchan_bank_init(xdma_channel_t *xchan);
@@ -294,9 +301,9 @@ struct xdma_request * xchan_bank_get(xdma_channel_t *xchan);
 int xchan_bank_put(xdma_channel_t *xchan, struct xdma_request *xr);
 
 /* IOMMU */
-void xdma_iommu_add_entry(xdma_channel_t *xchan, vm_offset_t *va,
+void xdma_iommu_add_entry(xdma_channel_t *xchan, vm_pointer_t *va,
     vm_paddr_t pa, vm_size_t size, vm_prot_t prot);
-void xdma_iommu_remove_entry(xdma_channel_t *xchan, vm_offset_t va);
+void xdma_iommu_remove_entry(xdma_channel_t *xchan, vm_pointer_t va);
 int xdma_iommu_init(struct xdma_iommu *xio);
 int xdma_iommu_release(struct xdma_iommu *xio);
 
