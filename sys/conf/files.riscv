@@ -113,3 +113,6 @@ riscv/thead/thead.c		standard
 
 # Zstd
 contrib/zstd/lib/freebsd/zstd_kfreebsd.c		optional zstdio compile-with ${ZSTD_C}
+
+# CHERI
+riscv/cheri/cheri_machdep.c			optional cpu_cheri
