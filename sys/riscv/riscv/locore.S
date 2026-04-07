@@ -80,6 +80,10 @@ _alt_start:
 	 */
 	modesw.cap
 .option pop
+
+	/* Enable CHERI for U-mode */
+	li	t0, SENVCFG_CRE
+	csrs	senvcfg, t0
 #else
 .option push
 .option norelax
@@ -123,7 +127,7 @@ _alt_start:
 _start:
 	/* Set the global pointer */
 #ifdef __CHERI__
-	MV_PTR	PTR(gp), PTR(null)
+	MV_PTR	PTR(gp), PTR_NULL
 
 	/* Enable CHERI for U-mode */
 	li	t0, SENVCFG_CRE
@@ -445,7 +449,12 @@ ENTRY(mpentry)
 .option nocapmode
 	modesw.cap
 .option pop
+
+	/* Enable CHERI for U-mode */
+	li	t0, SENVCFG_CRE
+	csrs	senvcfg, t0
 #endif
+
 	/*
 	 * Calculate the offset to __riscv_boot_ap
 	 * for the current core, cpuid is in a0.
