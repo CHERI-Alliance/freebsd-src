@@ -181,9 +181,11 @@ CFLAGS+=	-mabi=aapcs
 # code model as "medium" and "medany" respectively.
 #
 .if ${MACHINE_CPUARCH} == "riscv"
-RISCV_MARCH=	rv64imafdch_zifencei
+RISCV_MARCH=	rv64imafdch
 .if ${MACHINE_CPU:Mcheri}
 RISCV_MARCH:=	${RISCV_MARCH}xcheri
+.else
+RISCV_MARCH:=	${RISCV_MARCH}_zifencei
 .endif
 
 .if ${MACHINE_ARCH:Mriscv*c*}
