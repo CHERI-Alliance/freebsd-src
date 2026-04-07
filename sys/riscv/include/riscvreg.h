@@ -200,6 +200,10 @@
 #define	SATP_MODE_SV39	(8ULL << SATP_MODE_S)
 #define	SATP_MODE_SV48	(9ULL << SATP_MODE_S)
 
+#ifdef __riscv_zcherihybrid
+#define	SENVCFG_CRE	(0x01 << 28)
+#endif
+
 #define	XLEN		__riscv_xlen
 #define	XLEN_BYTES	(XLEN / 8)
 #ifdef __CHERI__
