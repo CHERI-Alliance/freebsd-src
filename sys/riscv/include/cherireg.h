@@ -313,14 +313,18 @@
 #define	CHERI_OTYPE_ISKERN(x)	(((x) & CHERI_OTYPE_KERN_FLAG) != 0)
 #define	CHERI_OTYPE_ISUSER(x)	(!(CHERI_OTYPE_ISKERN(x)))
 
+#ifdef _KERNEL
 /* Reserved CHERI object types: */
 #define	CHERI_OTYPE_UNSEALED	(-1l)
 #define	CHERI_OTYPE_SENTRY	(-2l)
+#endif
 #else /* !defined(__riscv_xcheri) */
 #define	CHERI_OTYPE_BITS	(1)
 
+#ifdef _KERNEL
 #define	CHERI_OTYPE_UNSEALED	(0l)
 #define	CHERI_OTYPE_SENTRY	(1l)
+#endif
 #endif /* !defined(__riscv_xcheri) */
 
 /*
