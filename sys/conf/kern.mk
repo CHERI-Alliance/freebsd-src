@@ -183,7 +183,7 @@ CFLAGS+=	-mabi=aapcs
 .if ${MACHINE_CPUARCH} == "riscv"
 RISCV_MARCH=	rv64imafdch
 .if ${MACHINE_CPU:Mcheri}
-RISCV_MARCH:=	${RISCV_MARCH}xcheri
+RISCV_MARCH:=	${RISCV_MARCH}_zcherihybrid_zcherilevels
 .else
 RISCV_MARCH:=	${RISCV_MARCH}_zifencei
 .endif
