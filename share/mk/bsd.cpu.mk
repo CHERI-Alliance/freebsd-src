@@ -384,7 +384,7 @@ LDFLAGS.bfd+= -Wl,--secure-plt
 .if ${MACHINE_CPUARCH} == "riscv"
 RISCV_MARCH=	rv64imafdc
 .if ${MACHINE_CPU:Mcheri}
-RISCV_MARCH:=	${RISCV_MARCH}xcheri
+RISCV_MARCH:=	${RISCV_MARCH}_zcherihybrid_zcherilevels
 .endif
 
 .if ${MACHINE_ARCH:Mriscv*c*}
