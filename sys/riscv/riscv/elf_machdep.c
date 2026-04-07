@@ -500,7 +500,7 @@ elf_reloc_internal(linker_file_t lf, char *relocbase, const void *data,
 			    before32, *insn32p);
 		break;
 	case R_RISCV_IRELATIVE:
-		addr = relocbase + addend;
+		addr = (uintptr_t)relocbase + addend;
 		val = ((Elf64_Addr (*)(void))addr)();
 		if (*where != val)
 			*where = val;
