@@ -185,9 +185,11 @@ CFLAGS+=	-cheri-tgot-tls
 # code model as "medium" and "medany" respectively.
 #
 .if ${MACHINE_CPUARCH} == "riscv"
-RISCV_MARCH=	rv64imafdch_zifencei_svinval
+RISCV_MARCH=	rv64imafdch_svinval
 .if ${MACHINE_CPU:Mcheri}
 RISCV_MARCH:=	${RISCV_MARCH}xcheri
+.else
+RISCV_MARCH:=	${RISCV_MARCH}_zifencei
 .endif
 
 .if ${MACHINE_ARCH:Mriscv*c*}
