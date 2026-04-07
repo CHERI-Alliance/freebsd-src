@@ -79,9 +79,13 @@ memrw(struct cdev *dev, struct uio *uio, int flags)
 		case CDEV_MINOR_KMEM:
 			/* If the address is in the DMAP just copy it */
 			if (VIRT_IN_DMAP(v)) {
-				error = uiomove(cheri_kern_bounds_set_exact(
-				    cheri_kern_address_set(dmap_capability, v),
-				    cnt), cnt, uio);
+#ifdef __CHERI__
+				error = uiomove(cheri_bounds_set_exact(
+				    cheri_address_set(dmap_capability, v), cnt),
+				    cnt, uio);
+#else
+				error = uiomove((void *)v, cnt, uio);
+#endif
 				break;
 			}
 
