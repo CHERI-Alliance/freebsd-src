@@ -158,6 +158,7 @@
 #include <machine/sbi.h>
 #include <machine/thead.h>
 
+#include <cheri/cheri.h>
 #include <cheri/cheric.h>
 
 /*
@@ -235,8 +236,8 @@ SYSCTL_INT(_vm_pmap, OID_AUTO, mode, CTLFLAG_RDTUN | CTLFLAG_NOFETCH,
 
 struct pmap kernel_pmap_store;
 
-vm_offset_t virtual_avail;	/* VA of first avail page (after kernel bss) */
-vm_offset_t virtual_end;	/* VA of last avail page (end of kernel AS) */
+vm_pointer_t virtual_avail;		/* VA of first avail page (after kernel bss) */
+vm_pointer_t virtual_end;		/* VA of last avail page (end of kernel AS) */
 vm_offset_t kernel_vm_end = 0;
 
 vm_paddr_t dmap_phys_base;	/* The start of the dmap region */
@@ -364,6 +365,23 @@ pagecopy(void *s, void *d)
 {
 
 	memcpy(d, s, PAGE_SIZE);
+}
+
+static __inline void
+pagecopy_cleartags(void *s, void *d)
+{
+#ifdef __CHERI__
+	void **dst;
+	void **src;
+	u_int i;
+
+	dst = d;
+	src = s;
+	for (i = 0; i < PAGE_SIZE / sizeof(*dst); i++)
+		*dst++ = cheri_tag_clear(*src++);
+#else
+	pagecopy(s, d);
+#endif
 }
 
 static __inline void
@@ -576,7 +594,12 @@ pmap_early_alloc_tables(vm_paddr_t *freemempos, int npages)
 {
 	pt_entry_t *pt;
 
+#ifdef __CHERI__
+	pt = cheri_bounds_set(cheri_address_set(kernel_root_cap, *freemempos),
+	    npages * PAGE_SIZE);
+#else
 	pt = (pt_entry_t *)*freemempos;
+#endif
 	*freemempos += npages * PAGE_SIZE;
 	bzero(pt, npages * PAGE_SIZE);
 
@@ -672,7 +695,8 @@ pmap_bootstrap_dmap(pd_entry_t *l1, vm_paddr_t freemempos)
 
 			/* map l3 pages */
 			l3slot = pmap_l3_index(va);
-			pmap_store(&l3[l3slot], L3_PTE(pa, PTE_KERN | memattr));
+			pmap_store(&l3[l3slot], L3_PTE(pa, PTE_KERN_CAP |
+			    memattr));
 
 			pa += L3_SIZE;
 			va += L3_SIZE;
@@ -696,7 +720,8 @@ pmap_bootstrap_dmap(pd_entry_t *l1, vm_paddr_t freemempos)
 
 			/* map l2 pages */
 			l2slot = pmap_l2_index(va);
-			pmap_store(&l2[l2slot], L2_PTE(pa, PTE_KERN | memattr));
+			pmap_store(&l2[l2slot], L2_PTE(pa, PTE_KERN_CAP |
+			    memattr));
 
 			pa += L2_SIZE;
 			va += L2_SIZE;
@@ -706,7 +731,8 @@ pmap_bootstrap_dmap(pd_entry_t *l1, vm_paddr_t freemempos)
 		while (pa + L1_SIZE - 1 < endpa) {
 			/* map l1 pages */
 			l1slot = pmap_l1_index(va);
-			pmap_store(&l1[l1slot], L1_PTE(pa, PTE_KERN | memattr));
+			pmap_store(&l1[l1slot], L1_PTE(pa, PTE_KERN_CAP |
+			    memattr));
 
 			pa += L1_SIZE;
 			va += L1_SIZE;
@@ -727,7 +753,8 @@ l2end:
 
 			/* map l2 pages */
 			l2slot = pmap_l2_index(va);
-			pmap_store(&l2[l2slot], L2_PTE(pa, PTE_KERN | memattr));
+			pmap_store(&l2[l2slot], L2_PTE(pa, PTE_KERN_CAP |
+			    memattr));
 
 			pa += L2_SIZE;
 			va += L2_SIZE;
@@ -756,7 +783,8 @@ l3end:
 
 			/* map l3 pages */
 			l3slot = pmap_l3_index(va);
-			pmap_store(&l3[l3slot], L3_PTE(pa, PTE_KERN | memattr));
+			pmap_store(&l3[l3slot], L3_PTE(pa, PTE_KERN_CAP |
+			    memattr));
 
 			pa += L3_SIZE;
 			va += L3_SIZE;
@@ -879,7 +907,7 @@ pmap_create_pagetables(vm_paddr_t kernstart, vm_size_t kernlen,
 	slot = pmap_l2_index(KERNBASE);
 	for (pa = kernstart; pa < kernend; pa += L2_SIZE, slot++) {
 		pmap_store(&kern_l2[slot],
-		    L2_PTE(pa, PTE_KERN | PTE_X | memattr));
+		    L2_PTE(pa, PTE_KERN_CAP | PTE_X | memattr));
 	}
 
 	/*
@@ -932,10 +960,13 @@ pmap_bootstrap(vm_paddr_t kernstart, vm_size_t kernlen)
 {
 	vm_paddr_t freemempos, pa;
 	vm_paddr_t root_pt_phys;
-	vm_offset_t freeva;
-	vm_offset_t dpcpu, msgbufpv;
+	vm_pointer_t freeva;
+	vm_pointer_t dpcpu, msgbufpv;
 	pt_entry_t *pte;
 	int i;
+#ifdef __CHERI_PURE_CAPABILITY__
+	void *kmemcap;
+#endif
 
 	printf("pmap_bootstrap %lx %lx\n", kernstart, kernlen);
 
@@ -984,6 +1015,27 @@ pmap_bootstrap(vm_paddr_t kernstart, vm_size_t kernlen)
 	 * them together.
 	 */
 	freeva = freemempos - kernstart + KERNBASE;
+#ifdef __CHERI_PURE_CAPABILITY__
+	/*
+	 * kmem_init expects to receive a virtual_avail = freeva capability with
+	 * - a cursor at the boundary of the bootstrapped memory
+	 * - a base at VM_MIN_KERNEL_ADDRESS (for vm_mapping the virtual space)
+	 * - a top at VM_MAX_KERNEL_ADDRESS (for vm_mapping the virtual space)
+	 * Therefore generate one such capability. Incrementing freeva will bump
+	 * up the cursor, but not the bounds.
+	 */
+	kmemcap = cheri_address_set(kernel_root_cap, VM_MIN_KERNEL_ADDRESS);
+	kmemcap = cheri_bounds_set(kmemcap, VM_MAX_KERNEL_ADDRESS - VM_MIN_KERNEL_ADDRESS);
+	freeva = (vm_pointer_t)cheri_address_set(kmemcap, freeva);
+
+#define reserve_space(var, pa, size)					\
+	do {								\
+		var = cheri_bounds_set(freeva, size);			\
+		pa = freemempos;					\
+		freeva += cheri_length_get(var);				\
+		freemempos += cheri_length_get(var);			\
+	} while (0)
+#else
 #define reserve_space(var, pa, size)					\
 	do {								\
 		var = freeva;						\
@@ -991,6 +1043,7 @@ pmap_bootstrap(vm_paddr_t kernstart, vm_size_t kernlen)
 		freeva += size;						\
 		freemempos += size;					\
 	} while (0)
+#endif
 
 	/* Allocate the dynamic per-cpu area. */
 	reserve_space(dpcpu, pa, DPCPU_SIZE);
@@ -999,7 +1052,7 @@ pmap_bootstrap(vm_paddr_t kernstart, vm_size_t kernlen)
 	pte = pmap_l3(kernel_pmap, dpcpu);
 	KASSERT(pte != NULL, ("Bootstrap pages missing"));
 	for (i = 0; i < howmany(DPCPU_SIZE, PAGE_SIZE); i++)
-		pmap_store(&pte[i], L3_PTE(pa + ptoa(i), PTE_KERN |
+		pmap_store(&pte[i], L3_PTE(pa + ptoa(i), PTE_KERN_CAP |
 		    pmap_memattr_bits(VM_MEMATTR_DEFAULT)));
 
 	/* Now, it can be initialized. */
@@ -1013,14 +1066,14 @@ pmap_bootstrap(vm_paddr_t kernstart, vm_size_t kernlen)
 	pte = pmap_l3(kernel_pmap, msgbufpv);
 	KASSERT(pte != NULL, ("Bootstrap pages missing"));
 	for (i = 0; i < howmany(msgbufsize, PAGE_SIZE); i++)
-		pmap_store(&pte[i], L3_PTE(pa + ptoa(i), PTE_KERN |
+		pmap_store(&pte[i], L3_PTE(pa + ptoa(i), PTE_KERN_CAP |
 		    pmap_memattr_bits(VM_MEMATTR_DEFAULT)));
 
 #undef	reserve_space
 
 	/* Mark the bounds of our available virtual address space */
-	virtual_avail = kernel_vm_end = freeva;
-	virtual_end = DEVMAP_MIN_VADDR;
+	kernel_vm_end = virtual_avail = freeva;
+	virtual_end = cheri_kern_address_set(virtual_avail, DEVMAP_MIN_VADDR);
 
 	/* Exclude the reserved physical memory from allocations. */
 	physmem_exclude_region(kernstart, freemempos - kernstart,
@@ -1210,6 +1263,20 @@ pmap_extract(pmap_t pmap, vm_offset_t va)
 	return (pa);
 }
 
+static bool
+pmap_can_extract_and_hold(pt_entry_t pte, vm_prot_t prot)
+{
+	if ((prot & VM_PROT_WRITE) != 0 && (pte & PTE_W) == 0)
+		return false;
+#ifdef __CHERI__
+	if (VM_PROT_HAS_READ_CAP(prot) && (pte & PTE_CW) == 0)
+		return false;
+	if (VM_PROT_HAS_WRITE_CAP(prot) && (pte & PTE_CW) == 0)
+		return false;
+#endif
+	return true;
+}
+
 /*
  *	Routine:	pmap_extract_and_hold
  *	Function:
@@ -1230,14 +1297,13 @@ pmap_extract_and_hold(pmap_t pmap, vm_offset_t va, vm_prot_t prot)
 	if (l2p == NULL || ((l2 = pmap_load(l2p)) & PTE_V) == 0) {
 		;
 	} else if ((l2 & PTE_RWX) != 0) {
-		if ((l2 & PTE_W) != 0 || (prot & VM_PROT_WRITE) == 0) {
+		if (pmap_can_extract_and_hold(l2, prot))
 			m = PHYS_TO_VM_PAGE(L2PTE_TO_PHYS(l2) +
 			    (va & L2_OFFSET));
-		}
 	} else {
 		l3p = pmap_l2_to_l3(l2p, va);
 		if ((l3 = pmap_load(l3p)) != 0) {
-			if ((l3 & PTE_W) != 0 || (prot & VM_PROT_WRITE) == 0)
+			if (pmap_can_extract_and_hold(l3, prot))
 				m = PTE_TO_VM_PAGE(l3);
 		}
 	}
@@ -1387,10 +1453,17 @@ pmap_kremove_device(vm_offset_t sva, vm_size_t size)
  *	region.
  */
 void *
-pmap_map(vm_offset_t *virt, vm_paddr_t start, vm_paddr_t end, int prot)
+pmap_map(vm_pointer_t *virt, vm_paddr_t start, vm_paddr_t end, int prot)
 {
+	void *p;
 
-	return (PHYS_TO_DMAP(start));
+	p = PHYS_TO_DMAP(start);
+#ifdef __CHERI_PURE_CAPABILITY__
+	p = cheri_bounds_set(p, end - start);
+	p = cheri_perms_and(p, vm_prot2perms(cheri_perms_get(p), prot));
+#endif
+
+	return (p);
 }
 
 /*
@@ -1420,7 +1493,7 @@ pmap_qenter(void *sva, vm_page_t *ma, int count)
 		pn = (pa / PAGE_SIZE);
 		l3 = pmap_l3(kernel_pmap, va);
 
-		entry = PTE_KERN;
+		entry = PTE_KERN_CAP;
 		entry |= pmap_memattr_bits(m->md.pv_memattr);
 		entry |= (pn << PTE_PPN0_S);
 		pmap_store(l3, entry);
@@ -2214,9 +2287,8 @@ retry:
 	dump_add_page(m->phys_addr);
 	pc = VM_PAGE_TO_DMAP(m);
 	pc->pc_pmap = pmap;
-	pc->pc_map[0] = PC_FREEN & ~1ul;	/* preallocated bit 0 */
-	pc->pc_map[1] = PC_FREEN;
-	pc->pc_map[2] = PC_FREEL;
+	memcpy(pc->pc_map, pc_freemask, sizeof(pc_freemask));
+	pc->pc_map[0] &= ~1ul;		/* preallocated bit 0 */
 	mtx_lock(&pv_chunks_mutex);
 	TAILQ_INSERT_TAIL(&pv_chunks, pc, pc_lru);
 	mtx_unlock(&pv_chunks_mutex);
@@ -2277,9 +2349,7 @@ retry:
 		dump_add_page(m->phys_addr);
 		pc = VM_PAGE_TO_DMAP(m);
 		pc->pc_pmap = pmap;
-		pc->pc_map[0] = PC_FREEN;
-		pc->pc_map[1] = PC_FREEN;
-		pc->pc_map[2] = PC_FREEL;
+		memcpy(pc->pc_map, pc_freemask, sizeof(pc_freemask));
 		TAILQ_INSERT_HEAD(&pmap->pm_pvchunk, pc, pc_list);
 		TAILQ_INSERT_TAIL(&new_tail, pc, pc_lru);
 		PV_STAT(atomic_add_int(&pv_entry_spare, _NPCPV));
@@ -2948,14 +3018,18 @@ pmap_fault(pmap_t pmap, vm_offset_t va, vm_prot_t ftype)
 	}
 
 	if ((pmap != kernel_pmap && (oldpte & PTE_U) == 0) ||
-	    (ftype == VM_PROT_WRITE && (oldpte & PTE_W) == 0) ||
+	    ((ftype & VM_PROT_WRITE) != 0 && (oldpte & PTE_W) == 0) ||
+#ifdef __CHERI__
+	    (VM_PROT_HAS_WRITE_CAP(ftype) && (oldpte & PTE_CW) == 0) ||
+#endif
 	    (ftype == VM_PROT_EXECUTE && (oldpte & PTE_X) == 0) ||
 	    (ftype == VM_PROT_READ && (oldpte & PTE_R) == 0))
 		goto done;
 
 	bits = PTE_A;
-	if (ftype == VM_PROT_WRITE)
+	if ((ftype & VM_PROT_WRITE) != 0) {
 		bits |= PTE_D;
+	}
 
 	/*
 	 * Spurious faults can occur if the implementation caches invalid
@@ -3258,6 +3332,18 @@ pmap_promote_l2(pmap_t pmap, pd_entry_t *l2, vm_offset_t va, vm_page_t ml3,
 }
 #endif
 
+#ifdef __CHERI__
+static inline uint64_t
+cheri_pte_cr(pmap_t pmap, vm_offset_t va, vm_page_t m, vm_prot_t prot)
+{
+	if (VM_PROT_HAS_READ_CAP(prot)) {
+		return PTE_CR_OK;
+	} else {
+		return PTE_CR_CLEAR;
+	}
+}
+#endif
+
 /*
  *	Insert the given physical page (p) at
  *	the specified virtual address (v) in the
@@ -3294,12 +3380,23 @@ pmap_enter(pmap_t pmap, vm_offset_t va, vm_page_t m, vm_prot_t prot,
 	new_l3 = PTE_V | PTE_R | PTE_A;
 	if (prot & VM_PROT_EXECUTE)
 		new_l3 |= PTE_X;
-	if (flags & VM_PROT_WRITE)
+	if (flags & VM_PROT_WRITE) {
 		new_l3 |= PTE_D;
-	if (prot & VM_PROT_WRITE)
+	}
+	if (prot & VM_PROT_WRITE) {
 		new_l3 |= PTE_W;
+#ifdef __CHERI__
+		if (prot & VM_PROT_CAP)
+			new_l3 |= PTE_CW;
+#endif
+	}
 	if (va < VM_MAX_USER_ADDRESS)
 		new_l3 |= PTE_U;
+#ifdef __CHERI__
+	if (VM_PROT_HAS_READ_CAP(prot))
+		new_l3 |= PTE_CW;
+	new_l3 |= cheri_pte_cr(pmap, va, m, prot);
+#endif
 
 	new_l3 |= (pn << PTE_PPN0_S);
 	if ((flags & PMAP_ENTER_WIRED) != 0)
@@ -3312,8 +3409,9 @@ pmap_enter(pmap_t pmap, vm_offset_t va, vm_page_t m, vm_prot_t prot,
 	 * to do the dirty bit accounting for these mappings.
 	 */
 	if ((m->oflags & VPO_UNMANAGED) != 0) {
-		if (prot & VM_PROT_WRITE)
+		if (prot & VM_PROT_WRITE) {
 			new_l3 |= PTE_D;
+		}
 	} else
 		new_l3 |= PTE_SW_MANAGED;
 
@@ -3548,6 +3646,9 @@ pmap_enter_2mpage(pmap_t pmap, vm_offset_t va, vm_page_t m, vm_prot_t prot,
 		new_l2 |= PTE_X;
 	if (va < VM_MAXUSER_ADDRESS)
 		new_l2 |= PTE_U;
+#ifdef __CHERI__
+	new_l2 |= cheri_pte_cr(pmap, va, m, prot);
+#endif
 	return (pmap_enter_l2(pmap, va, new_l2, PMAP_ENTER_NOSLEEP |
 	    PMAP_ENTER_NOREPLACE | PMAP_ENTER_NORECLAIM, NULL, lockp));
 }
@@ -3885,6 +3986,9 @@ pmap_enter_quick_locked(pmap_t pmap, vm_offset_t va, vm_page_t m,
 		newl3 |= PTE_SW_MANAGED;
 	if (va < VM_MAX_USER_ADDRESS)
 		newl3 |= PTE_U;
+#ifdef __CHERI__
+	newl3 |= cheri_pte_cr(pmap, va, m, prot);
+#endif
 
 	/*
 	 * Sync the i-cache on all harts before updating the PTE
@@ -4075,6 +4179,13 @@ pmap_zero_page_area(vm_page_t m, int off, int size)
  *	page by mapping the page into virtual memory and using
  *	memcpy to copy the page, one machine dependent page at a
  *	time.
+ *
+ *	With CHERI, it is sometimes desirable to explicitly propagate
+ *	tags between pages (e.g., during copy-on-write), but not other
+ *	times (e.g., copying data from VM to buffer cache).  There is
+ *	more playing out here yet to do (e.g., if any filesystems
+ *	learn to preserve tags) but these KPIs allow us to capture
+ *	that difference in the mean time.
  */
 void
 pmap_copy_page(vm_page_t msrc, vm_page_t mdst)
@@ -4082,14 +4193,31 @@ pmap_copy_page(vm_page_t msrc, vm_page_t mdst)
 	void *src = VM_PAGE_TO_DMAP(msrc);
 	void *dst = VM_PAGE_TO_DMAP(mdst);
 
+	pagecopy_cleartags(src, dst);
+}
+
+#ifdef __CHERI__
+void
+pmap_copy_page_tags(vm_page_t msrc, vm_page_t mdst)
+{
+	void *src = VM_PAGE_TO_DMAP(msrc);
+	void *dst = VM_PAGE_TO_DMAP(mdst);
+
 	pagecopy(src, dst);
 }
+#endif
 
 int unmapped_buf_allowed = 1;
 
+#ifdef __CHERI__
+static void
+_pmap_copy_pages(vm_page_t ma[], vm_offset_t a_offset, vm_page_t mb[],
+    vm_offset_t b_offset, int xfersize, bool clear_tags)
+#else
 void
 pmap_copy_pages(vm_page_t ma[], vm_offset_t a_offset, vm_page_t mb[],
     vm_offset_t b_offset, int xfersize)
+#endif
 {
 	void *a_cp, *b_cp;
 	vm_page_t m_a, m_b;
@@ -4109,21 +4237,40 @@ pmap_copy_pages(vm_page_t ma[], vm_offset_t a_offset, vm_page_t mb[],
 		if (__predict_false(!PHYS_IN_DMAP(p_a))) {
 			panic("!DMAP a %lx", p_a);
 		} else {
-			a_cp = (char *)PHYS_TO_DMAP_SUBPAGE(p_a + a_pg_offset,
-			    cnt);
+			a_cp = (char *)PHYS_TO_DMAP_LEN(p_a + a_pg_offset, cnt);
 		}
 		if (__predict_false(!PHYS_IN_DMAP(p_b))) {
 			panic("!DMAP b %lx", p_b);
 		} else {
-			b_cp = (char *)PHYS_TO_DMAP_SUBPAGE(p_b + b_pg_offset,
-			    cnt);
+			b_cp = (char *)PHYS_TO_DMAP_LEN(p_b + b_pg_offset, cnt);
 		}
-		memcpy(b_cp, a_cp, cnt);
+#ifdef __CHERI__
+		if (clear_tags)
+			memcpy_data(b_cp, a_cp, cnt);
+		else
+#endif
+			memcpy(b_cp, a_cp, cnt);
 		a_offset += cnt;
 		b_offset += cnt;
 		xfersize -= cnt;
 	}
 }
+
+#ifdef __CHERI__
+void
+pmap_copy_pages(vm_page_t ma[], vm_offset_t a_offset, vm_page_t mb[],
+    vm_offset_t b_offset, int xfersize)
+{
+	_pmap_copy_pages(ma, a_offset, mb, b_offset, xfersize, true);
+}
+
+void
+pmap_copy_pages_tags(vm_page_t ma[], vm_offset_t a_offset, vm_page_t mb[],
+    vm_offset_t b_offset, int xfersize)
+{
+	_pmap_copy_pages(ma, a_offset, mb, b_offset, xfersize, false);
+}
+#endif
 
 void *
 pmap_quick_enter_page(vm_page_t m)
@@ -4920,8 +5067,7 @@ restart:
 void *
 pmap_mapbios(vm_paddr_t pa, vm_size_t size)
 {
-
-        return (PHYS_TO_DMAP(pa));
+        return (cheri_kern_bounds_set((void *)PHYS_TO_DMAP(pa), size));
 }
 
 void
@@ -4977,7 +5123,7 @@ pmap_change_attr(void *va, vm_size_t size, int mode)
 static int
 pmap_change_attr_locked(void *addr, vm_size_t size, int mode)
 {
-	vm_offset_t base, offset, tmpva, va;
+	vm_pointer_t base, offset, tmpva, va;
 	vm_paddr_t phys;
 	pd_entry_t *l1, l1e;
 	pd_entry_t *l2, l2e;
@@ -4987,7 +5133,7 @@ pmap_change_attr_locked(void *addr, vm_size_t size, int mode)
 	int error = 0;
 
 	PMAP_LOCK_ASSERT(kernel_pmap, MA_OWNED);
-	va = (vm_offset_t)addr;
+	va = (vm_pointer_t)addr;
 	base = trunc_page(va);
 	offset = va & PAGE_MASK;
 	size = round_page(offset + size);
@@ -5202,8 +5348,9 @@ pmap_activate_sw(struct thread *td)
 
 	oldpmap = PCPU_GET(curpmap);
 	pmap = vmspace_pmap(td->td_proc->p_vmspace);
-	if (pmap == oldpmap)
+	if (pmap == oldpmap) {
 		return;
+	}
 	csr_write(satp, pmap->pm_satp);
 
 	hart = PCPU_GET(hart);
@@ -5215,7 +5362,6 @@ pmap_activate_sw(struct thread *td)
 	CPU_CLR(hart, &oldpmap->pm_active);
 #endif
 	PCPU_SET(curpmap, pmap);
-
 	sfence_vma();
 }
 

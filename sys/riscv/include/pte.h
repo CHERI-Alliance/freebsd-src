@@ -66,6 +66,21 @@ typedef	uint64_t	pn_t;			/* page number */
 #define	Ln_ENTRIES	(1 << Ln_ENTRIES_SHIFT)
 #define	Ln_ADDR_MASK	(Ln_ENTRIES - 1)
 
+#ifdef __CHERI__
+#define	PTE_CW		(1UL << 60) /* Capability Read/Write */
+#define	PTE_CRG		(1UL << 59) /* Cap Read Generation */
+#define	PTE_CHERI_MASK	(PTE_CW | PTE_CRG)
+
+#define	PTE_CR_CLEAR    0
+#define	PTE_CR_OK       PTE_CW
+
+#define	PTE_KERN_CHERI	PTE_CW
+#define	PTE_PROMOTE_CHERI (PTE_CW | PTE_CRG)
+#else
+#define	PTE_KERN_CHERI	0
+#define	PTE_PROMOTE_CHERI 0
+#endif
+
 /* Bits 9:8 are reserved for software */
 #define	PTE_SW_MANAGED	(1 << 9)
 #define	PTE_SW_WIRED	(1 << 8)
@@ -80,8 +95,9 @@ typedef	uint64_t	pn_t;			/* page number */
 #define	PTE_RWX		(PTE_R | PTE_W | PTE_X)
 #define	PTE_RX		(PTE_R | PTE_X)
 #define	PTE_KERN	(PTE_V | PTE_R | PTE_W | PTE_A | PTE_D)
+#define	PTE_KERN_CAP	(PTE_KERN | PTE_KERN_CHERI)
 #define	PTE_PROMOTE	(PTE_V | PTE_RWX | PTE_D | PTE_G | PTE_U | \
-			 PTE_SW_MANAGED | PTE_SW_WIRED)
+			 PTE_SW_MANAGED | PTE_SW_WIRED | PTE_PROMOTE_CHERI)
 
 /*
  * Svpbmt Memory Attribute (MA) bits [62:61].
