@@ -83,7 +83,11 @@ stack_save(struct stack *st)
 	struct unwind_state frame;
 	uintptr_t sp;
 
+#ifdef __CHERI__
+	__asm __volatile("cmv %0, csp" : "=&C" (sp));
+#else
 	__asm __volatile("mv %0, sp" : "=&r" (sp));
+#endif
 
 	frame.sp = sp;
 	frame.fp = (uintptr_t)__builtin_frame_address(0);

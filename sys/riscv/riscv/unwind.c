@@ -51,7 +51,7 @@ unwind_frame(struct thread *td, struct unwind_state *frame)
 
 	frame->sp = fp;
 	frame->fp = ((uintptr_t *)fp)[-2];
-	frame->pc = ((uintptr_t *)fp)[-1] - 4;
+	frame->pc = ((ptraddr_t)((uintptr_t *)fp)[-1]) - 4;
 
 	return (true);
 }
