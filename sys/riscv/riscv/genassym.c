@@ -96,6 +96,9 @@ ASSYM(TF_SEPC, offsetof(struct trapframe, tf_sepc));
 ASSYM(TF_STVAL, offsetof(struct trapframe, tf_stval));
 ASSYM(TF_SCAUSE, offsetof(struct trapframe, tf_scause));
 ASSYM(TF_SSTATUS, offsetof(struct trapframe, tf_sstatus));
+#ifdef __CHERI__
+ASSYM(TF_DDC, offsetof(struct trapframe, tf_ddc));
+#endif
 
 ASSYM(KF_TP, offsetof(struct kernframe, kf_tp));
 
