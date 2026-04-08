@@ -202,6 +202,10 @@
 
 #define	XLEN		__riscv_xlen
 #define	XLEN_BYTES	(XLEN / 8)
+#ifdef __CHERI__
+#define	CLEN		__riscv_clen
+#define	CLEN_BYTES	(CLEN / 8)
+#endif
 #define	INSN_SIZE	4
 #define	INSN_C_SIZE	2
 
