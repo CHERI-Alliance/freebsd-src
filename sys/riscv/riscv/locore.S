@@ -181,7 +181,7 @@ pagetables:
 
 	srli	s2, s9, L1_SHIFT	/* kernstart >> L1_SHIFT */
 	andi	a5, s2, Ln_ADDR_MASK	/* & Ln_ADDR_MASK */
-	li	t4, (PTE_KERN)
+	li	t4, (PTE_KERN_CAP)
 	or	t4, t4, s8		/* t4 |= pte bits */
 	slli	s2, s2, PTE_PPN2_S	/* (s2 << PTE_PPN2_S) */
 	or	t6, t4, s2
@@ -217,7 +217,7 @@ pagetables:
 	srli	t4, s9, L2_SHIFT	/* Div physmem base by 2 MiB */
 	li	t2, Ln_ENTRIES		/* Build 512 entries */
 	add	t3, t4, t2
-	li	t0, (PTE_KERN | PTE_X)
+	li	t0, (PTE_KERN_CAP | PTE_X)
 	or	t0, t0, s8		/* t0 |= pte bits */
 1:
 	slli	t2, t4, PTE_PPN1_S	/* << PTE_PPN1_S */
