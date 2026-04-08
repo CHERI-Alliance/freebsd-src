@@ -44,6 +44,17 @@
  * NOTE: keep this structure in sync with struct reg and struct mcontext.
  */
 struct trapframe {
+#ifdef __CHERI__
+	uintptr_t tf_ra;
+	uintptr_t tf_sp;
+	uintptr_t tf_gp;
+	uintptr_t tf_tp;
+	uintptr_t tf_t[7];
+	uintptr_t tf_s[12];
+	uintptr_t tf_a[8];
+	uintptr_t tf_sepc;
+	uintptr_t tf_ddc;
+#else
 	uint64_t tf_ra;
 	uint64_t tf_sp;
 	uint64_t tf_gp;
@@ -52,6 +63,7 @@ struct trapframe {
 	uint64_t tf_s[12];
 	uint64_t tf_a[8];
 	uint64_t tf_sepc;
+#endif
 	uint64_t tf_sstatus;
 	uint64_t tf_stval;
 	uint64_t tf_scause;
@@ -69,13 +81,20 @@ struct sigframe {
 	ucontext_t	sf_uc;	/* actual saved ucontext */
 };
 
+#ifdef COMPAT_FREEBSD64
+struct sigframe64 {
+	struct __siginfo64 sf_si;	/* actual saved siginfo */
+	ucontext64_t	sf_uc;	/* actual saved ucontext */
+};
+#endif
+
 #ifdef _KERNEL
 /*
  * Kernel frame. Reserved near the top of kernel stacks for saving kernel
  * state while in userspace.
  */
 struct kernframe {
-	register_t	kf_tp;
+	uintptr_t	kf_tp;
 };
 #endif
 
