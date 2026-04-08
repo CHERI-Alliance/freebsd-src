@@ -96,6 +96,12 @@
 #include <ddb/ddb.h>
 #endif
 
+#ifdef __CHERI__
+#include <cheri/cheri.h>
+#include <machine/cheri.h>
+#include <cheri/cheric.h>
+#endif
+
 #ifdef FDT
 #include <contrib/libfdt/libfdt.h>
 #include <dev/fdt/fdt_common.h>
@@ -308,20 +314,27 @@ init_proc0(void *kstack)
 static void
 try_load_dtb(void)
 {
-	vm_offset_t dtbp;
+	vm_pointer_t dtbp;
 
 	dtbp = MD_FETCH(preload_kmdp, MODINFOMD_DTBP, vm_offset_t);
+#ifdef __CHERI__
+	if (dtbp != (vm_pointer_t)NULL) {
+		dtbp = (vm_pointer_t)cheri_perms_and(cheri_address_set(
+		    kernel_root_cap, dtbp), CHERI_PERMS_KERNEL_DATA);
+		dtbp = cheri_bounds_set(dtbp, fdt_totalsize((void *)dtbp));
+	}
+#endif
 
 #if defined(FDT_DTB_STATIC)
 	/*
 	 * In case the device tree blob was not retrieved (from metadata) try
 	 * to use the statically embedded one.
 	 */
-	if (dtbp == (vm_offset_t)NULL)
-		dtbp = (vm_offset_t)&fdt_static_dtb;
+	if (dtbp == (vm_pointer_t)NULL)
+		dtbp = (vm_pointer_t)&fdt_static_dtb;
 #endif
 
-	if (dtbp == (vm_offset_t)NULL) {
+	if (dtbp == (vm_pointer_t)NULL) {
 		printf("ERROR loading DTB\n");
 		return;
 	}
@@ -375,6 +388,23 @@ fake_preload_metadata(struct riscv_bootparams *rvbp)
 	PRELOAD_PUSH_VALUE(uint64_t, (size_t)((vm_offset_t)&end - KERNBASE));
 
 	/*
+	 * XXX: Storing a capability here is problematic due to the
+	 * layout of metadata, and the issue of needing the boot
+	 * loader to eventually pass in caps here.  However, do round
+	 * up to ensure the DTB area is a representable pointer even
+	 * if we have to rederive it later.
+	 */
+
+#ifdef __CHERI__
+	const void *dtbp_virt = cheri_address_set(kernel_root_cap,
+	    rvbp->dtbp_phys);
+	dtb_size = fdt_totalsize(dtbp_virt);
+	lastaddr = CHERI_REPRESENTABLE_ALIGN_UP(lastaddr, dtb_size);
+#else
+	dtb_size = fdt_totalsize(rvbp->dtbp_phys);
+#endif
+
+	/*
 	 * Copy the DTB to KVA space. We are able to dereference the physical
 	 * address due to the identity map created in locore.
 	 */
@@ -382,9 +412,15 @@ fake_preload_metadata(struct riscv_bootparams *rvbp)
 	PRELOAD_PUSH_VALUE(uint32_t, MODINFO_METADATA | MODINFOMD_DTBP);
 	PRELOAD_PUSH_VALUE(uint32_t, sizeof(vm_offset_t));
 	PRELOAD_PUSH_VALUE(vm_offset_t, lastaddr);
-	dtb_size = fdt_totalsize(rvbp->dtbp_phys);
+#ifdef __CHERI__
+	void *dtbp = cheri_bounds_set(cheri_address_set(kernel_root_cap,
+	    lastaddr), dtb_size);
+	memmove(dtbp, dtbp_virt, dtb_size);
+	lastaddr = roundup(lastaddr + cheri_length_get(dtbp), sizeof(int));
+#else
 	memmove((void *)lastaddr, (const void *)rvbp->dtbp_phys, dtb_size);
 	lastaddr = roundup(lastaddr + dtb_size, sizeof(int));
+#endif
 
 	PRELOAD_PUSH_VALUE(uint32_t, MODINFO_METADATA | MODINFOMD_KERNEND);
 	PRELOAD_PUSH_VALUE(uint32_t, sizeof(vm_offset_t));
@@ -474,7 +510,7 @@ parse_metadata(void)
 {
 	vm_offset_t lastaddr;
 #ifdef DDB
-	vm_offset_t ksym_start, ksym_end;
+	vm_pointer_t ksym_start, ksym_end;
 #endif
 	char *kern_envp;
 
@@ -573,11 +609,7 @@ initriscv(struct riscv_bootparams *rvbp)
 
 	/* Set the pcpu pointer */
 #ifdef __CHERI__
-#ifdef __riscv_xcheri
-	__asm __volatile("cmove ctp, %0" :: "C"(pcpup));
-#else
 	__asm __volatile("cmv ctp, %0" :: "C"(pcpup));
-#endif
 #else
 	__asm __volatile("mv tp, %0" :: "r"(pcpup));
 #endif
