@@ -39,82 +39,90 @@
 #include <machine/riscvreg.h>
 
 .macro save_registers mode
-	addi	sp, sp, -(TF_SIZE)
+	ADDI_PTR	PTR(sp), PTR(sp), -(TF_SIZE)
 
-	sd	ra, (TF_RA)(sp)
-	sd	tp, (TF_TP)(sp)
-	sd	gp, (TF_GP)(sp)
+	S_PTR	PTR(ra), (TF_RA)(PTR(sp))
+	S_PTR	PTR(tp), (TF_TP)(PTR(sp))
+	S_PTR	PTR(gp), (TF_GP)(PTR(sp))
 
 .if \mode == 0	/* We came from userspace. */
-.option push
-.option norelax
-	/* Load the kernel's global pointer */
-	la	gp, __global_pointer$
-.option pop
-
 	/* Load our pcpu */
-	ld	tp, (TF_SIZE + KF_TP)(sp)
+	L_PTR	PTR(tp), (TF_SIZE + KF_TP)(PTR(sp))
 .endif
 
-	sd	t0, (TF_T + 0 * 8)(sp)
-	sd	t1, (TF_T + 1 * 8)(sp)
-	sd	t2, (TF_T + 2 * 8)(sp)
-	sd	t3, (TF_T + 3 * 8)(sp)
-	sd	t4, (TF_T + 4 * 8)(sp)
-	sd	t5, (TF_T + 5 * 8)(sp)
-	sd	t6, (TF_T + 6 * 8)(sp)
+	S_PTR	PTR(t0), (TF_T + 0 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(t1), (TF_T + 1 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(t2), (TF_T + 2 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(t3), (TF_T + 3 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(t4), (TF_T + 4 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(t5), (TF_T + 5 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(t6), (TF_T + 6 * PTR_WIDTH)(PTR(sp))
 
-	sd	s0, (TF_S + 0 * 8)(sp)
-	sd	s1, (TF_S + 1 * 8)(sp)
-	sd	s2, (TF_S + 2 * 8)(sp)
-	sd	s3, (TF_S + 3 * 8)(sp)
-	sd	s4, (TF_S + 4 * 8)(sp)
-	sd	s5, (TF_S + 5 * 8)(sp)
-	sd	s6, (TF_S + 6 * 8)(sp)
-	sd	s7, (TF_S + 7 * 8)(sp)
-	sd	s8, (TF_S + 8 * 8)(sp)
-	sd	s9, (TF_S + 9 * 8)(sp)
-	sd	s10, (TF_S + 10 * 8)(sp)
-	sd	s11, (TF_S + 11 * 8)(sp)
+	S_PTR	PTR(s0), (TF_S + 0 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(s1), (TF_S + 1 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(s2), (TF_S + 2 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(s3), (TF_S + 3 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(s4), (TF_S + 4 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(s5), (TF_S + 5 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(s6), (TF_S + 6 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(s7), (TF_S + 7 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(s8), (TF_S + 8 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(s9), (TF_S + 9 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(s10), (TF_S + 10 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(s11), (TF_S + 11 * PTR_WIDTH)(PTR(sp))
 
-	sd	a0, (TF_A + 0 * 8)(sp)
-	sd	a1, (TF_A + 1 * 8)(sp)
-	sd	a2, (TF_A + 2 * 8)(sp)
-	sd	a3, (TF_A + 3 * 8)(sp)
-	sd	a4, (TF_A + 4 * 8)(sp)
-	sd	a5, (TF_A + 5 * 8)(sp)
-	sd	a6, (TF_A + 6 * 8)(sp)
-	sd	a7, (TF_A + 7 * 8)(sp)
+	S_PTR	PTR(a0), (TF_A + 0 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(a1), (TF_A + 1 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(a2), (TF_A + 2 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(a3), (TF_A + 3 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(a4), (TF_A + 4 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(a5), (TF_A + 5 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(a6), (TF_A + 6 * PTR_WIDTH)(PTR(sp))
+	S_PTR	PTR(a7), (TF_A + 7 * PTR_WIDTH)(PTR(sp))
 
 .if \mode == 1
 	/* Store kernel sp */
 	li	t1, TF_SIZE
-	add	t0, sp, t1
-	sd	t0, (TF_SP)(sp)
+	ADD_PTR	PTR(t0), PTR(sp), t1
+	S_PTR	PTR(t0), (TF_SP)(PTR(sp))
 .else
 	/* Store user sp */
-	csrr	t0, sscratch
-	sd	t0, (TF_SP)(sp)
+	csrr	PTR(t0), PTR_CSR(sscratch)
+	S_PTR	PTR(t0), (TF_SP)(PTR(sp))
 .endif
-	li	t0, 0
-	csrw	sscratch, t0
-	csrr	t0, sepc
-	sd	t0, (TF_SEPC)(sp)
+	MV_PTR	PTR(t0), PTR_NULL
+	csrw	PTR_CSR(sscratch), PTR(t0)
+	csrr	PTR(t0), PTR_CSR(sepc)
+	S_PTR	PTR(t0), (TF_SEPC)(PTR(sp))
+#ifdef __CHERI__
+	csrr	PTR(t0), ddc
+	csc	PTR(t0), (TF_DDC)(PTR(sp))
+#endif
+
+#ifdef __CHERI__
+.if \mode == 0
+	/* Load our DDC */
+	MV_PTR	PTR(t0), PTR_NULL
+	csrw	ddc, PTR(t0)
+.endif
+#endif
+
 	csrr	t0, sstatus
-	sd	t0, (TF_SSTATUS)(sp)
+	sd	t0, (TF_SSTATUS)(PTR(sp))
+
 .if \mode == 1
 	/* Disable user address access for supervisor mode exceptions. */
 	li	t0, SSTATUS_SUM
 	csrc	sstatus, t0
 .endif
 	csrr	t0, stval
-	sd	t0, (TF_STVAL)(sp)
+	sd	t0, (TF_STVAL)(PTR(sp))
 	csrr	t0, scause
-	sd	t0, (TF_SCAUSE)(sp)
+	sd	t0, (TF_SCAUSE)(PTR(sp))
 .endm
 
 .macro load_registers mode
-	ld	t0, (TF_SSTATUS)(sp)
+	ld	t0, (TF_SSTATUS)(PTR(sp))
 .if \mode == 0
 	/* Ensure user interrupts will be enabled on eret */
 	li	t1, SSTATUS_SPIE
@@ -130,55 +138,65 @@
 .endif
 	csrw	sstatus, t0
 
-	ld	t0, (TF_SEPC)(sp)
-	csrw	sepc, t0
+.option push
+#ifdef __CHERI__
+	/*
+	 * Switch to user DDC.  After this point, all stack accesses
+	 * must use 'csp' instead of 'sp'.
+	 */
+	L_PTR	PTR(t0), (TF_DDC)(PTR(sp))
+	csrw	ddc, PTR(t0)
+#endif
+
+	L_PTR	PTR(t0), (TF_SEPC)(PTR(sp))
+	csrw	PTR_CSR(sepc), PTR(t0)
 
 .if \mode == 0
-	/* We go to userspace. Load user sp */
-	ld	t0, (TF_SP)(sp)
-	csrw	sscratch, t0
+	/* We go to userspace. Load user csp */
+	L_PTR	PTR(t0), (TF_SP)(PTR(sp))
+	csrw	PTR_CSR(sscratch), PTR(t0)
 
 	/* Store our pcpu */
-	sd	tp, (TF_SIZE + KF_TP)(sp)
-	ld	tp, (TF_TP)(sp)
+	S_PTR	PTR(tp), (TF_SIZE + KF_TP)(PTR(sp))
+	L_PTR	PTR(tp), (TF_TP)(PTR(sp))
 
 	/* And restore the user's global pointer */
-	ld	gp, (TF_GP)(sp)
+	L_PTR	PTR(gp), (TF_GP)(PTR(sp))
 .endif
 
-	ld	ra, (TF_RA)(sp)
+	L_PTR	PTR(ra), (TF_RA)(PTR(sp))
 
-	ld	t0, (TF_T + 0 * 8)(sp)
-	ld	t1, (TF_T + 1 * 8)(sp)
-	ld	t2, (TF_T + 2 * 8)(sp)
-	ld	t3, (TF_T + 3 * 8)(sp)
-	ld	t4, (TF_T + 4 * 8)(sp)
-	ld	t5, (TF_T + 5 * 8)(sp)
-	ld	t6, (TF_T + 6 * 8)(sp)
+	L_PTR	PTR(t0), (TF_T + 0 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(t1), (TF_T + 1 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(t2), (TF_T + 2 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(t3), (TF_T + 3 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(t4), (TF_T + 4 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(t5), (TF_T + 5 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(t6), (TF_T + 6 * PTR_WIDTH)(PTR(sp))
 
-	ld	s0, (TF_S + 0 * 8)(sp)
-	ld	s1, (TF_S + 1 * 8)(sp)
-	ld	s2, (TF_S + 2 * 8)(sp)
-	ld	s3, (TF_S + 3 * 8)(sp)
-	ld	s4, (TF_S + 4 * 8)(sp)
-	ld	s5, (TF_S + 5 * 8)(sp)
-	ld	s6, (TF_S + 6 * 8)(sp)
-	ld	s7, (TF_S + 7 * 8)(sp)
-	ld	s8, (TF_S + 8 * 8)(sp)
-	ld	s9, (TF_S + 9 * 8)(sp)
-	ld	s10, (TF_S + 10 * 8)(sp)
-	ld	s11, (TF_S + 11 * 8)(sp)
+	L_PTR	PTR(s0), (TF_S + 0 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s1), (TF_S + 1 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s2), (TF_S + 2 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s3), (TF_S + 3 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s4), (TF_S + 4 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s5), (TF_S + 5 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s6), (TF_S + 6 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s7), (TF_S + 7 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s8), (TF_S + 8 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s9), (TF_S + 9 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s10), (TF_S + 10 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(s11), (TF_S + 11 * PTR_WIDTH)(PTR(sp))
 
-	ld	a0, (TF_A + 0 * 8)(sp)
-	ld	a1, (TF_A + 1 * 8)(sp)
-	ld	a2, (TF_A + 2 * 8)(sp)
-	ld	a3, (TF_A + 3 * 8)(sp)
-	ld	a4, (TF_A + 4 * 8)(sp)
-	ld	a5, (TF_A + 5 * 8)(sp)
-	ld	a6, (TF_A + 6 * 8)(sp)
-	ld	a7, (TF_A + 7 * 8)(sp)
+	L_PTR	PTR(a0), (TF_A + 0 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(a1), (TF_A + 1 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(a2), (TF_A + 2 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(a3), (TF_A + 3 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(a4), (TF_A + 4 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(a5), (TF_A + 5 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(a6), (TF_A + 6 * PTR_WIDTH)(PTR(sp))
+	L_PTR	PTR(a7), (TF_A + 7 * PTR_WIDTH)(PTR(sp))
 
-	addi	sp, sp, (TF_SIZE)
+	ADDI_PTR	PTR(sp), PTR(sp), (TF_SIZE)
 .endm
 
 .macro	do_ast
@@ -187,8 +205,8 @@
 1:
 	csrci	sstatus, (SSTATUS_SIE)
 
-	ld	a1, PC_CURTHREAD(tp)
-	lw	a2, TD_AST(a1)
+	L_PTR	PTR(a1), PC_CURTHREAD(PTR(tp))
+	lw	a2, TD_AST(PTR(a1))
 
 	beqz	a2, 2f
 
@@ -197,7 +215,7 @@
 	csrs	sstatus, a4
 
 	/* Handle the ast */
-	mv	a0, sp
+	MV_PTR	PTR(a0), PTR(sp)
 	call	_C_LABEL(ast)
 
 	/* Re-check for new ast scheduled */
@@ -206,19 +224,19 @@
 .endm
 
 ENTRY(cpu_exception_handler)
-	csrrw	sp, sscratch, sp
+	csrrw	PTR(sp), PTR_CSR(sscratch), PTR(sp)
 	beqz	sp, 1f
 	/* User mode detected */
 	j	cpu_exception_handler_user
 1:
 	/* Supervisor mode detected */
-	csrrw	sp, sscratch, sp
+	csrrw	PTR(sp), PTR_CSR(sscratch), PTR(sp)
 	j	cpu_exception_handler_supervisor
 END(cpu_exception_handler)
 
 ENTRY(cpu_exception_handler_supervisor)
 	save_registers 1
-	mv	a0, sp
+	MV_PTR	PTR(a0), PTR(sp)
 	call	_C_LABEL(do_trap_supervisor)
 	load_registers 1
 	sret
@@ -226,10 +244,10 @@ END(cpu_exception_handler_supervisor)
 
 ENTRY(cpu_exception_handler_user)
 	save_registers 0
-	mv	a0, sp
+	MV_PTR	PTR(a0), PTR(sp)
 	call	_C_LABEL(do_trap_user)
 	do_ast
 	load_registers 0
-	csrrw	sp, sscratch, sp
+	csrrw	PTR(sp), PTR_CSR(sscratch), PTR(sp)
 	sret
 END(cpu_exception_handler_user)
