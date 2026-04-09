@@ -42,6 +42,8 @@
 #include <cheri/cheri.h>
 #include <cheri/cheric.h>
 
+#include <machine/vmparam.h>
+
 /* Set to -1 to prevent it from being zeroed with the rest of BSS */
 static void *userspace_root_cap = (void *)(intptr_t)-1;
 
