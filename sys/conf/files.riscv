@@ -119,3 +119,4 @@ contrib/zstd/lib/freebsd/zstd_kfreebsd.c		optional zstdio compile-with ${ZSTD_C}
 cheri/cheri_cap_relocs.c			optional cpu_cheri \
 	compile-with    "${CC} -c ${CFLAGS:N-nostdinc} ${WERROR} ${PROF} ${.IMPSRC}"
 riscv/cheri/cheri_machdep.c			optional cpu_cheri
+riscv/cheri/cheri_exception.c			optional cpu_cheri
