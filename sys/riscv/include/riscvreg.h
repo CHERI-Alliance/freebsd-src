@@ -214,6 +214,16 @@
 	(((tval) & TVAL_CAP_TYPE_MASK) >> TVAL_CAP_TYPE_SHIFT)
 #define	TVAL_CAP_CAUSE(tval)						\
 	(((tval) & TVAL_CAP_CAUSE_MASK) >> TVAL_CAP_CAUSE_SHIFT)
+
+#define	cheri_is_length_violation(frame)				\
+	(TVAL_CAP_CAUSE((frame)->tf_stval2) == CHERI_EXCCODE_BOUNDS)
+#define	cheri_is_pcc_violation(frame)					\
+	(TVAL_CAP_TYPE((frame)->tf_stval2) == CHERI_EXCTYPE_FETCH_FAULT || \
+	TVAL_CAP_TYPE((frame)->tf_stval2) == CHERI_EXCTYPE_BRANCH_FAULT)
+#define	cheri_is_ddc_violation(frame)					\
+	(TVAL_CAP_TYPE((frame)->tf_stval2) == CHERI_EXCTYPE_DATA_FAULT && \
+	(cheri_getflags((frame)->tf_sepc) & CHERI_FLAGS_CAP_MODE_MASK) == \
+	    CHERI_FLAGS_INT_MODE)
 #endif
 
 #define	XLEN		__riscv_xlen
