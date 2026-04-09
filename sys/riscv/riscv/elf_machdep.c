@@ -56,6 +56,14 @@
 #include <machine/elf.h>
 #include <machine/md_var.h>
 
+#include "linker_if.h"
+
+#ifdef __CHERI__
+#define	PTR_ALT	"#"
+#else
+#define	PTR_ALT
+#endif
+
 u_long elf_hwcap;
 
 static struct sysentvec elf_freebsd_sysvec = {
@@ -257,6 +265,7 @@ static const struct type2str_ent t2s[] = {
 	{ R_RISCV_64,		"R_RISCV_64"		},
 	{ R_RISCV_JUMP_SLOT,	"R_RISCV_JUMP_SLOT"	},
 	{ R_RISCV_RELATIVE,	"R_RISCV_RELATIVE"	},
+	{ R_RISCV_FUNC_RELATIVE,"R_RISCV_FUNC_RELATIVE"	},
 	{ R_RISCV_JAL,		"R_RISCV_JAL"		},
 	{ R_RISCV_CALL,		"R_RISCV_CALL"		},
 	{ R_RISCV_PCREL_HI20,	"R_RISCV_PCREL_HI20"	},
@@ -265,6 +274,9 @@ static const struct type2str_ent t2s[] = {
 	{ R_RISCV_HI20,		"R_RISCV_HI20"		},
 	{ R_RISCV_LO12_I,	"R_RISCV_LO12_I"	},
 	{ R_RISCV_LO12_S,	"R_RISCV_LO12_S"	},
+#ifdef __CHERI__
+	{ R_RISCV_CHERI_CAPABILITY, "R_RISCV_CHERI_CAPABILITY" },
+#endif
 };
 
 static const char *
@@ -281,10 +293,10 @@ reloctype_to_str(int type)
 }
 
 bool
-elf_is_ifunc_reloc(Elf_Size r_info)
+elf_is_ifunc_reloc(Elf_Size r_info __unused)
 {
 
-	return (ELF_R_TYPE(r_info) == R_RISCV_IRELATIVE);
+	return (false);
 }
 
 /*
@@ -304,8 +316,12 @@ elf_reloc_internal(linker_file_t lf, char *relocbase, const void *data,
 	const Elf_Rela *rela;
 	uintptr_t addr;
 	Elf_Addr val;
+#ifdef __CHERI__
+	uintptr_t beforecap;
+#endif
 	Elf64_Addr *where;
 	Elf_Addr addend;
+	uintptr_t beforeptr;
 	uint32_t before32_1;
 	uint32_t before32;
 	uint64_t before64;
@@ -350,15 +366,16 @@ elf_reloc_internal(linker_file_t lf, char *relocbase, const void *data,
 		if (error != 0)
 			return (-1);
 
-		before64 = *where;
-		*where = addr;
+		beforeptr = *(uintptr_t *)where;
+		*(uintptr_t *)where = addr;
 		if (debug_kld)
-			printf("%p %c %-24s %016lx -> %016lx\n", where,
-			    (local ? 'l' : 'g'), reloctype_to_str(rtype),
-			    before64, *where);
+			printf("%p %c %-24s %" PTR_ALT "p -> %" PTR_ALT "p\n",
+			    where, (local ? 'l' : 'g'), reloctype_to_str(rtype),
+			    (void *)beforeptr, (void *)addr);
 		break;
 
 	case R_RISCV_RELATIVE:
+	case R_RISCV_FUNC_RELATIVE:
 		before64 = *where;
 		*where = elf_relocaddr(lf, (Elf_Addr)relocbase + addend);
 		if (debug_kld)
@@ -512,12 +529,39 @@ elf_reloc_internal(linker_file_t lf, char *relocbase, const void *data,
 			    (local ? 'l' : 'g'), reloctype_to_str(rtype),
 			    before32, *insn32p);
 		break;
-	case R_RISCV_IRELATIVE:
-		addr = (uintptr_t)relocbase + addend;
-		val = ((Elf64_Addr (*)(void))addr)();
-		if (*where != val)
-			*where = val;
+
+#ifdef __CHERI__
+	case R_RISCV_CHERI_CAPABILITY:
+		error = lookup(lf, symidx, 1, &addr);
+		if (error != 0)
+			return (-1);
+
+		/*
+		 * XXX: This is conditional to avoid invalidating
+		 * sentries.  The addend should probably be passed to
+		 * the lookup function instead.
+		 */
+		if (addend != 0) {
+			KASSERT(!cheri_is_sealed(addr),
+			    ("%s: sentry %#p with non-zero addend %#lx",
+			    __func__, (void *)addr, addend));
+
+			/*
+			 * XXX: Prevent the add below from being
+			 * hoisted out of the condition.
+			 */
+			__asm__("" : "+r" (addend));
+			addr += addend;
+		}
+
+		beforecap = *(uintptr_t *)where;
+		*(uintptr_t *)where = addr;
+		if (debug_kld)
+			printf("%p %c %-24s %#lp -> %#p\n", where,
+			    (local ? 'l' : 'g'), reloctype_to_str(rtype),
+			    (void *)beforecap, (void *)addr);
 		break;
+#endif
 	default:
 		printf("kldload: unexpected relocation type %ld, "
 		    "symbol index %ld\n", rtype, symidx);
