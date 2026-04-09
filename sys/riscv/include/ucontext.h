@@ -36,15 +36,19 @@
 #define	_MACHINE_UCONTEXT_H_
 
 struct gpregs {
-	__register_t	gp_ra;
-	__register_t	gp_sp;
-	__register_t	gp_gp;
-	__register_t	gp_tp;
-	__register_t	gp_t[7];
-	__register_t	gp_s[12];
-	__register_t	gp_a[8];
-	__register_t	gp_sepc;
-	__register_t	gp_sstatus;
+	__uintptr_t	gp_ra;
+	__uintptr_t	gp_sp;
+	__uintptr_t	gp_gp;
+	__uintptr_t	gp_tp;
+	__uintptr_t	gp_t[7];
+	__uintptr_t	gp_s[12];
+	__uintptr_t	gp_a[8];
+	__uintptr_t	gp_sepc;
+	__uint64_t	gp_sstatus;
+#ifdef __CHERI__
+	__uint64_t	pad;
+	__uintptr_t	gp_ddc;
+#endif
 };
 
 struct fpregs {
@@ -77,10 +81,44 @@ struct __mcontext {
 	int		mc_flags;
 #define	_MC_FP_VALID	0x1		/* Set when mc_fpregs has valid data */
 	int		mc_pad;
-	__uint64_t	mc_ptr;		/* Address of ctx headers and data */
-	__uint64_t	mc_spare[7];	/* Space for expansion */
+	__uintptr_t	mc_ptr;		/* Address of ctx headers and data */
+	__uintptr_t	mc_spare[7];	/* Space for expansion */
 };
 
 typedef struct __mcontext mcontext_t;
+
+#ifdef COMPAT_FREEBSD64
+#include <compat/freebsd64/freebsd64_signal.h>
+
+struct gpregs64 {
+	__uint64_t	gp_ra;
+	__uint64_t	gp_sp;
+	__uint64_t	gp_gp;
+	__uint64_t	gp_tp;
+	__uint64_t	gp_t[7];
+	__uint64_t	gp_s[12];
+	__uint64_t	gp_a[8];
+	__uint64_t	gp_sepc;
+	__uint64_t	gp_sstatus;
+};
+
+typedef struct	__mcontext64 {
+	struct gpregs64	mc_gpregs;
+	struct fpregs	mc_fpregs;
+	int		mc_flags;
+	int		mc_pad;
+	__uint64_t	mc_ptr;
+	__uint64_t	mc_spare[7];
+} mcontext64_t;
+
+typedef struct __ucontext64 {
+	sigset_t		uc_sigmask;
+	mcontext64_t		uc_mcontext;
+	uint64_t		uc_link;
+	struct sigaltstack64	uc_stack;
+	int			uc_flags;
+	int			__spare__[4];
+} ucontext64_t;
+#endif
 
 #endif	/* !_MACHINE_UCONTEXT_H_ */
