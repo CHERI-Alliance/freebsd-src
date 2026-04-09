@@ -58,6 +58,10 @@
 #include <vm/vm_param.h>
 #include <vm/vm_extern.h>
 
+#ifdef __CHERI__
+#include <cheri/cheric.h>
+#endif
+
 #include <machine/fpe.h>
 #include <machine/frame.h>
 #include <machine/pcb.h>
@@ -83,14 +87,15 @@ void do_trap_supervisor(struct trapframe *);
 void do_trap_user(struct trapframe *);
 
 static __inline void
-call_trapsignal(struct thread *td, int sig, int code, void *addr, int trapno)
+call_trapsignal(struct thread *td, int sig, int code, uintptr_t addr,
+    int trapno)
 {
 	ksiginfo_t ksi;
 
 	ksiginfo_init_trap(&ksi);
 	ksi.ksi_signo = sig;
 	ksi.ksi_code = code;
-	ksi.ksi_addr = addr;
+	ksi.ksi_addr = (void *)addr;
 	ksi.ksi_trapno = trapno;
 	trapsignal(td, &ksi);
 }
@@ -101,6 +106,10 @@ cpu_fetch_syscall_args(struct thread *td)
 	struct proc *p;
 	syscallarg_t *ap, *dst_ap;
 	struct syscall_args *sa;
+#ifdef __CHERI__
+	char *stack_args = NULL;
+	int error;
+#endif
 
 	p = td->td_proc;
 	sa = &td->td_sa;
@@ -112,19 +121,44 @@ cpu_fetch_syscall_args(struct thread *td)
 
 	if (__predict_false(sa->code == SYS_syscall || sa->code == SYS___syscall)) {
 		sa->code = *ap++;
+
+#ifdef __CHERI__
+		/*
+		 * For syscall() and __syscall(), the arguments are
+		 * stored in a var args block on the stack.
+		 * If using the CHERI bounded varargs ABI, the stack structure
+		 * is passed in ct6.
+		 */
+		if (SV_PROC_FLAG(td->td_proc, SV_CHERI)) {
+			/* CHERI bounded-vararg ABI */
+			stack_args = (char *)td->td_frame->tf_t[6];
+		}
+#endif
 	} else {
 		*dst_ap++ = *ap++;
 	}
 
-	if (__predict_false(sa->code >= p->p_sysent->sv_size))
+	if (__predict_false(sa->code >= p->p_sysent->sv_size)) {
 		sa->callp = &nosys_sysent;
-	else
+	} else {
 		sa->callp = &p->p_sysent->sv_table[sa->code];
+	}
 
 	KASSERT(sa->callp->sy_narg <= nitems(sa->args),
 	    ("Syscall %d takes too many arguments", sa->code));
 
-	memcpy(dst_ap, ap, (NARGREG - 1) * sizeof(*dst_ap));
+#ifdef __CHERI__
+	if (__predict_false(stack_args != NULL)) {
+		/* CHERI bounded-vararg ABI */
+		error = copyinptr(stack_args, dst_ap, sa->callp->sy_narg *
+		    sizeof(*dst_ap));
+		if (error)
+			return (error);
+	} else
+#endif
+	{
+		memcpy(dst_ap, ap, (NARGREG - 1) * sizeof(*dst_ap));
+	}
 
 	td->td_retval[0] = 0;
 	td->td_retval[1] = 0;
@@ -134,8 +168,14 @@ cpu_fetch_syscall_args(struct thread *td)
 
 #include "../../kern/subr_syscall.c"
 
+#ifdef __CHERI__
+#define	CREG	"c"
+#else
+#define	CREG
+#endif
+
 static void
-print_with_symbol(const char *name, uint64_t value)
+print_with_symbol(const char *name, uintptr_t value)
 {
 #ifdef DDB
 	c_db_sym_t sym;
@@ -144,7 +184,11 @@ print_with_symbol(const char *name, uint64_t value)
 	const char *sym_name;
 #endif
 
+#ifdef __CHERI__
+	printf("%7s: %#.16lp", name, (void *)value);
+#else
 	printf("%7s: 0x%016lx", name, value);
+#endif
 
 #ifdef DDB
 	if (value >= VM_MIN_KERNEL_ADDRESS) {
@@ -165,28 +209,31 @@ static void
 dump_regs(struct trapframe *frame)
 {
 	char name[6];
-	int i;
+	u_int i;
 
 	for (i = 0; i < nitems(frame->tf_t); i++) {
-		snprintf(name, sizeof(name), "t[%d]", i);
+		snprintf(name, sizeof(name), CREG"t[%d]", i);
 		print_with_symbol(name, frame->tf_t[i]);
 	}
 
 	for (i = 0; i < nitems(frame->tf_s); i++) {
-		snprintf(name, sizeof(name), "s[%d]", i);
+		snprintf(name, sizeof(name), CREG"s[%d]", i);
 		print_with_symbol(name, frame->tf_s[i]);
 	}
 
 	for (i = 0; i < nitems(frame->tf_a); i++) {
-		snprintf(name, sizeof(name), "a[%d]", i);
+		snprintf(name, sizeof(name), CREG"a[%d]", i);
 		print_with_symbol(name, frame->tf_a[i]);
 	}
 
-	print_with_symbol("ra", frame->tf_ra);
-	print_with_symbol("sp", frame->tf_sp);
-	print_with_symbol("gp", frame->tf_gp);
-	print_with_symbol("tp", frame->tf_tp);
-	print_with_symbol("sepc", frame->tf_sepc);
+	print_with_symbol(CREG"ra", frame->tf_ra);
+	print_with_symbol(CREG"sp", frame->tf_sp);
+	print_with_symbol(CREG"gp", frame->tf_gp);
+	print_with_symbol(CREG"tp", frame->tf_tp);
+	print_with_symbol("sepc"CREG, frame->tf_sepc);
+#ifdef __CHERI__
+	print_with_symbol("ddc", frame->tf_ddc);
+#endif
 	printf("sstatus: 0x%016lx\n", frame->tf_sstatus);
 	printf("stval  : 0x%016lx\n", frame->tf_stval);
 }
@@ -231,7 +278,7 @@ page_fault_handler(struct trapframe *frame, int usermode)
 
 	if (usermode) {
 		if (!VIRT_IS_VALID(stval)) {
-			call_trapsignal(td, SIGSEGV, SEGV_MAPERR, (void *)stval,
+			call_trapsignal(td, SIGSEGV, SEGV_MAPERR, stval,
 			    frame->tf_scause & SCAUSE_CODE);
 			goto done;
 		}
@@ -274,7 +321,7 @@ page_fault_handler(struct trapframe *frame, int usermode)
 	error = vm_fault_trap(map, va, ftype, VM_FAULT_NORMAL, &sig, &ucode);
 	if (error != KERN_SUCCESS) {
 		if (usermode) {
-			call_trapsignal(td, sig, ucode, (void *)stval,
+			call_trapsignal(td, sig, ucode, stval,
 			    frame->tf_scause & SCAUSE_CODE);
 		} else {
 			if (pcb->pcb_onfault != 0) {
@@ -302,7 +349,8 @@ fatal:
 			return;
 	}
 #endif
-	panic("Fatal page fault at %#lx: %#lx", frame->tf_sepc, stval);
+	panic("Fatal page fault at %#lx: %#lx", (unsigned long)frame->tf_sepc,
+	    stval);
 }
 
 void
@@ -330,7 +378,7 @@ do_trap_supervisor(struct trapframe *frame)
 #endif
 
 	CTR4(KTR_TRAP, "%s: exception=%lu, sepc=%#lx, stval=%#lx", __func__,
-	    exception, frame->tf_sepc, frame->tf_stval);
+	    exception, (unsigned long)frame->tf_sepc, frame->tf_stval);
 
 	switch (exception) {
 	case SCAUSE_LOAD_ACCESS_FAULT:
@@ -338,14 +386,14 @@ do_trap_supervisor(struct trapframe *frame)
 	case SCAUSE_INST_ACCESS_FAULT:
 		dump_regs(frame);
 		panic("Memory access exception at %#lx: %#lx",
-		    frame->tf_sepc, frame->tf_stval);
+		    (unsigned long)frame->tf_sepc, frame->tf_stval);
 		break;
 	case SCAUSE_LOAD_MISALIGNED:
 	case SCAUSE_STORE_MISALIGNED:
 	case SCAUSE_INST_MISALIGNED:
 		dump_regs(frame);
 		panic("Misaligned address exception at %#lx: %#lx",
-		    frame->tf_sepc, frame->tf_stval);
+		    (unsigned long)frame->tf_sepc, frame->tf_stval);
 		break;
 	case SCAUSE_STORE_PAGE_FAULT:
 	case SCAUSE_LOAD_PAGE_FAULT:
@@ -369,7 +417,7 @@ do_trap_supervisor(struct trapframe *frame)
 		dump_regs(frame);
 		panic("Illegal instruction 0x%0*lx at %#lx",
 		    (frame->tf_stval & 0x3) != 0x3 ? 4 : 8,
-		    frame->tf_stval, frame->tf_sepc);
+		    frame->tf_stval, (unsigned long)frame->tf_sepc);
 		break;
 	default:
 		dump_regs(frame);
@@ -413,14 +461,14 @@ do_trap_user(struct trapframe *frame)
 	case SCAUSE_LOAD_ACCESS_FAULT:
 	case SCAUSE_STORE_ACCESS_FAULT:
 	case SCAUSE_INST_ACCESS_FAULT:
-		call_trapsignal(td, SIGBUS, BUS_ADRERR, (void *)frame->tf_sepc,
+		call_trapsignal(td, SIGBUS, BUS_ADRERR, frame->tf_sepc,
 		    exception);
 		userret(td, frame);
 		break;
 	case SCAUSE_LOAD_MISALIGNED:
 	case SCAUSE_STORE_MISALIGNED:
 	case SCAUSE_INST_MISALIGNED:
-		call_trapsignal(td, SIGBUS, BUS_ADRALN, (void *)frame->tf_sepc,
+		call_trapsignal(td, SIGBUS, BUS_ADRALN, frame->tf_sepc,
 		    exception);
 		userret(td, frame);
 		break;
@@ -456,12 +504,12 @@ do_trap_user(struct trapframe *frame)
 			pcb->pcb_vsflags |= PCB_VS_STARTED;
 			break;
 		}
-		call_trapsignal(td, SIGILL, ILL_ILLTRP, (void *)frame->tf_sepc,
+		call_trapsignal(td, SIGILL, ILL_ILLTRP, frame->tf_sepc,
 		    exception);
 		userret(td, frame);
 		break;
 	case SCAUSE_BREAKPOINT:
-		call_trapsignal(td, SIGTRAP, TRAP_BRKPT, (void *)frame->tf_sepc,
+		call_trapsignal(td, SIGTRAP, TRAP_BRKPT, frame->tf_sepc,
 		    exception);
 		userret(td, frame);
 		break;
