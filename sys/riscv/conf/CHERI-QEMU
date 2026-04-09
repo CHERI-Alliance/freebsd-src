@@ -4,3 +4,15 @@ include "QEMU"
 include "std.CHERI"
 
 ident CHERI-QEMU
+
+options 	COMPAT_FREEBSD64
+nooptions	COMPAT_LINUXKPI
+
+nooptions	NFSCL
+nooptions	NFSD
+nooptions	VIMAGE
+nooptions	dtrace
+
+makeoptions WITHOUT_MODULES="acpi dtrace ena hyperv ipfilter iscsi iwlwifi linux64 linuxkpi linuxkpi_wlan mfi nfscl mrsas opensolaris ossl p9fs pf proto rtw88 rtw89 smbfs tws sym vmm wlan zfs"
+
+nodevice netmap
