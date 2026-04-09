@@ -41,8 +41,19 @@
 #ifndef MACHINE
 #define	MACHINE		"riscv"
 #endif
-#ifndef MACHINE_ARCH
-#define	MACHINE_ARCH	"riscv64"
+
+/* Always use the purecap arch for the kernel. */
+#ifdef __CHERI__
+# ifndef MACHINE_ARCH
+#  define	MACHINE_ARCH	"riscv64c"
+# endif
+# ifndef MACHINE_ARCH64
+#  define	MACHINE_ARCH64	"riscv64"
+# endif
+#else
+# ifndef MACHINE_ARCH
+#  define	MACHINE_ARCH	"riscv64"
+# endif
 #endif
 
 #ifdef SMP
