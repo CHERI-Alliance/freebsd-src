@@ -98,7 +98,7 @@ sfence_vma(void)
 }
 
 static __inline void
-sfence_vma_page(uintptr_t addr)
+sfence_vma_page(ptraddr_t addr)
 {
 
 	__asm __volatile("sfence.vma %0" :: "r" (addr) : "memory");
