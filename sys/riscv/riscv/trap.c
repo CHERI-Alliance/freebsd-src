@@ -236,6 +236,9 @@ dump_regs(struct trapframe *frame)
 #endif
 	printf("sstatus: 0x%016lx\n", frame->tf_sstatus);
 	printf("stval  : 0x%016lx\n", frame->tf_stval);
+#ifdef __CHERI__
+        printf("stval2  : 0x%016lx\n", frame->tf_stval2);
+#endif
 }
 
 static void
@@ -302,6 +305,13 @@ page_fault_handler(struct trapframe *frame, int usermode)
 
 	va = trunc_page(stval);
 
+#ifdef __CHERI__
+	if (is_cheri_store_amo_cap_fault(frame)) {
+		ftype = VM_PROT_WRITE | VM_PROT_CAP;
+	} else if (is_cheri_load_cap_fault(frame)) {
+		ftype = VM_PROT_READ | VM_PROT_CAP;
+	} else
+#endif
 	if (frame->tf_scause == SCAUSE_STORE_PAGE_FAULT) {
 		ftype = VM_PROT_WRITE;
 	} else if (frame->tf_scause == SCAUSE_INST_PAGE_FAULT) {
@@ -419,6 +429,32 @@ do_trap_supervisor(struct trapframe *frame)
 		    (frame->tf_stval & 0x3) != 0x3 ? 4 : 8,
 		    frame->tf_stval, (unsigned long)frame->tf_sepc);
 		break;
+#ifdef __CHERI__
+	case SCAUSE_CHERI:
+		if (curthread->td_pcb->pcb_onfault != 0) {
+			frame->tf_a[0] = EPROT;
+			frame->tf_sepc = curthread->td_pcb->pcb_onfault;
+			break;
+		}
+		dump_regs(frame);
+		switch (exception) {
+		default:
+			panic("Fatal capability page fault %#016lx: %#016lx",
+			    (unsigned long)frame->tf_sepc,
+			    frame->tf_stval);
+			break;
+		case SCAUSE_CHERI:
+		{
+			u_int cap_cause = TVAL_CAP_CAUSE(frame->tf_stval2);
+			u_int cap_fault_type = TVAL_CAP_TYPE(frame->tf_stval2);
+
+			panic("CHERI %s at %#016lx\n",
+                            cheri_exccode_string(cap_fault_type, cap_cause),
+			    (unsigned long)frame->tf_sepc);
+			break;
+		}
+		}
+#endif
 	default:
 		dump_regs(frame);
 		panic("Unknown kernel exception %#lx trap value %#lx",
@@ -513,6 +549,56 @@ do_trap_user(struct trapframe *frame)
 		    exception);
 		userret(td, frame);
 		break;
+#ifdef __CHERI__
+	case SCAUSE_CHERI:
+		/*
+		 * User accesses to invalid addresses in a compat64
+		 * process raise SIGSEGV under a non-CHERI kernel via
+		 * a page fault exception.  With CHERI however, those
+		 * accesses can raise a capability abort if they are
+		 * outside the bounds of the user DDC.  Map those
+		 * accesses to SIGSEGV instead of SIGPROT.
+		 */
+		if (!SV_PROC_FLAG(td->td_proc, SV_CHERI) &&
+		    cheri_is_length_violation(frame)) {
+			if (cheri_is_pcc_violation(frame) &&
+			    cheri_base_get(frame->tf_sepc) ==
+			    CHERI_CAP_USER_DATA_BASE &&
+			    cheri_length_get(frame->tf_sepc) ==
+			    CHERI_CAP_USER_DATA_LENGTH) {
+				call_trapsignal(td, SIGSEGV, SEGV_MAPERR,
+				    (ptraddr_t)frame->tf_sepc,
+				    SCAUSE_INST_PAGE_FAULT);
+				userret(td, frame);
+				break;
+			}
+
+			/*
+			 * To fully mimic SIGSEGV, this would need to
+			 * decode the instruction to compute the
+			 * effective faulting address and access type
+			 * (R/W) to determine the non-CHERI exception
+			 * that would have been raised.
+			 */
+			if (cheri_is_ddc_violation(frame) &&
+			    cheri_base_get(frame->tf_ddc) ==
+			    CHERI_CAP_USER_DATA_BASE &&
+			    cheri_length_get(frame->tf_ddc) ==
+			    CHERI_CAP_USER_DATA_LENGTH) {
+				call_trapsignal(td, SIGSEGV, SEGV_MAPERR,
+				    0 /* XXX */,
+				    SCAUSE_LOAD_PAGE_FAULT /* XXX */);
+				userret(td, frame);
+				break;
+			}
+		}
+
+		call_trapsignal(td, SIGPROT,
+		    cheri_stval_to_sicode(frame->tf_stval2), frame->tf_sepc,
+		    exception);
+		userret(td, frame);
+		break;
+#endif
 	default:
 		dump_regs(frame);
 		panic("Unknown userland exception %#lx, trap value %#lx",
