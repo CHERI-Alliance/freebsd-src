@@ -59,6 +59,7 @@
 #include <vm/vm_extern.h>
 
 #ifdef __CHERI__
+#include <cheri/cheri.h>
 #include <cheri/cheric.h>
 #endif
 
