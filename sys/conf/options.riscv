@@ -4,3 +4,6 @@ PV_STATS			opt_pmap.h
 
 # SoC Support
 SOC_ALLWINNER_D1		opt_soc.h
+
+# Binary compatibility
+COMPAT_FREEBSD64		opt_global.h
