@@ -41,13 +41,27 @@
 #include <machine/asm.h>
 
 /*
+ * sigcode has to be labeled as an @object type so that captable pointers
+ * to it will be able to read it.  This is fine as the code is never
+ * executed directly in the kernel, just copied to places for userland
+ * to execute.
+ */
+#define	SIGCODE(sym)						\
+	.text; .globl sym; .type sym,@object; .align 4; sym: .cfi_startproc
+
+/*
  * This code is copied to the user's stack for returning from signal handlers
  * (see sendsig() and sigreturn()). We have to compute the address of the
  * sigcontext struct for the sigreturn call.
  */
-ENTRY(sigcode)
+.option push
+SIGCODE(sigcode)
+#ifdef __CHERI__
+	ADDI_PTR	PTR(a0), PTR(sp), SF_UC
+#else
 	mv	a0, sp
 	addi	a0, a0, SF_UC
+#endif
 
 1:
 	li	t0, SYS_sigreturn
@@ -58,14 +72,46 @@ ENTRY(sigcode)
 	ecall
 
 	j	1b
-END(sigcode)
-
 	/* This may be copied to the stack, keep it 16-byte aligned */
 	.align	3
+END(sigcode)
 esigcode:
+.option pop
+
+#ifdef COMPAT_FREEBSD64
+.option push
+.option nocapmode
+SIGCODE(freebsd64_sigcode)
+	mv	a0, sp
+	addi	a0, a0, SF64_UC
+
+1:
+	li	t0, SYS_sigreturn
+	ecall
+
+	/* sigreturn failed, exit */
+	li	t0, SYS_exit
+	ecall
+
+	j	1b
+	/* This may be copied to the stack, keep it 16-byte aligned */
+	.align	3
+END(freebsd64_sigcode)
+freebsd64_esigcode:
+.option pop
+#endif
 
 	.data
 	.align	3
 	.global	szsigcode
+	.type	szsigcode, @object
 szsigcode:
 	.quad	esigcode - sigcode
+	.size	szsigcode, . - szsigcode
+#ifdef COMPAT_FREEBSD64
+	.global	freebsd64_szsigcode
+	.type	freebsd64_szsigcode, @object
+freebsd64_szsigcode:
+	.quad	freebsd64_esigcode - freebsd64_sigcode
+	.size	freebsd64_szsigcode, . - freebsd64_szsigcode
+#endif
