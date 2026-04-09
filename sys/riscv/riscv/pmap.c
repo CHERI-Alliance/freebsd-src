@@ -4166,12 +4166,12 @@ pmap_zero_page(vm_page_t m)
 void
 pmap_zero_page_area(vm_page_t m, int off, int size)
 {
-	void *va = VM_PAGE_TO_DMAP(m);
+	char *va = PHYS_TO_DMAP_SUBPAGE(VM_PAGE_TO_PHYS(m), size);
 
 	if (off == 0 && size == PAGE_SIZE)
 		pagezero(va);
 	else
-		bzero((char *)va + off, size);
+		bzero(va + off, size);
 }
 
 /*
@@ -4237,12 +4237,14 @@ pmap_copy_pages(vm_page_t ma[], vm_offset_t a_offset, vm_page_t mb[],
 		if (__predict_false(!PHYS_IN_DMAP(p_a))) {
 			panic("!DMAP a %lx", p_a);
 		} else {
-			a_cp = (char *)PHYS_TO_DMAP_LEN(p_a + a_pg_offset, cnt);
+			a_cp = (char *)PHYS_TO_DMAP_SUBPAGE(p_a + a_pg_offset,
+			    cnt);
 		}
 		if (__predict_false(!PHYS_IN_DMAP(p_b))) {
 			panic("!DMAP b %lx", p_b);
 		} else {
-			b_cp = (char *)PHYS_TO_DMAP_LEN(p_b + b_pg_offset, cnt);
+			b_cp = (char *)PHYS_TO_DMAP_SUBPAGE(p_b + b_pg_offset,
+			    cnt);
 		}
 #ifdef __CHERI__
 		if (clear_tags)
