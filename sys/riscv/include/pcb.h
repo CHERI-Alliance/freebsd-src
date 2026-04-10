@@ -40,17 +40,25 @@
 struct trapframe;
 
 struct pcb {
+#ifdef __CHERI__
+	uintptr_t	pcb_ra;		/* Return address */
+	uintptr_t	pcb_sp;		/* Stack pointer */
+	uintptr_t	pcb_gp;		/* Global pointer */
+	uintptr_t	pcb_tp;		/* Thread pointer */
+	uintptr_t	pcb_s[12];	/* Saved registers */
+#else
 	uint64_t	pcb_ra;		/* Return address */
 	uint64_t	pcb_sp;		/* Stack pointer */
 	uint64_t	pcb_gp;		/* Global pointer */
 	uint64_t	pcb_tp;		/* Thread pointer */
 	uint64_t	pcb_s[12];	/* Saved registers */
+#endif
 	uint64_t	pcb_x[32][2];	/* Floating point registers */
 	uint64_t	pcb_fcsr;	/* Floating point control reg */
 	uint64_t	pcb_fpflags;	/* Floating point flags */
 #define	PCB_FP_STARTED	0x1
 #define	PCB_FP_USERMASK	0x1
-	vm_offset_t	pcb_onfault;	/* Copyinout fault handler */
+	vm_pointer_t	pcb_onfault;	/* Copyinout fault handler */
 	/* Vector state. */
 	uint64_t	pcb_vsflags;
 #define	PCB_VS_STARTED	0x1
