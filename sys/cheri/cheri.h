@@ -120,6 +120,8 @@ typedef void (cap_relocs_cb)(void *arg, bool function, bool constant,
 int	init_linker_file_cap_relocs(const void *start_relocs,
 	    const void *stop_relocs, void *data_cap, ptraddr_t base_addr,
 	    bool can_set_code_bounds, cap_relocs_cb *cb, void *cb_arg);
+int	init_linker_file_cap_irelocs(const void *start_relocs,
+	    const void *stop_relocs, void *root_cap, ptraddr_t base_addr);
 #endif
 #endif /* !_KERNEL */
 
