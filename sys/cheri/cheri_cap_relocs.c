@@ -67,6 +67,9 @@ int	init_linker_file_cap_relocs(const void *start_relocs,
 	    const void *stop_relocs, void *data_cap, ptraddr_t base_addr,
 	    bool can_set_code_bounds, cap_relocs_cb *cb, void *cb_arg);
 
+int	init_linker_file_cap_irelocs(const void *start_relocs,
+	    const void *stop_relocs, void *root_cap, ptraddr_t base_addr);
+
 /* Can't include <sys/systm.h>. */
 int	printf(const char *, ...) __printflike(1, 2);
 
@@ -93,6 +96,10 @@ init_linker_file_cap_relocs(const void *start_relocs, const void *stop_relocs,
 			*dest = 0;
 			continue;
 		}
+		if (reloc->permissions & indirect_reloc_flag) {
+			// Skip IFUNC relocations until link_elf_ireloc()
+			continue;
+		}
 		function = reloc->permissions == function_reloc_flag ||
 		    reloc->permissions == (function_reloc_flag |
 		    code_reloc_flag);
@@ -111,6 +118,44 @@ init_linker_file_cap_relocs(const void *start_relocs, const void *stop_relocs,
 			src = __builtin_cheri_seal_entry(src);
 		}
 		*dest = src;
+	}
+
+	return (0);
+}
+
+int
+init_linker_file_cap_irelocs(const void *start_relocs, const void *stop_relocs,
+    void *root_cap, ptraddr_t base_addr)
+{
+	for (const struct capreloc *reloc = start_relocs;
+	     reloc < (const struct capreloc *)stop_relocs; reloc++) {
+		const void **dest = __builtin_cheri_address_set(root_cap,
+		    reloc->capability_location + base_addr);
+		void *(*resolver)(void);
+		if ((reloc->permissions & indirect_reloc_flag) == 0) {
+			continue;
+		}
+		if (reloc->permissions != (function_reloc_flag |
+		    indirect_reloc_flag)) {
+			printf("kldload: unexpected ifunc capreloc type %#zx\n",
+			    reloc->permissions);
+			return (-1);
+		}
+
+		if (reloc->offset != 0) {
+			printf("kldload: unexpected ifunc capreloc offset\n");
+			return (-1);
+		}
+
+		resolver = __builtin_cheri_address_set(root_cap, reloc->object);
+		resolver = __builtin_cheri_perms_and(resolver,
+		    CHERI_PERMS_KERNEL_CODE);
+#ifdef CHERI_FLAGS_CAP_MODE
+		resolver = __builtin_cheri_flags_set(resolver,
+		    CHERI_FLAGS_CAP_MODE);
+#endif
+		resolver = __builtin_cheri_seal_entry(resolver);
+		*dest = resolver();
 	}
 
 	return (0);

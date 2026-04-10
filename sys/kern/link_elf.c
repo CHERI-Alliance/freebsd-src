@@ -1824,6 +1824,13 @@ relocate_file1(elf_file_t ef, elf_lookup_fn lookup, elf_reloc_fn reloc,
 
 #undef APPLY_RELOCS
 
+#if defined(__CHERI__) && defined(DT_CHERI___CAPRELOCS)
+	if (init_linker_file_cap_irelocs(ef->caprelocs,
+		(char *)ef->caprelocs + ef->caprelocssize,
+		ef->mapbase, (ptraddr_t)ef->address) != 0)
+		return (ENOEXEC);
+#endif
+
 	TSEXIT();
 	return (0);
 }
