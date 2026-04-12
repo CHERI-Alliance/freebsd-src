@@ -81,6 +81,13 @@
 #include <ddb/db_sym.h>
 #endif
 
+#ifdef __CHERI__
+int log_user_cheri_exceptions = 0;
+SYSCTL_INT(_machdep, OID_AUTO, log_user_cheri_exceptions, CTLFLAG_RWTUN,
+    &log_user_cheri_exceptions, 0,
+    "Print registers and process details on user CHERI exceptions");
+#endif
+
 int (*dtrace_invop_jump_addr)(struct trapframe *);
 
 /* Called from exception.S */
@@ -241,6 +248,46 @@ dump_regs(struct trapframe *frame)
         printf("stval2  : 0x%016lx\n", frame->tf_stval2);
 #endif
 }
+
+#ifdef __CHERI__
+static void
+dump_cheri_exception(struct trapframe *frame)
+{
+	struct thread *td;
+	struct proc *p;
+
+	td = curthread;
+	p = td->td_proc;
+	printf("pid %d tid %d (%s), uid %d: ", p->p_pid, td->td_tid,
+	    p->p_comm, td->td_ucred->cr_uid);
+	switch (frame->tf_scause & SCAUSE_CODE) {
+	case SCAUSE_CHERI:
+		printf("CHERI fault (type %#lx), cause %lx",
+		    TVAL_CAP_TYPE(frame->tf_stval2),
+		    TVAL_CAP_CAUSE(frame->tf_stval2));
+		break;
+	default:
+		printf("fault %ld", frame->tf_scause & SCAUSE_CODE);
+		break;
+	}
+	printf("\n");
+	if (p->p_args != NULL) {
+		char *args;
+		unsigned len;
+
+		args = p->p_args->ar_args;
+		len = p->p_args->ar_length;
+		for (unsigned i = 0; i < len; i++) {
+			if (args[i] == '\0')
+				printf(" ");
+			else
+				printf("%c", args[i]);
+		}
+		printf("\n");
+	}
+	dump_regs(frame);
+}
+#endif
 
 static void
 ecall_handler(void)
@@ -558,6 +605,9 @@ do_trap_user(struct trapframe *frame)
 		break;
 #ifdef __CHERI__
 	case SCAUSE_CHERI:
+		if (log_user_cheri_exceptions)
+			dump_cheri_exception(frame);
+
 		/*
 		 * User accesses to invalid addresses in a compat64
 		 * process raise SIGSEGV under a non-CHERI kernel via
