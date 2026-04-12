@@ -16,3 +16,6 @@ nooptions	dtrace
 makeoptions WITHOUT_MODULES="acpi dtrace ena hyperv ipfilter iscsi iwlwifi linux64 linuxkpi linuxkpi_wlan mfi nfscl mrsas opensolaris ossl p9fs pf proto rtw88 rtw89 smbfs tws sym vmm wlan zfs"
 
 nodevice netmap
+
+nooptions	ROOTDEVNAME
+options 	ROOTDEVNAME=\"ufs:/dev/vtbd0p2\"
