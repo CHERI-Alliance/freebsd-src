@@ -1759,9 +1759,6 @@ shm_mmap(struct file *fp, vm_map_t map, vm_pointer_t *addr,
 	shmfd = fp->f_data;
 	maxprot = VM_PROT_NONE;
 
-	prot = VM_PROT_ADD_CAP(prot);
-	maxprot = VM_PROT_ADD_CAP(prot);
-
 	rl_cookie = shm_rangelock_rlock(shmfd, 0, objsize);
 	/* FREAD should always be set. */
 	if ((fp->f_flag & FREAD) != 0)
@@ -1795,6 +1792,9 @@ shm_mmap(struct file *fp, vm_map_t map, vm_pointer_t *addr,
 		}
 	}
 	maxprot &= max_maxprot;
+
+	prot = VM_PROT_ADD_CAP(prot);
+	maxprot = VM_PROT_ADD_CAP(maxprot);
 
 	/* See comment in vn_mmap(). */
 	if (
