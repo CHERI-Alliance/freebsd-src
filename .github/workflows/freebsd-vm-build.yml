@@ -50,7 +50,7 @@ jobs:
       - name: "Checkout freebsd-src"
         - uses: actions/checkout@v4
           with:
-            ref: ${{ github.head_ref }}
+            ref: be8d0cecc7a4b8b036500a0ea6f982be0047730e
       - name: "setup SSH"
         run: |
             # which sudo
