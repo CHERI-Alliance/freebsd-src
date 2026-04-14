@@ -45,7 +45,8 @@ jobs:
       image: ghcr.io/anyvm-org/anyvm:v0.0.5
     steps:
       - name: "Checkout freebsd-src"
-        uses: actions/checkout@v4
+        - uses: actions/checkout@v4
+          with: ref: ${{ github.head_ref }}
       - name: "setup SSH"
         run: |
             # which sudo
