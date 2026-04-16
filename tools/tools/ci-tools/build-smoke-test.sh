@@ -69,6 +69,7 @@ build_world_script () {
     printf "Running build_world_script\n"
     command_wrapper su user -c "make -j$(nproc) ${EXTRA_MAKE_FLAGS} \
     CROSS_TOOLCHAIN=${CROSS_TOOLCHAIN} -DWITHOUT_LLVM_BINUTILS \
+    -DWITHOUT_LLVM_BINUTILS_BOOTSTRAP \
     WITHOUT_TOOLCHAIN=yes buildworld"
 }
 
