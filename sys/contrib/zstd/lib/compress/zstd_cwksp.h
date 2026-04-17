@@ -262,7 +262,7 @@ MEM_STATIC size_t ZSTD_cwksp_slack_space_required(void) {
  */
 MEM_STATIC size_t ZSTD_cwksp_bytes_to_align_ptr(void* ptr, const size_t alignBytes) {
     size_t const alignBytesMask = alignBytes - 1;
-    size_t const bytes = (alignBytes - ((size_t)ptr & (alignBytesMask))) & alignBytesMask;
+    size_t const bytes = (alignBytes - ((uintptr_t)ptr & (alignBytesMask))) & alignBytesMask;
     assert(ZSTD_isPower2(alignBytes));
     assert(bytes < alignBytes);
     return bytes;
@@ -276,7 +276,7 @@ MEM_STATIC void*  ZSTD_cwksp_initialAllocStart(ZSTD_cwksp* ws)
 {
     char* endPtr = (char*)ws->workspaceEnd;
     assert(ZSTD_isPower2(ZSTD_CWKSP_ALIGNMENT_BYTES));
-    endPtr = endPtr - ((size_t)endPtr % ZSTD_CWKSP_ALIGNMENT_BYTES);
+    endPtr = endPtr - ((uintptr_t)endPtr % ZSTD_CWKSP_ALIGNMENT_BYTES);
     return (void*)endPtr;
 }
 
@@ -538,7 +538,7 @@ MEM_STATIC void* ZSTD_cwksp_reserve_object_aligned(ZSTD_cwksp* ws, size_t byteSi
     if (start == NULL) return NULL;
     if (surplus == 0) return start;
     assert(ZSTD_isPower2(alignment));
-    return (void*)(((size_t)start + surplus) & ~mask);
+    return (void*)(((uintptr_t)start + surplus) & ~mask);
 }
 
 MEM_STATIC void ZSTD_cwksp_mark_tables_dirty(ZSTD_cwksp* ws)
