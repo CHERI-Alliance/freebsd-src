@@ -76,6 +76,9 @@
 #define	CHERI_PERM_INVOKE CHERI_PERM_BRANCH_SEALED_PAIR
 #endif
 
+/* Supported architecture permission bits feature flags */
+#define	HAS_CHERI_PERM_LOAD_STORE_CAP
+
 /*
  * Macros defining initial permission sets:
  *
