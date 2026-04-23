@@ -36,15 +36,19 @@
 #define	_MACHINE_UCONTEXT_H_
 
 struct gpregs {
-	__register_t	gp_ra;
-	__register_t	gp_sp;
-	__register_t	gp_gp;
-	__register_t	gp_tp;
-	__register_t	gp_t[7];
-	__register_t	gp_s[12];
-	__register_t	gp_a[8];
-	__register_t	gp_sepc;
-	__register_t	gp_sstatus;
+	__uintptr_t	gp_ra;
+	__uintptr_t	gp_sp;
+	__uintptr_t	gp_gp;
+	__uintptr_t	gp_tp;
+	__uintptr_t	gp_t[7];
+	__uintptr_t	gp_s[12];
+	__uintptr_t	gp_a[8];
+	__uintptr_t	gp_sepc;
+	__uint64_t	gp_sstatus;
+#ifdef __CHERI__
+	__uint64_t	pad;
+	__uintptr_t	gp_ddc;
+#endif
 };
 
 struct fpregs {
@@ -71,41 +75,14 @@ struct vector_context {
 	__uint64_t	reserved[3];
 };
 
-#ifdef __CHERI__
-struct capregs {
-	__uintptr_t	cp_cra;
-	__uintptr_t	cp_csp;
-	__uintptr_t	cp_cgp;
-	__uintptr_t	cp_ctp;
-	__uintptr_t	cp_ct[7];
-	__uintptr_t	cp_cs[12];
-	__uintptr_t	cp_ca[8];
-	__uintptr_t	cp_sepcc;
-	__uintptr_t	cp_ddc;
-	__register_t	cp_sstatus;
-	__register_t	cp_pad;
-};
-#endif
-
 struct __mcontext {
-#ifdef __CHERI__
-	struct capregs	mc_capregs;
-#else
 	struct gpregs	mc_gpregs;
-#endif
 	struct fpregs	mc_fpregs;
 	int		mc_flags;
 #define	_MC_FP_VALID	0x1		/* Set when mc_fpregs has valid data */
-#define	_MC_CAP_VALID	0x2		/* Set when mc_capregs has valid data */
 	int		mc_pad;
-#ifdef __CHERI__
 	__uintptr_t	mc_ptr;		/* Address of ctx headers and data */
-	__uint64_t	mc_spare[6];
-#else
-	__uint64_t	mc_ptr;		/* Address of ctx headers and data */
-	__uint64_t	mc_capregs;
-	__uint64_t	mc_spare[6];	/* Space for expansion */
-#endif
+	__uintptr_t	mc_spare[7];	/* Space for expansion */
 };
 
 typedef struct __mcontext mcontext_t;
@@ -113,12 +90,24 @@ typedef struct __mcontext mcontext_t;
 #ifdef COMPAT_FREEBSD64
 #include <compat/freebsd64/freebsd64_signal.h>
 
+struct gpregs64 {
+	__uint64_t	gp_ra;
+	__uint64_t	gp_sp;
+	__uint64_t	gp_gp;
+	__uint64_t	gp_tp;
+	__uint64_t	gp_t[7];
+	__uint64_t	gp_s[12];
+	__uint64_t	gp_a[8];
+	__uint64_t	gp_sepc;
+	__uint64_t	gp_sstatus;
+};
+
 typedef struct	__mcontext64 {
-	struct gpregs	mc_gpregs;
+	struct gpregs64	mc_gpregs;
 	struct fpregs	mc_fpregs;
 	int		mc_flags;
 	int		mc_pad;
-	__uint64_t	mc_capregs;
+	__uint64_t	mc_ptr;
 	__uint64_t	mc_spare[7];
 } mcontext64_t;
 
