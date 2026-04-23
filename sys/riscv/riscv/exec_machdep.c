@@ -281,20 +281,13 @@ exec_setregs(struct thread *td, struct image_params *imgp, uintptr_t stack)
 }
 
 /* Sanity check these are the same size, they will be memcpy'd to and fro */
-#ifdef __CHERI__
-CTASSERT(sizeof(((struct trapframe *)0)->tf_a) ==
-    sizeof((struct capregs *)0)->cp_ca);
-CTASSERT(sizeof(((struct trapframe *)0)->tf_s) ==
-    sizeof((struct capregs *)0)->cp_cs);
-CTASSERT(sizeof(((struct trapframe *)0)->tf_t) ==
-    sizeof((struct capregs *)0)->cp_ct);
-#else
 CTASSERT(sizeof(((struct trapframe *)0)->tf_a) ==
     sizeof((struct gpregs *)0)->gp_a);
 CTASSERT(sizeof(((struct trapframe *)0)->tf_s) ==
     sizeof((struct gpregs *)0)->gp_s);
 CTASSERT(sizeof(((struct trapframe *)0)->tf_t) ==
     sizeof((struct gpregs *)0)->gp_t);
+#ifndef __CHERI__
 CTASSERT(sizeof(((struct trapframe *)0)->tf_a) ==
     sizeof((struct reg *)0)->a);
 CTASSERT(sizeof(((struct trapframe *)0)->tf_s) ==
@@ -308,24 +301,6 @@ get_mcontext(struct thread *td, mcontext_t *mcp, int clear_ret)
 {
 	struct trapframe *tf = td->td_frame;
 
-#ifdef __CHERI__
-	memcpy(mcp->mc_capregs.cp_ct, tf->tf_t, sizeof(mcp->mc_capregs.cp_ct));
-	memcpy(mcp->mc_capregs.cp_cs, tf->tf_s, sizeof(mcp->mc_capregs.cp_cs));
-	memcpy(mcp->mc_capregs.cp_ca, tf->tf_a, sizeof(mcp->mc_capregs.cp_ca));
-
-	if (clear_ret & GET_MC_CLEAR_RET) {
-		mcp->mc_capregs.cp_ca[0] = 0;
-		mcp->mc_capregs.cp_ct[0] = 0; /* clear syscall error */
-	}
-
-	mcp->mc_capregs.cp_cra = tf->tf_ra;
-	mcp->mc_capregs.cp_csp = tf->tf_sp;
-	mcp->mc_capregs.cp_cgp = tf->tf_gp;
-	mcp->mc_capregs.cp_ctp = tf->tf_tp;
-	mcp->mc_capregs.cp_sepcc = tf->tf_sepc;
-	mcp->mc_capregs.cp_ddc = tf->tf_ddc;
-	mcp->mc_capregs.cp_sstatus = tf->tf_sstatus;
-#else
 	memcpy(mcp->mc_gpregs.gp_t, tf->tf_t, sizeof(mcp->mc_gpregs.gp_t));
 	memcpy(mcp->mc_gpregs.gp_s, tf->tf_s, sizeof(mcp->mc_gpregs.gp_s));
 	memcpy(mcp->mc_gpregs.gp_a, tf->tf_a, sizeof(mcp->mc_gpregs.gp_a));
@@ -341,6 +316,8 @@ get_mcontext(struct thread *td, mcontext_t *mcp, int clear_ret)
 	mcp->mc_gpregs.gp_tp = tf->tf_tp;
 	mcp->mc_gpregs.gp_sepc = tf->tf_sepc;
 	mcp->mc_gpregs.gp_sstatus = tf->tf_sstatus;
+#ifdef __CHERI__
+	mcp->mc_gpregs.gp_ddc = tf->tf_ddc;
 #endif
 	get_fpcontext(td, mcp);
 
@@ -400,11 +377,7 @@ set_mcontext(struct thread *td, mcontext_t *mcp)
 
 	tf = td->td_frame;
 
-#ifdef __CHERI__
-	new_sstatus = mcp->mc_capregs.cp_sstatus;
-#else
 	new_sstatus = mcp->mc_gpregs.gp_sstatus;
-#endif
 
 	/*
 	 * Permit changes to the USTATUS bits of SSTATUS.
@@ -419,18 +392,6 @@ set_mcontext(struct thread *td, mcontext_t *mcp)
 	    SSTATUS_UIE)) != 0)
 		return (EINVAL);
 
-#ifdef __CHERI__
-	memcpy(tf->tf_t, mcp->mc_capregs.cp_ct, sizeof(tf->tf_t));
-	memcpy(tf->tf_s, mcp->mc_capregs.cp_cs, sizeof(tf->tf_s));
-	memcpy(tf->tf_a, mcp->mc_capregs.cp_ca, sizeof(tf->tf_a));
-
-	tf->tf_ra = mcp->mc_capregs.cp_cra;
-	tf->tf_sp = mcp->mc_capregs.cp_csp;
-	tf->tf_gp = mcp->mc_capregs.cp_cgp;
-	tf->tf_sepc = mcp->mc_capregs.cp_sepcc;
-	tf->tf_ddc = mcp->mc_capregs.cp_ddc;
-	tf->tf_sstatus = mcp->mc_capregs.cp_sstatus;
-#else
 	memcpy(tf->tf_t, mcp->mc_gpregs.gp_t, sizeof(tf->tf_t));
 	memcpy(tf->tf_s, mcp->mc_gpregs.gp_s, sizeof(tf->tf_s));
 	memcpy(tf->tf_a, mcp->mc_gpregs.gp_a, sizeof(tf->tf_a));
@@ -440,6 +401,8 @@ set_mcontext(struct thread *td, mcontext_t *mcp)
 	tf->tf_gp = mcp->mc_gpregs.gp_gp;
 	tf->tf_sepc = mcp->mc_gpregs.gp_sepc;
 	tf->tf_sstatus = mcp->mc_gpregs.gp_sstatus;
+#ifdef __CHERI__
+	tf->tf_ddc = mcp->mc_gpregs.gp_ddc;
 #endif
 
 	set_fpcontext(td, mcp);
