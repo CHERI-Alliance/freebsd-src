@@ -179,12 +179,12 @@ mcontext_to_mcontext64(mcontext_t *mc, mcontext64_t *mc64)
 	u_int i;
 
 	memset(mc64, 0, sizeof(*mc64));
-	creg = (uintptr_t *)&mc->mc_capregs;
+	creg = (uintptr_t *)&mc->mc_gpregs;
 	greg = (register_t *)&mc64->mc_gpregs;
 	for (i = 0; i < CONTEXT64_COPYREGS; i++)
 		greg[i] = (register_t)creg[i];
-	mc64->mc_gpregs.gp_elr = cheri_offset_get(mc->mc_capregs.cap_elr);
-	mc64->mc_gpregs.gp_spsr = mc->mc_spsr;
+	mc64->mc_gpregs.gp_elr = cheri_offset_get(mc->mc_gpregs.gp_elr);
+	mc64->mc_gpregs.gp_spsr = mc->mc_gpregs.gp_spsr;
 	mc64->mc_flags = mc->mc_flags;
 	if (mc->mc_flags & _MC_FP_VALID)
 		mc64->mc_fpregs = mc->mc_fpregs;
@@ -211,37 +211,19 @@ freebsd64_set_mcontext(struct thread *td, mcontext64_t *mcp)
 	mcontext_t mc;
 	uintptr_t *creg;
 	const register_t *greg;
-	int error;
 	u_int i;
 
 	memset(&mc, 0, sizeof(mc));
-	if (mcp->mc_flags & _MC_CAP_VALID) {
-		error = copyinptr(USER_PTR(mcp->mc_capregs,
-		    sizeof(mc.mc_capregs)), &mc.mc_capregs,
-		    sizeof(mc.mc_capregs));
-		if (error)
-			return (error);
+	creg = (uintptr_t *)&mc.mc_gpregs;
+	greg = (register_t *)&mcp->mc_gpregs;
+	for (i = 0; i < CONTEXT64_COPYREGS; i++)
+		creg[i] = (uintptr_t)greg[i];
 
-		/* XXX: Permit userland to change GPRs for sigreturn? */
+	mc.mc_gpregs.gp_elr = cheri_offset_set(td->td_frame->tf_elr,
+	    mcp->mc_gpregs.gp_elr);
+	mc.mc_gpregs.gp_spsr = mcp->mc_gpregs.gp_spsr;
+	mc.mc_gpregs.gp_ddc = td->td_frame->tf_ddc;
 
-		/* Honor 64-bit PC. */
-		mc.mc_capregs.cap_elr = cheri_offset_set(mc.mc_capregs.cap_elr,
-		    mcp->mc_gpregs.gp_elr);
-	} else {
-		creg = (uintptr_t *)&mc.mc_capregs;
-		greg = (register_t *)&mcp->mc_gpregs;
-		for (i = 0; i < CONTEXT64_COPYREGS; i++)
-			creg[i] = (uintptr_t)greg[i];
-
-		mc.mc_capregs.cap_elr = cheri_offset_set(td->td_frame->tf_elr,
-		    mcp->mc_gpregs.gp_elr);
-		mc.mc_capregs.cap_ddc = td->td_frame->tf_ddc;
-	}
-
-	/* spsr is stored outside of capregs. */
-	mc.mc_spsr = mcp->mc_gpregs.gp_spsr;
-
-	mc.mc_flags = mcp->mc_flags & ~_MC_CAP_VALID;
 	if (mcp->mc_flags & _MC_FP_VALID)
 		mc.mc_fpregs = mcp->mc_fpregs;
 
@@ -257,7 +239,7 @@ freebsd64_sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 	struct sigacts *psp;
 	struct thread *td;
 	struct proc *p;
-	vm_offset_t sp, fp, capregs;
+	vm_offset_t sp, fp;
 	int onstack;
 	int sig;
 
@@ -284,11 +266,6 @@ freebsd64_sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 		sp = (ptraddr_t)td->td_frame->tf_sp;
 	}
 
-	/* Allocate room for the capability register context. */
-	sp -= sizeof(mc.mc_capregs);
-	sp = rounddown2(sp, sizeof(uintptr_t));
-	capregs = sp;
-
 	/* Make room, keeping the stack aligned */
 	sp -= sizeof(struct sigframe64);
 	sp = STACKALIGN(sp);
@@ -298,8 +275,6 @@ freebsd64_sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 	bzero(&frame, sizeof(frame));
 	get_mcontext(td, &mc, 0);
 	mcontext_to_mcontext64(&mc, &frame.sf_uc.uc_mcontext);
-	frame.sf_uc.uc_mcontext.mc_flags |= _MC_CAP_VALID;
-	frame.sf_uc.uc_mcontext.mc_capregs = capregs;
 	siginfo_to_siginfo64(&ksi->ksi_info, &frame.sf_si);
 	frame.sf_uc.uc_sigmask = *mask;
 	frame.sf_uc.uc_stack.ss_sp = (ptraddr_t)td->td_sigstk.ss_sp;
@@ -309,18 +284,8 @@ freebsd64_sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 	mtx_unlock(&psp->ps_mtx);
 	PROC_UNLOCK(td->td_proc);
 
-	/* Copy the capability registers out to the user's stack. */
-	if (copyoutptr(&mc.mc_capregs, USER_PTR(capregs,
-	    sizeof(mc.mc_capregs)), sizeof(mc.mc_capregs)) != 0) {
-		PROC_LOCK(p);
-		printf("pid %d, tid %d: could not copy out cap registers\n",
-		    td->td_proc->p_pid, td->td_tid);
-		sigexit(td, SIGILL);
-		/* NOTREACHED */
-	}
-
 	/* Copy the sigframe out to the user's stack. */
-	if (copyoutptr(&frame, USER_PTR(fp, sizeof(struct sigframe64)),
+	if (copyout(&frame, USER_PTR(fp, sizeof(struct sigframe64)),
 	    sizeof(struct sigframe64)) != 0) {
 		/* Process has trashed its stack. Kill it. */
 		CTR2(KTR_SIG, "sendsig: sigexit td=%p fp=%lx", td, fp);
@@ -349,7 +314,7 @@ freebsd64_sigreturn(struct thread *td, struct freebsd64_sigreturn_args *uap)
 	ucontext64_t uc;
 	int error;
 
-	error = copyinptr(USER_PTR_OBJ(uap->sigcntxp), &uc, sizeof(uc));
+	error = copyin(USER_PTR_OBJ(uap->sigcntxp), &uc, sizeof(uc));
 	if (error != 0)
 		return (error);
 

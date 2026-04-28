@@ -36,11 +36,15 @@
 #define	_MACHINE_UCONTEXT_H_
 
 struct gpregs {
-	__register_t	gp_x[30];
-	__register_t	gp_lr;
-	__register_t	gp_sp;
-	__register_t	gp_elr;
+	__uintptr_t	gp_x[30];
+	__uintptr_t	gp_lr;
+	__uintptr_t	gp_sp;
+	__uintptr_t	gp_elr;
 	__uint64_t	gp_spsr;
+#ifdef __CHERI__
+	__uint64_t	pad;
+	__uintptr_t	gp_ddc;
+#endif
 };
 
 struct fpregs {
@@ -50,16 +54,6 @@ struct fpregs {
 	int		fp_flags;
 	int		fp_pad;
 };
-
-#ifdef __CHERI__
-struct capregs {
-	__uintptr_t	cap_x[30];
-	__uintptr_t	cap_lr;
-	__uintptr_t	cap_sp;
-	__uintptr_t	cap_elr;
-	__uintptr_t	cap_ddc;
-};
-#endif
 
 /*
  * Support for registers that don't fit into gpregs or fpregs, e.g. SVE.
@@ -82,29 +76,18 @@ struct sve_context {
 };
 
 struct __mcontext {
-#ifdef __CHERI__
-	struct capregs	mc_capregs;
-#else
 	struct gpregs	mc_gpregs;
-#endif
 	struct fpregs	mc_fpregs;
 	int		mc_flags;
 #define	_MC_FP_VALID	0x1		/* Set when mc_fpregs has valid data */
 #define	_MC_ESR_VALID	0x2		/* Set when mc_esr has valid data */
-#define	_MC_CAP_VALID	(1u<<31)	/* Set when mc_capregs has valid data */
-#ifdef __CHERI__
-	__uint32_t	mc_spsr;
-	__uint64_t	mc_pad;
-	__uintcap_t	mc_ptr;		/* Address of extra_regs struct */
-	__uint64_t	mc_esr;		/* Exception syndrome register */
-	__uint64_t	mc_spare[4];	/* Space for expansion, set to zero */
-#else
 	int		mc_pad;		/* Padding */
-	__uint64_t	mc_ptr;		/* Address of extra_regs struct */
-	__register_t	mc_esr;		/* Exception syndrome register */
-	__uint64_t	mc_spare[5];	/* Space for expansion, set to zero */
-	__uint64_t	mc_capregs;
+#ifdef __CHERI__
+	__uint64_t	mc_pad64;
 #endif
+	__uintptr_t	mc_ptr;		/* Address of extra_regs struct */
+	__register_t	mc_esr;		/* Exception syndrome register */
+	__uint64_t	mc_spare[6];	/* Space for expansion, set to zero */
 };
 
 
@@ -137,13 +120,22 @@ typedef struct __mcontext32_vfp {
 
 #ifdef COMPAT_FREEBSD64
 #include <compat/freebsd64/freebsd64_signal.h>
+
+struct gpregs64 {
+	__uint64_t	gp_x[30];
+	__uint64_t	gp_lr;
+	__uint64_t	gp_sp;
+	__uint64_t	gp_elr;
+	__uint64_t	gp_spsr;
+};
+
 typedef struct __mcontext64 {
-	struct gpregs	mc_gpregs;
+	struct gpregs64	mc_gpregs;
 	struct fpregs	mc_fpregs;
 	int		mc_flags;
 	int		mc_pad;		/* Padding */
+	__uint64_t	mv_ptr;
 	__uint64_t	mc_spare[7];	/* Space for expansion, set to zero */
-	__uint64_t	mc_capregs;
 } mcontext64_t;
 
 typedef struct __ucontext64 {
