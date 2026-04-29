@@ -51,7 +51,9 @@ vmm_mmio_alloc(struct vmspace *vmspace, vm_paddr_t gpa, size_t len,
     vm_paddr_t hpa)
 {
 	struct sglist *sg;
+	vm_map_t map;
 	vm_object_t obj;
+	vm_pointer_t reservation;
 	int error;
 
 	if (gpa + len < gpa || hpa + len < hpa || (gpa & PAGE_MASK) != 0 ||
@@ -79,10 +81,16 @@ vmm_mmio_alloc(struct vmspace *vmspace, vm_paddr_t gpa, size_t len,
 	if (error != KERN_SUCCESS)
 		panic("vmm_mmio_alloc: vm_object_set_memattr error %d", error);
 
-	vm_map_lock(&vmspace->vm_map);
-	error = vm_map_insert(&vmspace->vm_map, obj, 0, gpa, gpa + len,
-	    VM_PROT_RW, VM_PROT_RW, 0);
-	vm_map_unlock(&vmspace->vm_map);
+	map = &vmspace->vm_map;
+	vm_map_lock(map);
+	reservation = gpa;
+	error = vm_map_reservation_create_locked(map, &reservation, len,
+	    VM_PROT_RW);
+	if (error != KERN_SUCCESS) {
+	}
+	error = vm_map_insert(map, obj, 0, reservation, reservation + len,
+	    VM_PROT_RW, VM_PROT_RW, 0, gpa);
+	vm_map_unlock(map);
 	if (error != KERN_SUCCESS) {
 		error = vm_mmap_to_errno(error);
 		vm_object_deallocate(obj);
