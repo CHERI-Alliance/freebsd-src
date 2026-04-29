@@ -270,7 +270,7 @@ again:
 	 * entries to avoid deadlock.  The exec map is also used by some image
 	 * activators, so we leave a fixed number of pages for their use.
 	 */
-#ifdef __LP64__
+#if __SIZEOF_SIZE_T__ > 4
 	exec_map_entries = 8 * mp_ncpus;
 #else
 	exec_map_entries = 2 * mp_ncpus + 4;
