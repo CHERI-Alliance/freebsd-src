@@ -528,6 +528,7 @@ identify_cpu_ids(struct cpu_desc *desc)
 	}
 }
 
+#ifndef __CHERI__
 static void
 handle_thead_quirks(u_int cpu, struct cpu_desc *desc)
 {
@@ -549,14 +550,17 @@ handle_thead_quirks(u_int cpu, struct cpu_desc *desc)
 	has_errata_thead_pbmt = true;
 	thead_setup_cache();
 }
+#endif
 
 static void
 handle_cpu_quirks(u_int cpu, struct cpu_desc *desc)
 {
 	switch (mvendorid) {
+#ifndef __CHERI__
 	case MVENDORID_THEAD:
 		handle_thead_quirks(cpu, desc);
 		break;
+#endif
 	}
 }
 
