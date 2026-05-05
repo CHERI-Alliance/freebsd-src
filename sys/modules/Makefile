@@ -462,7 +462,7 @@ SUBDIR+=	dtrace
 SUBDIR+=	opensolaris
 .endif
 
-.if !${MACHINE_ABI:Mlong32}
+.if !${MACHINE_ABI:Mlong32} && !${MACHINE_ABI:Mptr128c}
 _bnxt=		bnxt
 .endif
 
@@ -582,6 +582,7 @@ _rdma=		rdma
 .if ${MACHINE_CPUARCH} == "aarch64" || ${MACHINE_CPUARCH} == "amd64" || \
     ${MACHINE_CPUARCH} == "i386" || ${MACHINE_ARCH:Mpowerpc64*} != ""
 _ipmi=		ipmi
+.if !${MACHINE_ABI:Mptr128c}
 _mlx4=		mlx4
 _mlx5=		mlx5
 .if (${MK_INET_SUPPORT} != "no" && ${MK_INET6_SUPPORT} != "no") || \
@@ -592,6 +593,7 @@ _mlx5en=	mlx5en
 .if ${MK_OFED} != "no" || defined(ALL_MODULES)
 _mlx4ib=	mlx4ib
 _mlx5ib=	mlx5ib
+.endif
 .endif
 .endif
 
@@ -666,7 +668,8 @@ _rtwnfw=	rtwnfw
 .endif
 
 .if ${MK_SOURCELESS_UCODE} != "no" && ${MACHINE_CPUARCH} != "arm" && \
-	${MACHINE_ARCH} != "powerpc" && ${MACHINE_CPUARCH} != "riscv"
+	${MACHINE_ARCH} != "powerpc" && ${MACHINE_CPUARCH} != "riscv" \
+	&& !${MACHINE_ABI:Mptr128c}
 _cxgbe=		cxgbe
 .endif
 
@@ -735,9 +738,13 @@ _cxgb=		cxgb
 .endif
 
 .if ${MACHINE_CPUARCH} == "aarch64"
+.if !${MACHINE_ABI:Mptr128c}
 _armv8crypto=	armv8crypto
+.endif
 _armv8_rng=	armv8_rng
+.if !${MACHINE_ABI:Mptr128c}
 _dpaa2=		dpaa2
+.endif
 _sff=		sff
 _em=		em
 _hyperv=  hyperv
@@ -966,9 +973,15 @@ _malo=	malo
 _ufshci=ufshci
 .endif
 
+.if ${MACHINE_ABI:Mpurecap}
+BROKEN_MODULES+=linuxkpi_video
+BROKEN_MODULES+=rtw88
+BROKEN_MODULES+=linux_ntsync
+.endif
+
 SUBDIR+=${MODULES_EXTRA}
 
-.for reject in ${WITHOUT_MODULES}
+.for reject in ${BROKEN_MODULES} ${WITHOUT_MODULES}
 SUBDIR:= ${SUBDIR:N${reject}}
 .endfor
 
