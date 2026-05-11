@@ -1,5 +1,8 @@
 name: Build with toolchain
 
+env:
+  ACTIONS_STEP_DEBUG: true
+
 on:
   workflow_call:
     inputs:
@@ -46,6 +49,8 @@ jobs:
     steps:
       - name: "Checkout freebsd-src"
         uses: actions/checkout@v4
+          with:
+            ref: be8d0cecc7a4b8b036500a0ea6f982be0047730e
       - name: "setup SSH"
         run: |
             # which sudo
