@@ -345,4 +345,21 @@
 #define	is_cheri_store_amo_cap_fault(frame)			\
 	(frame->tf_scause == SCAUSE_STORE_PAGE_FAULT &&		\
 	frame->tf_stval2 == 1)
+
+/*
+ * Derive an unbounded pointer before initial relocation.  For
+ * purecap, derive the pointer from PCC.
+ */
+#ifdef __CHERI__
+#define	CHERI_RODATA_PTR(x) ({						\
+	__typeof__((0, x)) _p;						\
+									\
+	__asm__ (							\
+	    "cllc %0, %c1\n\t"						\
+	    : "=C" (_p) : "i" (x));					\
+	_p; })
+#else
+#define	CHERI_RODATA_PTR(x)	(&(*x))
+#endif
+
 #endif /* !_MACHINE_CHERIREG_H_ */
