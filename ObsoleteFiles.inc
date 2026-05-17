@@ -146,6 +146,7 @@ OLD_FILES+=usr/share/certs/untrusted/LuxTrust_Global_Root_2.pem
 OLD_FILES+=usr/share/certs/untrusted/thawte_Primary_Root_CA_-_G2.pem
 OLD_FILES+=usr/share/certs/untrusted/Symantec_Class_1_Public_Primary_Certification_Authority_-_G4.pem
 
+.if 0
 # 20260425: new clang import which bumps version from 19 to 21
 OLD_FILES+=usr/lib/clang/19/include/__clang_cuda_builtin_vars.h
 OLD_FILES+=usr/lib/clang/19/include/__clang_cuda_cmath.h
@@ -587,6 +588,7 @@ OLD_FILES+=usr/include/c++/v1/__type_traits/is_unsigned_integer.h
 OLD_FILES+=usr/include/c++/v1/__type_traits/noexcept_move_assign_container.h
 OLD_FILES+=usr/include/c++/v1/experimental/__config
 OLD_FILES+=usr/include/c++/v1/locale.h
+.endif
 
 # 20260420: remove perfmon
 OLD_FILES+=boot/kernel/perfmon.ko
@@ -1101,6 +1103,8 @@ OLD_FILES+=usr/share/man/man5/p9fs.5.gz
 # 20241104: remove the outdated c2x.7 symlink in favor of c23.7
 OLD_FILES+=usr/share/man/man7/c2x.7.gz
 
+# XXX: CHERI is still on 17
+.if 0
 # 20241023: new clang import which bumps version from 18 to 19
 OLD_FILES+=usr/lib/clang/18/include/__clang_cuda_builtin_vars.h
 OLD_FILES+=usr/lib/clang/18/include/__clang_cuda_cmath.h
@@ -1578,6 +1582,7 @@ OLD_FILES+=usr/include/c++/v1/__type_traits/is_trivially_move_assignable.h
 OLD_FILES+=usr/include/c++/v1/__type_traits/is_trivially_move_constructible.h
 OLD_FILES+=usr/include/c++/v1/__type_traits/operation_traits.h
 OLD_FILES+=usr/include/c++/v1/experimental/__memory
+.endif
 
 # 20241014: move divapp to netpfil/common/
 OLD_FILES+=usr/tests/sys/netpfil/pf/divapp

@@ -12,8 +12,8 @@ SUBDIR_BOOTSTRAP= \
 	libc_nonshared \
 	libcompiler_rt \
 	${_libclang_rt} \
-	libc++ \
-	libc++experimental \
+	${_libcxx} \
+	${_libcxxxxperimental} \
 	libcxxrt \
 	libder \
 	libdiff \
@@ -125,6 +125,7 @@ SUBDIR_DEPEND_libauditdm= libbsm
 SUBDIR_DEPEND_libbsddialog= ncurses
 SUBDIR_DEPEND_libbsnmp= ${_libnetgraph}
 SUBDIR_DEPEND_libc++:= libcxxrt
+SUBDIR_DEPEND_cheri-libc++:= libcxxrt
 # libssp_nonshared doesn't need to be linked into libc on every arch, but it is
 # small enough to build that this bit of serialization is likely insignificant.
 SUBDIR_DEPEND_libc= libsys libcompiler_rt libssp_nonshared
@@ -246,6 +247,16 @@ SUBDIR.${MK_USB}+=	libusbhid libusb
 SUBDIR.${MK_OFED}+=	ofed
 SUBDIR.${MK_VERIEXEC}+=	libveriexec
 SUBDIR.${MK_ZFS}+=	libbe
+
+#.if ${MACHINE_CPUARCH} == "aarch64*" || ${MACHINE_CPUARCH} == "riscv*"
+# XXX should be:
+#.if ${MACHINE_ABI:Mpurecap}
+_libcxx=		cheri-libc++
+_libcxxexperimental=	cheri-libc++experimental
+#.else
+#_libcxx=		libc++
+#_libcxxexperimental=	libc++experimental
+#.endif
 
 .if !make(install)
 SUBDIR_PARALLEL=
