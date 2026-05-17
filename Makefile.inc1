@@ -3324,7 +3324,11 @@ _prereq_libs+=	lib/libclang_rt/ubsan_standalone_cxx
 _startup_libs=	lib/csu
 _startup_libs+=	lib/libc
 _startup_libs+=	lib/libc_nonshared
+.if ${TARGET:Maarch64*} || ${TARGET:Mriscv64*}
+_startup_libs+=	lib/cheri-libcxxrt
+.else
 _startup_libs+=	lib/libcxxrt
+.endif
 _startup_libs+=	lib/libsys
 
 _prereq_libs+=	lib/libgcc_eh lib/libgcc_s
@@ -3348,7 +3352,7 @@ _prebuild_libs=	${_kerberos5_lib_libasn1} \
 		${_krb5_util_et} \
 		${_krb5_util_profile} \
 		lib/libbz2 ${_libcom_err} lib/libcrypt \
-		lib/libc++ \
+		${_libcxx} \
 		lib/libelf lib/libexpat \
 		${_lib_libgssapi} \
 		lib/libjail \
@@ -3387,6 +3391,13 @@ _prebuild_libs=	${_kerberos5_lib_libasn1} \
 		lib/libxo \
 		${_secure_lib_libcrypto} ${_secure_lib_libssl} \
 		${_lib_libldns} ${_secure_lib_libssh}
+
+#.if ${TARGET:Maarch64*} || ${TARGET:Mriscv64*}
+# XXX: should only be aarch64c and riscv64c
+_libcxx=	lib/cheri-libc++
+#.else
+#_libcxx=	lib/libc++
+#.endif
 
 .if ${MK_GOOGLETEST} != "no"
 _prebuild_libs+= lib/libregex

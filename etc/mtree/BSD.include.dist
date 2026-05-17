@@ -17,6 +17,10 @@
     c++
         v1
             __algorithm
+                pstl_backends
+                    cpu_backends
+                    ..
+                ..
             ..
             __atomic
                 support
@@ -152,6 +156,10 @@
                 backends
                 ..
                 cpu_algos
+                ..
+                internal
+                    omp
+                    ..
                 ..
             ..
             __random
