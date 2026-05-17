@@ -10,10 +10,13 @@ MK_SSP=	no
 
 .if !defined(BUILDING_TESTS)
 
-OBJS+=	Scrt1.o crt1.o gcrt1.o
+OBJS+=	Scrt1.o crt1.o
 OBJS+=	crtbegin.o crtbeginS.o crtbeginT.o
 OBJS+=	crtend.o crtendS.o
+.if !${MACHINE_ABI:Mpurecap}
+OBJS+=	gcrt1.o
 OBJS+=	crti.o crtn.o
+.endif
 
 CRT1OBJS+=	crtbrand.o feature_note.o ignore_init_note.o
 
@@ -24,6 +27,12 @@ CFLAGS+=	-fno-omit-frame-pointer
 CFLAGS+=	-I${.CURDIR:H}/common \
 		-I${SRCTOP}/lib/libc/include \
 		-I${SRCTOP}/lib/libsys \
+
+.if ${MACHINE_ABI:Mpurecap}
+# Purecap code requires crt_init_globals to be called before using jump tables
+CFLAGS+=	-fno-jump-tables
+CFLAGS+=	-I${.CURDIR:H}/common-cheri
+.endif
 
 CFLAGS_CRTS=	-DSHARED ${PICFLAG}
 
