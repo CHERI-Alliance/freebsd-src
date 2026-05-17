@@ -1863,8 +1863,8 @@ public:
 
 #ifdef __CHERI_PURE_CAPABILITY__
   bool        validCapabilityRegister(int num) const;
-  uintcap_t   getCapabilityRegister(int num) const;
-  void        setCapabilityRegister(int num, uintcap_t value);
+  __uintcap_t   getCapabilityRegister(int num) const;
+  void        setCapabilityRegister(int num, __uintcap_t value);
 #else
   CAPABILITIES_NOT_SUPPORTED
 #endif // __CHERI_PURE_CAPABILITY__
@@ -1994,12 +1994,12 @@ inline bool Registers_arm64::validCapabilityRegister(int regNum) const {
   return false;
 }
 
-inline uintcap_t Registers_arm64::getCapabilityRegister(int regNum) const {
+inline __uintcap_t Registers_arm64::getCapabilityRegister(int regNum) const {
   assert(validCapabilityRegister(regNum));
   return getRegister(regNum);
 }
 
-inline void Registers_arm64::setCapabilityRegister(int regNum, uintcap_t value) {
+inline void Registers_arm64::setCapabilityRegister(int regNum, __uintcap_t value) {
   assert(validCapabilityRegister(regNum));
   setRegister(regNum, value);
 }
@@ -3600,8 +3600,8 @@ public:
   void        setFloatRegister(int num, double value);
   bool        validVectorRegister(int num) const;
   bool        validCapabilityRegister(int num) const;
-  uintcap_t   getCapabilityRegister(int num) const;
-  void        setCapabilityRegister(int num, uintcap_t value);
+  __uintcap_t   getCapabilityRegister(int num) const;
+  void        setCapabilityRegister(int num, __uintcap_t value);
   v128        getVectorRegister(int num) const;
   void        setVectorRegister(int num, v128 value);
   const char *getRegisterName(int num);
@@ -3677,7 +3677,7 @@ inline Registers_mips_cheri::Registers_mips_cheri(const void *registers) {
 
 }
 
-inline uintcap_t Registers_mips_cheri::getCapabilityRegister(int regNum) const {
+inline __uintcap_t Registers_mips_cheri::getCapabilityRegister(int regNum) const {
   assert(validCapabilityRegister(regNum));
   if (regNum == UNW_REG_IP)
     return getIP();
@@ -3686,7 +3686,7 @@ inline uintcap_t Registers_mips_cheri::getCapabilityRegister(int regNum) const {
   return _registers.__c[regNum - UNW_MIPS_DDC];
 }
 
-inline void Registers_mips_cheri::setCapabilityRegister(int regNum, uintcap_t value) {
+inline void Registers_mips_cheri::setCapabilityRegister(int regNum, __uintcap_t value) {
   assert(validCapabilityRegister(regNum));
   if (regNum == UNW_REG_IP) {
     setIP(value);
@@ -4544,8 +4544,8 @@ public:
 
 #ifdef __CHERI_PURE_CAPABILITY__
   bool        validCapabilityRegister(int num) const;
-  uintcap_t   getCapabilityRegister(int num) const;
-  void        setCapabilityRegister(int num, uintcap_t value);
+  __uintcap_t   getCapabilityRegister(int num) const;
+  void        setCapabilityRegister(int num, __uintcap_t value);
 #else
   CAPABILITIES_NOT_SUPPORTED
 #endif
@@ -4652,12 +4652,12 @@ inline bool Registers_riscv::validCapabilityRegister(int regNum) const {
   return true;
 }
 
-inline uintcap_t Registers_riscv::getCapabilityRegister(int regNum) const {
+inline __uintcap_t Registers_riscv::getCapabilityRegister(int regNum) const {
   assert(validCapabilityRegister(regNum));
   return getRegister(regNum);
 }
 
-inline void Registers_riscv::setCapabilityRegister(int regNum, uintcap_t value) {
+inline void Registers_riscv::setCapabilityRegister(int regNum, __uintcap_t value) {
   assert(validCapabilityRegister(regNum));
   setRegister(regNum, value);
 }

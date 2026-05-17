@@ -102,8 +102,8 @@ int main() {
                    : "r14" /* clobbers */)
 #elif defined(__aarch64__)
 #ifdef __CHERI_PURE_CAPABILITY__
-  uintcap_t expected_c10 = 0x12345678;
-  uintcap_t expected_c11 = 0x87654321;
+  __uintcap_t expected_c10 = 0x12345678;
+  __uintcap_t expected_c11 = 0x87654321;
   auto check_reg_values = [=](unw_context_t *context, unw_cursor_t *cursor) {
     (void)context;
     CHECK_REG(UNW_ARM64_C10, expected_c10);

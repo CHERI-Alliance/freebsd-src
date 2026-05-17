@@ -457,7 +457,7 @@ typename A::pint_t
 DwarfInstructions<A, R>::evaluateExpression(pint_t expression, A &addressSpace,
                                             const R &registers,
                                             pint_t initialStackValue) {
-// XXXAR: I am not entirely sure these operations should work on a uintcap_t
+// XXXAR: I am not entirely sure these operations should work on a __uintcap_t
 // but if it's an untagged integer value it is fine
 #pragma clang diagnostic push
 #if __has_feature(capabilities)
