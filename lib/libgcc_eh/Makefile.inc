@@ -42,11 +42,11 @@ STATIC_CXXFLAGS+= -fvisibility=hidden -fPIC
 # Probably need to just move this earlier or use CXXFLAGS
 .if ${MK_DIRDEPS_BUILD} == "yes"
 # Avoid dependency on lib/libc++
-CFLAGS+=	-isystem ${SRCTOP}/contrib/llvm-project/libcxx/include -nostdinc++
+CFLAGS+=	-isystem ${SRCTOP}/contrib/subrepo-cheri-libc++/include -nostdinc++
 
 # we need this for __config_site
-CFLAGS+=	-I${SRCTOP}/lib/libc++
+CFLAGS+=	-I${SRCTOP}/lib/cheri-libc++
 .if ${.MAKE.LEVEL} > 0
-GENDIRDEPS_FILTER+= Nlib/libc++
+GENDIRDEPS_FILTER+= Nlib/cheri-libc++
 .endif
 .endif
