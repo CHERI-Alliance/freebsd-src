@@ -1,0 +1,271 @@
+/*-
+ * Copyright (c) 2014 Robert N. M. Watson
+ * Copyright (c) 2017-2018 Alex Richardson
+ * All rights reserved.
+ *
+ * This software was developed by SRI International and the University of
+ * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
+ * ("CTSRD"), as part of the DARPA CRASH research programme.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+#include <sys/param.h>
+#include <machine/elf.h>
+#include <stdint.h>
+#include <stdlib.h>
+
+#include <cheri/cherireg.h>
+#include <cheriintrin.h>
+
+#ifdef PIC
+#error "PIEs never need to initialise their own globals"
+#endif
+
+#ifdef CHERI_INIT_RELA
+extern const Elf_Rela __weak_symbol __rela_dyn_start[] __hidden;
+extern const Elf_Rela __weak_symbol __rela_dyn_end[] __hidden;
+
+static __always_inline void
+crt_init_rela(const Elf_Phdr *phdr __unused, const Elf_Phdr *phlimit __unused)
+{
+	const Elf_Rela *rela, *relalim;
+	void *data_cap;
+	const void *code_cap;
+	bool use_code_bounds = false;
+
+#ifdef __CHERI_PURE_CAPABILITY__
+	data_cap = __DECONST(void *, phdr);
+	for (const Elf_Phdr *ph = phdr; ph < phlimit; ph++) {
+		if (ph->p_type == PT_CHERI_PCC) {
+			use_code_bounds = true;
+			break;
+		}
+	}
+#else
+	data_cap = cheri_ddc_get();
+#endif
+	data_cap = cheri_perms_clear(data_cap,
+	    CHERI_PERM_EXECUTE | CHERI_PERM_SW_VMEM);
+
+	code_cap = cheri_pcc_get();
+
+	rela = CHERI_RODATA_PTR(__rela_dyn_start);
+	relalim = CHERI_RODATA_PTR(__rela_dyn_end);
+	for (; rela < relalim; rela++)
+		elf_reloc(rela, data_cap, code_cap, 0, use_code_bounds);
+}
+#endif
+
+#define CHERI_INIT_GLOBALS_GDC_ONLY
+#if defined(__riscv) && defined(__CHERI_PURE_CAPABILITY__)
+#define CHERI_INIT_GLOBALS_ALLOW_IFUNCS
+#endif
+#include <cheri_init_globals.h>
+#if !defined(CHERI_INIT_GLOBALS_VERSION) || CHERI_INIT_GLOBALS_VERSION < 4
+#error "cheri_init_globals.h is outdated. Please update LLVM"
+#endif
+
+/* This is __always_inline since it is called before globals have been set up */
+static __always_inline void
+crt_init_globals(const Elf_Phdr *phdr, long phnum,
+    void **data_cap_out,
+    const void **code_cap_out,
+    const void **rodata_cap_out)
+{
+	const Elf_Phdr *phlimit = phdr + phnum;
+	const struct capreloc *start_relocs;
+	const struct capreloc *stop_relocs;
+	Elf_Addr text_start = (Elf_Addr)-1l;
+	Elf_Addr text_end = 0;
+	Elf_Addr readonly_start = (Elf_Addr)-1l;
+	Elf_Addr readonly_end = 0;
+	Elf_Addr writable_start = (Elf_Addr)-1l;
+	Elf_Addr writable_end = 0;
+	bool use_code_bounds = false;
+	bool have_rodata_segment = false;
+	bool have_text_segment = false;
+	bool have_data_segment = false;
+	void *data_cap;
+	const void *code_cap;
+	const void *rodata_cap;
+
+#ifdef CHERI_INIT_RELA
+	crt_init_rela(phdr, phlimit);
+#endif
+
+	/* Attempt to bound the data capability to only the writable segment */
+	for (const Elf_Phdr *ph = phdr; ph < phlimit; ph++) {
+		if (ph->p_type != PT_LOAD && ph->p_type != PT_GNU_RELRO) {
+			/* Static binaries should not have a PT_DYNAMIC phdr */
+			if (ph->p_type == PT_DYNAMIC) {
+				__builtin_trap();
+				break;
+			}
+			if (ph->p_type == PT_CHERI_PCC)
+				use_code_bounds = true;
+			continue;
+		}
+		/*
+		 * We found a PT_LOAD or PT_GNU_RELRO phdr. PT_GNU_RELRO will
+		 * be a subset of a matching PT_LOAD but we need to add the
+		 * range from PT_GNU_RELRO to the constant capability since
+		 * __cap_relocs could have some constants pointing to the relro
+		 * section. The phdr for the matching PT_LOAD has PF_R|PF_W so
+		 * it would not be added to the readonly if we didn't also
+		 * parse PT_GNU_RELRO.
+		 */
+		Elf_Addr seg_start = ph->p_vaddr;
+		Elf_Addr seg_end = seg_start + ph->p_memsz;
+		if ((ph->p_flags & PF_X)) {
+			/* text segment */
+			have_text_segment = true;
+			text_start = MIN(text_start, seg_start);
+			text_end = MAX(text_end, seg_end);
+		} else if ((ph->p_flags & PF_W)) {
+			/* data segment */
+			have_data_segment = true;
+			writable_start = MIN(writable_start, seg_start);
+			writable_end = MAX(writable_end, seg_end);
+		} else {
+			have_rodata_segment = true;
+			/* read-only segment (not always present) */
+			readonly_start = MIN(readonly_start, seg_start);
+			readonly_end = MAX(readonly_end, seg_end);
+		}
+	}
+
+#ifdef __CHERI_PURE_CAPABILITY__
+	/*
+	 * Pure capability executables with multiple compartments
+	 * might have multiple writable and executable segments.
+	 * However, the capabilities for `phdr` and the current PCC
+	 * should be constrained to the executable.  Trust relocations
+	 * to further narrow bounds as needed.
+	 *
+	 * XXX: Once PT_CHERI_PCC is required for pure capability
+	 * binaries, the purecap version of this function should be
+	 * simplified such that the phdrs are only examined for
+	 * hybrid.
+	 */
+	if (use_code_bounds) {
+		code_cap = cheri_pcc_get();
+		data_cap = __DECONST(void *, phdr);
+		data_cap = cheri_perms_clear(data_cap,
+		    CHERI_PERM_EXECUTE | CHERI_PERM_SW_VMEM);
+		rodata_cap = cheri_perms_clear(data_cap,
+		    CHERI_PERM_STORE |
+#ifdef HAS_CHERI_PERM_LOAD_STORE_CAP
+		    CHERI_PERM_STORE_CAP |
+#else
+		    CHERI_PERM_CAP | CHERI_PERM_STORE_LOCAL_CAP |
+#endif
+		    CHERI_PERM_SW_VMEM);
+		goto handle_relocs;
+	}
+#endif
+
+	if (!have_text_segment) {
+		/* No text segment??? Must be an error somewhere else. */
+		__builtin_trap();
+	}
+	if (!have_rodata_segment) {
+		/*
+		 * Note: If we don't have a separate rodata segment we also
+		 * need to include the text segment in the rodata cap. This is
+		 * required since all constants will be part of the read/exec
+		 * segment instead of a separate read-only one.
+		 */
+		readonly_start = text_start;
+		readonly_end = text_end;
+	}
+	if (!have_data_segment) {
+		/*
+		 * There cannot be any capabilities to initialize if there
+		 * is no data segment. Set all to NULL to catch errors.
+		 *
+		 * Note: RELRO segment will be part of a R/W PT_LOAD.
+		 */
+		code_cap = NULL;
+		data_cap = NULL;
+		rodata_cap = NULL;
+	} else {
+		/* Check that ranges are well-formed */
+		if (writable_end < writable_start ||
+		    readonly_end < readonly_start ||
+		    text_end < text_start)
+			__builtin_trap();
+
+		/* Abort if text and writeable overlap: */
+		if (MAX(writable_start, text_start) <
+		    MIN(writable_end, text_end)) {
+			/* TODO: should we allow a single RWX segment? */
+			__builtin_trap();
+		}
+
+#ifdef __CHERI_PURE_CAPABILITY__
+		data_cap = __DECONST(void *, phdr);
+#else
+		data_cap = cheri_ddc_get();
+#endif
+		data_cap = cheri_perms_clear(data_cap,
+		   CHERI_PERM_EXECUTE | CHERI_PERM_SW_VMEM);
+
+		code_cap = cheri_pcc_get();
+		rodata_cap = cheri_perms_clear(data_cap,
+		    CHERI_PERM_STORE |
+#ifdef HAS_CHERI_PERM_LOAD_STORE_CAP
+		    CHERI_PERM_STORE_CAP |
+#endif
+		    CHERI_PERM_STORE_LOCAL_CAP | CHERI_PERM_SW_VMEM);
+
+		data_cap = cheri_address_set(data_cap, writable_start);
+		rodata_cap = cheri_address_set(rodata_cap, readonly_start);
+
+		/* TODO: should we use exact setbounds? */
+		data_cap =
+		    cheri_bounds_set(data_cap, writable_end - writable_start);
+		rodata_cap =
+		    cheri_bounds_set(rodata_cap, readonly_end - readonly_start);
+
+		if (!cheri_tag_get(data_cap))
+			__builtin_trap();
+		if (!cheri_tag_get(rodata_cap))
+			__builtin_trap();
+		if (!cheri_tag_get(code_cap))
+			__builtin_trap();
+	}
+
+#ifdef __CHERI_PURE_CAPABILITY__
+handle_relocs:
+#endif
+	start_relocs = CHERI_RODATA_PTR(__start___cap_relocs);
+	stop_relocs = CHERI_RODATA_PTR(__stop___cap_relocs);
+
+	cheri_init_globals_impl(start_relocs, stop_relocs, data_cap, code_cap,
+	    rodata_cap, use_code_bounds, 0);
+	if (data_cap_out)
+		*data_cap_out = data_cap;
+	if (code_cap_out)
+		*code_cap_out = code_cap;
+	if (rodata_cap_out)
+		*rodata_cap_out = rodata_cap;
+}
