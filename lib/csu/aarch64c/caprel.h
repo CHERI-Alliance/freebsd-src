@@ -1,0 +1,100 @@
+/*-
+ * SPDX-License-Identifier: BSD-2-Clause
+ *
+ * Copyright (c) 2024 SRI International
+ *
+ * This software was developed by SRI International, the University of
+ * Cambridge Computer Laboratory (Department of Computer Science and
+ * Technology), and Capabilities Limited under Defense Advanced Research
+ * Projects Agency / Air Force Research Laboratory (DARPA/AFRL) Contract
+ * No. FA8750-24-C-B047 ("DEC").
+ */
+
+#ifndef __CAPREL_H__
+#define	__CAPREL_H__
+
+#include <sys/types.h>
+#include <machine/elf.h>
+#include <stdbool.h>
+
+#include <cheri/cherireg.h>
+#include <cheriintrin.h>
+
+#define	FUNC_PTR_REMOVE_PERMS						\
+	(CHERI_PERM_SEAL | CHERI_PERM_STORE | CHERI_PERM_STORE_CAP |	\
+	CHERI_PERM_STORE_LOCAL_CAP)
+
+#define	DATA_PTR_REMOVE_PERMS						\
+	(CHERI_PERM_SEAL | CHERI_PERM_EXECUTE | CHERI_PERM_EXECUTIVE)
+
+#define	CAP_RELOC_REMOVE_PERMS						\
+	(CHERI_PERM_SW_VMEM)
+
+/*
+ * Fragments consist of a 64-bit address followed by a 56-bit length and an
+ * 8-bit permission field.
+ */
+static __always_inline uintptr_t
+init_cap_from_fragment(const Elf_Addr *fragment, void *data_cap,
+    const void *text_rodata_cap, Elf_Addr base_addr, Elf_Size addend,
+    bool use_code_bounds)
+{
+	uintptr_t cap;
+	Elf_Addr address, len;
+	uint8_t perms;
+
+	address = fragment[0];
+	len = fragment[1] & ((1UL << (8 * sizeof(*fragment) - 8)) - 1);
+	perms = fragment[1] >> (8 * sizeof(*fragment) - 8);
+
+	cap = perms == MORELLO_FRAG_EXECUTABLE ?
+	    (uintptr_t)text_rodata_cap : (uintptr_t)data_cap;
+	cap = cheri_address_set(cap, base_addr + address);
+	if (perms != MORELLO_FRAG_EXECUTABLE || use_code_bounds)
+		cap = cheri_bounds_set(cap, len);
+	cap = cheri_perms_clear(cap, CAP_RELOC_REMOVE_PERMS);
+
+	if (perms == MORELLO_FRAG_EXECUTABLE || perms == MORELLO_FRAG_RODATA) {
+		cap = cheri_perms_clear(cap, FUNC_PTR_REMOVE_PERMS);
+	}
+	if (perms == MORELLO_FRAG_RWDATA || perms == MORELLO_FRAG_RODATA) {
+		cap = cheri_perms_clear(cap, DATA_PTR_REMOVE_PERMS);
+	}
+
+	cap += addend;
+
+	if (perms == MORELLO_FRAG_EXECUTABLE) {
+		cap = cheri_sentry_create(cap);
+	}
+
+	return (cap);
+}
+
+static __always_inline void
+elf_reloc(const Elf_Rela *rela, void *data_cap, const void *code_cap,
+    Elf_Addr relocbase, bool use_code_bounds)
+{
+	Elf_Addr addr;
+	Elf_Addr *where;
+
+#ifdef TLS_TGOT_COMPAT
+	/* See __libc_init_got_tgot */
+	if (ELF_R_TYPE(rela->r_info) == R_MORELLO_TLS_TGOTREL64)
+		return;
+#endif
+
+	if (ELF_R_TYPE(rela->r_info) != R_MORELLO_RELATIVE &&
+	    ELF_R_TYPE(rela->r_info) != R_MORELLO_FUNC_RELATIVE)
+		__builtin_trap();
+
+	addr = relocbase + rela->r_offset;
+#ifdef __CHERI_PURE_CAPABILITY__
+	where = cheri_address_set(data_cap, addr);
+#else
+	where = (Elf_Addr *)addr;
+#endif
+	*(uintptr_t *)(void *)where = init_cap_from_fragment(where, data_cap,
+	    code_cap, relocbase, rela->r_addend, use_code_bounds);
+}
+
+#endif /* __CAPREL_H__ */
