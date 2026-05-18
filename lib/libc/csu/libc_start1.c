@@ -29,8 +29,25 @@
 #include <sys/elf.h>
 #include <sys/elf_common.h>
 #include <errno.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include "libc_private.h"
+
+/* purecap PIEs always have their relocations processed by rtld */
+#if defined(__CHERI__) && defined(PIC) && !defined(CRT_IRELOC_SUPPRESS)
+#undef	CRT_IRELOC_RELA
+#define	CRT_IRELOC_SUPPRESS
+#undef	CRT_TGOT_RELOC_RELA
+#undef	CRT_TGOT_RELOC_CAPRELOC
+#define	CRT_TGOT_RELOC_SUPPRESS
+#endif
+
+#ifndef TLS_TGOT
+#undef	CRT_TGOT_RELOC_RELA
+#undef	CRT_TGOT_RELOC_REL
+#undef	CRT_TGOT_RELOC_CAPRELOC
+#define	CRT_TGOT_RELOC_SUPPRESS
+#endif
 
 extern void (*__preinit_array_start[])(int, char **, char **) __hidden;
 extern void (*__preinit_array_end[])(int, char **, char **) __hidden;
@@ -44,25 +61,47 @@ extern void _init(void) __hidden;
 extern int _DYNAMIC;
 #pragma weak _DYNAMIC
 
+#if defined(CRT_IRELOC_RELA) || defined(CRT_IRELOC_REL) || \
+    defined(CRT_TGOT_RELOC_RELA) || defined(CRT_TGOT_RELOC_REL) || \
+    defined(CRT_TGOT_RELOC_CAPRELOC)
+#include "reloc.c"
+#endif
+
 #if defined(CRT_IRELOC_RELA)
+#ifdef __CHERI__
+extern Elf_Auxinfo *__auxargs;
+#endif
+
 extern const Elf_Rela __rela_iplt_start[] __weak_symbol __hidden;
 extern const Elf_Rela __rela_iplt_end[] __weak_symbol __hidden;
 
-#include "reloc.c"
-
 static void
+#ifdef __CHERI__
+process_irelocs(void *data_cap, const void *code_cap)
+#else
 process_irelocs(void)
+#endif
 {
+#ifdef CRT_IRELOC_CAPRELOC
+	const struct capreloc *cr;
+#endif
 	const Elf_Rela *r;
 
 	for (r = &__rela_iplt_start[0]; r < &__rela_iplt_end[0]; r++)
+#ifdef __CHERI__
+		crt1_handle_rela(r, data_cap, code_cap);
+#else
 		crt1_handle_rela(r);
+#endif
+
+#ifdef CRT_IRELOC_CAPRELOC
+	for (cr = &__start___cap_relocs[0]; cr < &__stop___cap_relocs[0]; cr++)
+		crt1_handle_capreloc(cr, data_cap, code_cap);
+#endif
 }
 #elif defined(CRT_IRELOC_REL)
 extern const Elf_Rel __rel_iplt_start[] __weak_symbol __hidden;
 extern const Elf_Rel __rel_iplt_end[] __weak_symbol __hidden;
-
-#include "reloc.c"
 
 static void
 process_irelocs(void)
@@ -77,6 +116,48 @@ process_irelocs(void)
 #error "Define platform reloc type"
 #endif
 
+#if defined(CRT_TGOT_RELOC_RELA)
+extern const Elf_Rela __rela_tgot_start[] __weak_symbol __hidden;
+extern const Elf_Rela __rela_tgot_end[] __weak_symbol __hidden;
+
+static void
+process_tgot_relocs(void *tgot, Elf_Addr init, void *tls)
+{
+	const Elf_Rela *r;
+
+	for (r = &__rela_tgot_start[0]; r < &__rela_tgot_end[0]; r++)
+		crt1_handle_tgot_rela(r, tgot, init, tls);
+}
+#elif defined(CRT_TGOT_RELOC_REL)
+extern const Elf_Rel __rel_tgot_start[] __weak_symbol __hidden;
+extern const Elf_Rel __rel_tgot_end[] __weak_symbol __hidden;
+
+static void
+process_tgot_relocs(void *tgot, Elf_Addr init, void *tls)
+{
+	const Elf_Rel *r;
+
+	for (r = &__rel_tgot_start[0]; r < &__rel_tgot_end[0]; r++)
+		crt1_handle_tgot_rel(r, tgot, init, tls);
+}
+#elif defined(CRT_TGOT_RELOC_CAPRELOC)
+extern const struct capreloc __start___tgot_cap_relocs[] __weak_symbol __hidden;
+extern const struct capreloc __stop___tgot_cap_relocs[] __weak_symbol __hidden;
+
+static void
+process_tgot_relocs(void *tgot, Elf_Addr init, void *tls)
+{
+	const struct capreloc *r;
+
+	for (r = &__start___tgot_cap_relocs[0];
+	    r < &__stop___tgot_cap_relocs[0]; r++)
+		crt1_handle_tgot_capreloc(r, tgot, init, tls);
+}
+#elif defined(CRT_TGOT_RELOC_SUPPRESS)
+#else
+#error "Define platform reloc type"
+#endif
+
 #ifndef PIC
 static void
 finalizer(void)
@@ -85,6 +166,7 @@ finalizer(void)
 	size_t array_size, n;
 
 	array_size = __fini_array_end - __fini_array_start;
+	/* Unlike .init_array, .fini_array is processed backwards */
 	for (n = array_size; n > 0; n--) {
 		fn = __fini_array_start[n - 1];
 		if ((uintptr_t)fn != 0 && (uintptr_t)fn != 1)
@@ -142,6 +224,19 @@ handle_argv(int argc, char *argv[], char **env)
 	}
 }
 
+#ifdef __CHERI__
+static void
+handle_irelocs(void *data_cap, const void *code_cap)
+{
+#ifndef CRT_IRELOC_SUPPRESS
+	ifunc_init(__auxargs);
+	process_irelocs(data_cap, code_cap);
+#else
+	(void)data_cap;
+	(void)code_cap;
+#endif
+}
+#else
 static void
 handle_irelocs(char *env[])
 {
@@ -159,17 +254,30 @@ handle_irelocs(char *env[])
 	(void)env;
 #endif
 }
+#endif
 
 void
 __libc_start1(int argc, char *argv[], char *env[], void (*cleanup)(void),
-    int (*mainX)(int, char *[], char *[]))
+    int (*mainX)(int, char *[], char *[])
+#ifdef __CHERI__
+    , void *data_cap, const void *code_cap
+#endif
+	)
 {
 	handle_argv(argc, argv, env);
 
+#ifdef __CHERI__
+	if (cleanup != NULL) {
+#else
 	if (&_DYNAMIC != NULL) {
+#endif
 		atexit(cleanup);
 	} else {
+#ifdef __CHERI__
+		handle_irelocs(data_cap, code_cap);
+#else
 		handle_irelocs(env);
+#endif
 		_init_tls();
 	}
 
@@ -209,5 +317,13 @@ __libc_start1_gcrt(int argc, char *argv[], char *env[],
 	handle_static_init(argc, argv, env);
 	errno = 0;
 	exit(mainX(argc, argv, env));
+}
+#endif
+
+#ifndef CRT_TGOT_RELOC_SUPPRESS
+void
+__libc_init_tgot(void *tgot, const void *init, size_t size, void *tls)
+{
+	process_tgot_relocs(tgot, (Elf_Addr)init, tls);
 }
 #endif
