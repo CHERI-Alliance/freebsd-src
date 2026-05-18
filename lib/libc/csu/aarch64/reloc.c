@@ -1,6 +1,7 @@
 /*-
  * Copyright (c) 2019 Leandro Lupori
  * Copyright (c) 2021 The FreeBSD Foundation
+ * Copyright (c) 2022 Jessica Clarke
  *
  * Portions of this software were developed by Andrew Turner
  * under sponsorship from the FreeBSD Foundation.
@@ -27,18 +28,25 @@
 #include <sys/cdefs.h>
 #include <machine/ifunc.h>
 
-static __ifunc_arg_t ifunc_arg;
+#ifdef __CHERI__
+#include <stdbool.h>
+
+static bool use_code_bounds;
+#endif
+
+static __ifunc_arg_t ifunc_arg = {
+	._size = sizeof(ifunc_arg),
+};
 
 static void
 ifunc_init(const Elf_Auxinfo *aux)
 {
-	ifunc_arg._size = sizeof(ifunc_arg);
-	ifunc_arg._hwcap = 0;
-	ifunc_arg._hwcap2 = 0;
-	ifunc_arg._hwcap3 = 0;
-	ifunc_arg._hwcap4 = 0;
+#ifdef __CHERI__
+	const Elf_Phdr *phdr;
+	long phnum;
+#endif
 
-	for (;  aux->a_type != AT_NULL; aux++) {
+	for (; aux->a_type != AT_NULL; aux++) {
 		switch (aux->a_type) {
 		case AT_HWCAP:
 			ifunc_arg._hwcap = aux->a_un.a_val | _IFUNC_ARG_HWCAP;
@@ -52,10 +60,151 @@ ifunc_init(const Elf_Auxinfo *aux)
 		case AT_HWCAP4:
 			ifunc_arg._hwcap4 = aux->a_un.a_val;
 			break;
+#ifdef __CHERI__
+		case AT_PHDR:
+			phdr = aux->a_un.a_ptr;
+			break;
+		case AT_PHNUM:
+			phnum = aux->a_un.a_val;
+			break;
+#endif
 		}
+	}
+#ifdef __CHERI__
+	for (const Elf_Phdr *ph = phdr; ph < phdr + phnum; ph++) {
+		if (ph->p_type == PT_CHERI_PCC) {
+			use_code_bounds = true;
+			break;
+		}
+	}
+#endif
+}
+
+#ifdef __CHERI__
+#include <cheri/cherireg.h>
+#include <cheriintrin.h>
+
+#include <stddef.h>
+
+/*
+ * Fragments consist of a 64-bit address followed by a 56-bit length and an
+ * 8-bit permission field.
+ */
+static uintptr_t
+init_cap_from_fragment(const Elf_Addr *fragment, void *data_cap,
+    const void *text_rodata_cap, Elf_Addr base_addr,
+    Elf_Size addend, bool use_code_bounds)
+{
+	uintptr_t cap;
+	Elf_Addr address, len;
+	uint8_t perms;
+
+	address = fragment[0];
+	len = fragment[1] & ((1UL << (8 * sizeof(*fragment) - 8)) - 1);
+	perms = fragment[1] >> (8 * sizeof(*fragment) - 8);
+
+	cap = perms == MORELLO_FRAG_EXECUTABLE ?
+	    (uintptr_t)text_rodata_cap : (uintptr_t)data_cap;
+	cap = cheri_address_set(cap, base_addr + address);
+	if (perms != MORELLO_FRAG_EXECUTABLE || use_code_bounds)
+		cap = cheri_bounds_set(cap, len);
+	cap = cheri_perms_clear(cap, CHERI_PERM_SW_VMEM);
+
+	if (perms == MORELLO_FRAG_EXECUTABLE || perms == MORELLO_FRAG_RODATA) {
+		cap = cheri_perms_clear(cap, CHERI_PERM_SEAL |
+		    CHERI_PERM_STORE | CHERI_PERM_STORE_CAP |
+		    CHERI_PERM_STORE_LOCAL_CAP);
+	}
+	if (perms == MORELLO_FRAG_RWDATA || perms == MORELLO_FRAG_RODATA) {
+		cap = cheri_perms_clear(cap, CHERI_PERM_SEAL |
+		    CHERI_PERM_EXECUTE);
+	}
+
+	cap += addend;
+
+	if (perms == MORELLO_FRAG_EXECUTABLE) {
+		cap = cheri_sentry_create(cap);
+	}
+
+	return (cap);
+}
+
+static void
+crt1_handle_rela(const Elf_Rela *r, void *data_cap, const void *code_cap)
+{
+	typedef uintptr_t (*ifunc_resolver_t)(
+	    uint64_t, const __ifunc_arg_t *, uint64_t, uint64_t,
+	    uint64_t, uint64_t, uint64_t, uint64_t);
+	uintptr_t *where, target, ptr;
+	Elf_Addr *fragment;
+
+	switch (ELF_R_TYPE(r->r_info)) {
+	case R_MORELLO_IRELATIVE:
+		where = (uintptr_t *)((uintptr_t)data_cap +
+		    (r->r_offset - (ptraddr_t)data_cap));
+		fragment = (Elf_Addr *)where;
+		/*
+		 * XXX: See libexec/rtld-elf/aarch64/reloc.c. Unlike there we
+		 * can ignore the ET_DYN case.
+		 */
+		if ((Elf_Ssize)fragment[0] == r->r_addend)
+			ptr = (uintptr_t)code_cap +
+			    (r->r_addend - (ptraddr_t)code_cap);
+		else
+			ptr = init_cap_from_fragment(fragment, data_cap,
+			    code_cap, 0, r->r_addend, use_code_bounds);
+		target = ((ifunc_resolver_t)ptr)(ifunc_arg._hwcap, &ifunc_arg,
+		    0, 0, 0, 0, 0, 0);
+		*where = target;
+		break;
 	}
 }
 
+static void
+crt1_handle_tgot_rela(const Elf_Rela *r, void *tgot, Elf_Addr init, void *tls)
+{
+	uintptr_t *where;
+	Elf_Addr *fragment;
+
+	switch (ELF_R_TYPE(r->r_info)) {
+	case R_MORELLO_TLS_TGOT_SLOT:
+		where = (uintptr_t *)((uintptr_t)tgot +
+		    (r->r_offset - init));
+		fragment = (Elf_Addr *)where;
+		*where = init_cap_from_fragment(fragment, tls,
+		    NULL, (ptraddr_t)tls, 0, true);
+		break;
+	}
+}
+
+#ifdef TLS_TGOT_COMPAT
+extern const Elf_Rela __rela_dyn_start[] __weak_symbol __hidden;
+extern const Elf_Rela __rela_dyn_end[] __weak_symbol __hidden;
+
+/*
+ * Statically-linked TGOT binaries normally have their Initial-Exec GOT entries
+ * filled in by the static linker (and in fact should never even use
+ * Initial-Exec), but with the mixed ABI we force Initial-Exec with dynamic
+ * relocations so that the static TLS block can remain next to the TCB for ABI
+ * compatibility. Those relocations are deferred until _init_tls, which calls
+ * here to apply them.
+ */
+void
+__libc_init_got_tgot(void *data_cap, ptrdiff_t tcbtgotoff)
+{
+	const Elf_Rela *r;
+	uintptr_t *where;
+
+	for (r = &__rela_dyn_start[0]; r < &__rela_dyn_end[0]; r++) {
+		if (ELF_R_TYPE(r->r_info) != R_MORELLO_TLS_TGOTREL64)
+			continue;
+		where = (uintptr_t *)((uintptr_t)data_cap +
+		    (r->r_offset - (ptraddr_t)data_cap));
+		*where = tcbtgotoff + r->r_addend;
+	}
+}
+#endif
+#else
 static void
 crt1_handle_rela(const Elf_Rela *r)
 {
@@ -68,8 +217,10 @@ crt1_handle_rela(const Elf_Rela *r)
 	case R_AARCH64_IRELATIVE:
 		ptr = (Elf_Addr *)r->r_addend;
 		where = (Elf_Addr *)r->r_offset;
-		target = ((ifunc_resolver_t)ptr)(ifunc_arg._hwcap, &ifunc_arg, 0, 0, 0, 0, 0, 0);
+		target = ((ifunc_resolver_t)ptr)(ifunc_arg._hwcap, &ifunc_arg,
+		    0, 0, 0, 0, 0, 0);
 		*where = target;
 		break;
 	}
 }
+#endif
