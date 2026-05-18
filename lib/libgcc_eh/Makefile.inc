@@ -1,6 +1,7 @@
-COMPILERRTDIR=	${SRCTOP}/contrib/llvm-project/compiler-rt
-UNWINDINCDIR=	${SRCTOP}/contrib/llvm-project/libunwind/include
-UNWINDSRCDIR=	${SRCTOP}/contrib/llvm-project/libunwind/src
+LIBUNWIND_VERSION=	17
+COMPILERRTDIR=	${SRCTOP}/contrib/subrepo-cheri-compiler-rt
+UNWINDINCDIR=	${SRCTOP}/contrib/subrepo-cheri-libunwind/include
+UNWINDSRCDIR=	${SRCTOP}/contrib/subrepo-cheri-libunwind/src
 
 STATIC_CFLAGS+=${PICFLAG} -fvisibility=hidden -DVISIBILITY_HIDDEN
 
@@ -16,8 +17,10 @@ SRCS_EXC+=	UnwindRegistersSave.S
 SRCS_EXC+=	libunwind.cpp
 
 SRCS+=		${SRCS_EXC}
+.if ${LIBUNWIND_VERSION} >= 18
 .if ${MACHINE} == "amd64" || ${MACHINE} == "i386" || ${MACHINE} == "powerpc"
 CFLAGS.UnwindLevel1-gcc-ext.c+=	-D_LIBUNWIND_SUPPORT_FRAME_APIS
+.endif
 .endif
 .for file in ${SRCS_EXC:M*.c}
 CFLAGS.${file}+=	-fno-exceptions -funwind-tables
