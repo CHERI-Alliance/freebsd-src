@@ -31,12 +31,12 @@
 ENTRY(__sys_vfork)
 	WEAK_REFERENCE(__sys_vfork, vfork)
 	WEAK_REFERENCE(__sys_vfork, _vfork)
-	mov	x2, lr
+	mov	PTR(2), PTRN(lr)
 	_SYSCALL(vfork)
 	b.cs	cerror
 	sub	x1, x1, #1
 	and	x0, x0, x1
-	mov	lr, x2
+	mov	PTRN(lr), PTR(2)
 	ret
 END(__sys_vfork)
 
