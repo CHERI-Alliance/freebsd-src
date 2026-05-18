@@ -34,8 +34,9 @@
 
 #ifndef _LIBC_PRIVATE_H_
 #define _LIBC_PRIVATE_H_
-#include <sys/_types.h>
-#include <sys/_pthreadtypes.h>
+#include <sys/types.h>
+
+#include <machine/tls.h>
 
 #include <libsys.h>
 
@@ -269,16 +270,25 @@ enum {
 int _yp_check(char **);
 #endif
 
+#ifdef __CHERI__
+void __libc_start1(int, char *[], char *[],
+    void (*)(void), int (*)(int, char *[], char *[]), void *,
+    const void *) __dead2;
+#else
 void __libc_start1(int, char *[], char *[],
     void (*)(void), int (*)(int, char *[], char *[])) __dead2;
 void __libc_start1_gcrt(int, char *[], char *[],
     void (*)(void), int (*)(int, char *[], char *[]),
     int *, int *) __dead2;
+#endif
 
 /*
  * Initialise TLS for static programs
  */
 void _init_tls(void);
+#ifdef TLS_TGOT
+void __libc_init_tgot(void *tgot, const void *init, __size_t size, void *tls);
+#endif
 
 /*
  * Provides pthread_once()-like functionality for both single-threaded
