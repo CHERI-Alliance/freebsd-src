@@ -90,7 +90,9 @@ finalizer(void)
 		if ((uintptr_t)fn != 0 && (uintptr_t)fn != 1)
 			(fn)();
 	}
+#ifndef __CHERI__
 	_fini();
+#endif
 }
 #endif
 
@@ -112,7 +114,9 @@ handle_static_init(int argc, char **argv, char **env)
 		if ((uintptr_t)fn != 0 && (uintptr_t)fn != 1)
 			fn(argc, argv, env);
 	}
+#ifndef __CHERI__
 	_init();
+#endif
 	array_size = __init_array_end - __init_array_start;
 	for (n = 0; n < array_size; n++) {
 		fn = __init_array_start[n];
@@ -180,6 +184,7 @@ __libc_start1(int argc, char *argv[], char *env[], void (*cleanup)(void),
 	exit(mainX(argc, argv, env));
 }
 
+#ifndef __CHERI__
 /* XXXKIB _mcleanup and monstartup defs */
 extern void _mcleanup(void);
 extern void monstartup(void *, void *);
@@ -205,3 +210,4 @@ __libc_start1_gcrt(int argc, char *argv[], char *env[],
 	errno = 0;
 	exit(mainX(argc, argv, env));
 }
+#endif
