@@ -2,7 +2,11 @@
 
 CRTARCH=	${MACHINE_CPUARCH:C/amd64/x86_64/:C/powerpc/ppc/}
 
+.if ${MACHINE_ABI:Mpurecap}
+CRTSRC=		${SRCTOP}/contrib/subrepo-cheri-compiler-rt/lib/builtins
+.else
 CRTSRC=		${SRCTOP}/contrib/llvm-project/compiler-rt/lib/builtins
+.endif
 
 .if ${MACHINE_ARCH} == "powerpc64le"
 # Long double is IEEE binary128.  Search the generic builtins first so the
@@ -165,7 +169,7 @@ SRCF+=		trunctfxf2
 .endif
 
 # __cpu_model support, only used on aarch64 and x86
-.if ${MACHINE_CPUARCH} == "aarch64"
+.if ${MACHINE_CPUARCH} == "aarch64" && !${MACHINE_ABI:Mpurecap}
 SRCS+=		cpu_model/aarch64.c
 .elif ${MACHINE_CPUARCH} == "amd64" || ${MACHINE_CPUARCH} == "i386"
 SRCS+=		cpu_model/x86.c
@@ -317,7 +321,9 @@ CFLAGS+=	-DCOMPILER_RT_HAS_FLOAT16
     ((${COMPILER_TYPE} == "gcc" && ${COMPILER_VERSION} >= 130000) && \
      (defined(CRT_COMMON_F16_ARCH)))
 CFLAGS+=	-DCOMPILER_RT_HAS_BFLOAT16
+.if !${MACHINE_ABI:Mpurecap}
 SRCF+=		extendbfsf2
+.endif
 SRCF+=		truncdfbf2
 SRCF+=		truncsfbf2
 .endif
