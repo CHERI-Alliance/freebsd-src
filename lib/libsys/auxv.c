@@ -46,15 +46,24 @@ void *__elf_aux_vector;
 #ifndef PIC
 static pthread_once_t aux_vector_once = PTHREAD_ONCE_INIT;
 
+#ifdef __CHERI__
+extern Elf_Auxinfo *__auxargs;	/* This will be NULL when dynamically linked */
+#pragma weak __auxargs
+#endif
+
 static void
 init_aux_vector_once(void)
 {
+#ifdef __CHERI__
+	__elf_aux_vector = __auxargs;
+#else
 	Elf_Addr *sp;
 
 	sp = (Elf_Addr *)environ;
 	while (*sp++ != 0)
 		;
 	__elf_aux_vector = (Elf_Auxinfo *)sp;
+#endif
 }
 
 void
