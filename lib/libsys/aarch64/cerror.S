@@ -29,14 +29,14 @@
 
 ENTRY(cerror)
 	.hidden	cerror
-	sub	sp, sp, #16
-	stp	x0, lr, [sp]
+	sub	PTRN(sp), PTRN(sp), #(PTR_WIDTH * 2)
+	stp	PTR(0), PTRN(lr), [PTRN(sp)]
 	bl	_C_LABEL(__error)
-	ldp	x1, lr, [sp]
-	str	w1, [x0]
+	ldp	PTR(1), PTRN(lr), [PTRN(sp)]
+	str	w1, [PTR(0)]
 	movn	x0, #0
 	movn	x1, #0
-	add	sp, sp, #16
+	add	PTRN(sp), PTRN(sp), #(PTR_WIDTH * 2)
 	ret
 END(cerror)
 
