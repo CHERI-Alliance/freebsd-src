@@ -61,3 +61,8 @@ ENTRY(__sys_##name);						\
 	WEAK_REFERENCE(__sys_##name, _##name);			\
 	_SYSCALL_BODY(name);					\
 END(__sys_##name)
+
+#define	NO_UNDERSCORE(name)					\
+ENTRY(__sys_##name);						\
+	_SYSCALL_BODY(name);					\
+END(__sys_##name)
