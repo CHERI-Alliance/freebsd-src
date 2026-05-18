@@ -36,6 +36,64 @@ ifunc_init(const Elf_Auxinfo *aux)
 	}
 }
 
+#ifdef __CHERI__
+#include <cheriintrin.h>
+
+#include <cheri_init_globals.h>
+
+static void
+crt1_handle_rela(const Elf_Rela *r, void *data_cap, const void *code_cap)
+{
+}
+
+static void
+crt1_handle_capreloc(const struct capreloc *r, void *data_cap,
+    const void *code_cap)
+{
+	typedef uintptr_t (*ifunc_resolver_t)(
+	    unsigned long, unsigned long, unsigned long, unsigned long,
+	    unsigned long, unsigned long, unsigned long, unsigned long);
+	uintptr_t *where, target, ptr;
+
+	if (r->permissions == (function_reloc_flag | indirect_reloc_flag)) {
+		where = (uintptr_t *)((uintptr_t)data_cap +
+		    (r->capability_location - (ptraddr_t)data_cap));
+		ptr = (uintptr_t)cheri_perms_and(code_cap,
+		    function_pointer_permissions_mask);
+		ptr = cheri_address_set(ptr, r->object);
+		if (r->size != 0)
+			ptr = cheri_bounds_set(ptr, r->size);
+		ptr += r->offset;
+		ptr = cheri_sentry_create(ptr);
+		target = ((ifunc_resolver_t)ptr)(elf_hwcap,
+		    0, 0, 0, 0, 0, 0, 0);
+		*where = target;
+	}
+}
+
+static void
+crt1_handle_tgot_capreloc(const struct capreloc *r, void *tgot, Elf_Addr init,
+    void *tls)
+{
+	uintptr_t *where, val;
+
+	where = (uintptr_t *)((uintptr_t)tgot +
+	    (r->capability_location - init));
+
+	val = (uintptr_t)tls;
+	if (r->permissions == constant_reloc_flag)
+		val = cheri_perms_and(val, constant_pointer_permissions_mask);
+	else if (r->permissions == 0)
+		val = cheri_perms_and(val, global_pointer_permissions_mask);
+	else
+		__builtin_trap();
+
+	val = cheri_address_set(val, r->object + (ptraddr_t)tls);
+	val = cheri_bounds_set(val, r->size);
+	val += r->offset;
+	*where = val;
+}
+#else
 static void
 crt1_handle_rela(const Elf_Rela *r)
 {
@@ -54,3 +112,4 @@ crt1_handle_rela(const Elf_Rela *r)
 		break;
 	}
 }
+#endif
