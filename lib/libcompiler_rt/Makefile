@@ -9,7 +9,11 @@ WARNS?=		2
 CFLAGS+=	${PICFLAG}
 CFLAGS+=	-fvisibility=hidden
 CFLAGS+=	-DVISIBILITY_HIDDEN
+.if ${MACHINE_ABI:Mpurecap}
+CFLAGS+=	-I${SRCTOP}/contrib/subrepo-cheri-libunwind/include
+.else
 CFLAGS+=	-I${SRCTOP}/contrib/llvm-project/libunwind/include
+.endif
 
 # gcc has incompatible internal declarations for __divtc3 and __multc3, but has
 # no option to silence its warning, so make warnings non-fatal.
@@ -18,7 +22,7 @@ MK_WERROR.gcc=	no
 .include "Makefile.inc"
 
 # Out-of-line LSE atomics helpers for aarch64
-.if ${MACHINE_CPUARCH} == "aarch64"
+.if ${MACHINE_CPUARCH} == "aarch64" && !${MACHINE_ABI:Mpurecap}
 . for pat in cas swp ldadd ldclr ldeor ldset
 .  for size in 1 2 4 8 16
 .   for model in 1 2 3 4 5
