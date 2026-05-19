@@ -76,7 +76,6 @@ setproctitle_internal(const char *fmt, va_list ap)
 	int nargc;
 	int i;
 	size_t len;
-	unsigned long ul_ps_strings;
 
 	if (buf == NULL) {
 		buf = malloc(SPT_BUFSIZE);
@@ -121,14 +120,6 @@ setproctitle_internal(const char *fmt, va_list ap)
 	if (ps_strings == NULL)
 		(void)_elf_aux_info(AT_PS_STRINGS, &ps_strings,
 		    sizeof(ps_strings));
-
-	if (ps_strings == NULL) {
-		len = sizeof(ul_ps_strings);
-		if (sysctlbyname("kern.ps_strings", &ul_ps_strings, &len, NULL,
-		    0) == -1)
-			return (NULL);
-		ps_strings = (struct ps_strings *)ul_ps_strings;
-	}
 
 	if (ps_strings == NULL)
 		return (NULL);
