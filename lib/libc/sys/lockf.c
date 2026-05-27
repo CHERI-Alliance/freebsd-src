@@ -62,9 +62,7 @@ lockf(int filedes, int function, off_t size)
 		break;
 	case F_TEST:
 		fl.l_type = F_WRLCK;
-		if (((int (*)(int, int, ...))
-		    *(__libc_interposing_slot(INTERPOS_fcntl)))
-		    (filedes, F_GETLK, &fl) == -1)
+		if (INTERPOS_SYS(fcntl, filedes, F_GETLK, (intptr_t)&fl) == -1)
 			return (-1);
 		if (fl.l_type == F_UNLCK || (fl.l_sysid == 0 &&
 		    fl.l_pid == getpid()))
