@@ -52,6 +52,11 @@
 #include "floatio.h"
 #include "gdtoa.h"
 
+#ifdef __CHERI__
+#include <cheri/cheric.h> /* for cheri_top_get() */
+#include <cheriintrin.h>
+#endif
+
 #define	DEFPREC		6
 
 static int exponent(CHAR *, int, CHAR);
@@ -278,6 +283,164 @@ __ujtoa(uintmax_t val, CHAR *endp, int base, int octzero, const char *xdigs)
 	return (cp);
 }
 
+#ifdef __CHERI__
+/**
+ * Print the pointer details.
+ * <address> [<permissions>,<base>-<top>] <attr>
+ *
+ * For null-derived capabilities, only the address is displayed.
+ *
+ * The address, base, and top are all printed in hex and honor
+ * requested precision by padding with leading zeroes.
+ *
+ * The permissions are zero or more of 'r' (LOAD), 'w' (STORE),
+ * 'x' (EXECUTE), 'R' (LOAD_CAP), and 'W' (STORE_CAP).
+ *
+ * The attributes are a comma-separated list of "invalid", "sentry",
+ * "sealed" (sealed but not a sentry), or "capmode" enclosed in ()'s.
+ * If no attributes are true, the ()'s are omitted.
+ */
+
+static CHAR *
+__cheri_ptr_alt(void *pointer, CHAR *cp, const char *xdigs,
+    int precision)
+{
+	uintmax_t ujval;
+	CHAR *scp;
+	int padding, size;
+#ifdef CHERI_FLAGS_CAP_MODE
+	bool capmode;
+#endif
+	bool have_attributes, tagged;
+
+	/* Skip attributes if NULL-derived. */
+	if (cheri_is_null_derived(pointer))
+		goto address;
+
+	tagged = cheri_tag_get(pointer);
+	have_attributes = !tagged;
+	if (cheri_type_get(pointer) != CHERI_OTYPE_UNSEALED)
+		have_attributes = true;
+
+#ifdef CHERI_FLAGS_CAP_MODE
+	capmode = false;
+	if ((cheri_perms_get(pointer) & CHERI_PERM_EXECUTE) != 0 &&
+	    cheri_flags_get(pointer) == CHERI_FLAGS_CAP_MODE) {
+		capmode = true;
+		have_attributes = true;
+	}
+#endif
+
+	/* attributes */
+	if (have_attributes) {
+		*--cp = ')';
+
+#define	PREPEND_ATTR(cp, str) do {					\
+	(cp) -= strlen((str));						\
+	memcpy((cp), (str), strlen((str)));				\
+	*--(cp) = ',';							\
+} while (0)
+
+#ifdef __riscv
+		if (capmode)
+			PREPEND_ATTR(cp, "capmode");
+#endif
+		switch (cheri_type_get(pointer)) {
+		case CHERI_OTYPE_UNSEALED:
+			break;
+		case CHERI_OTYPE_SENTRY:
+			PREPEND_ATTR(cp, "sentry");
+			break;
+		default:
+			PREPEND_ATTR(cp, "sealed");
+			break;
+		}
+		if (!tagged)
+			PREPEND_ATTR(cp, "invalid");
+
+#undef PREPEND_ATTR
+
+		/* Replace first ',' with '('. */
+		*cp = '(';
+
+		*--cp = ' ';
+	}
+
+	*--cp = ']';
+
+	/* top */
+	ujval = cheri_top_get(pointer);
+	scp = cp;
+	cp = __ujtoa(ujval, cp, 16, 0, xdigs);
+	size = scp - cp;
+	if (precision > size) {
+		padding = precision - size;
+		while (padding-- > 0)
+			*--cp = '0';
+	}
+	*--cp = 'x';
+	*--cp = '0';
+
+	*--cp = '-';
+
+	/* base */
+	ujval = cheri_base_get(pointer);
+	scp = cp;
+	cp = __ujtoa(ujval, cp, 16, 0, xdigs);
+	size = scp - cp;
+	if (precision > size) {
+		padding = precision - size;
+		while (padding-- > 0)
+			*--cp = '0';
+	}
+	*--cp = 'x';
+	*--cp = '0';
+
+	*--cp = ',';
+
+	/* permissions */
+	ujval = cheri_perms_get(pointer);
+#ifdef HAS_CHERI_PERM_LOAD_MUTABLE
+	if (ujval & CHERI_PERM_LOAD_MUTABLE)
+		*--cp = 'M';
+#endif
+#ifdef HAS_CHERI_PERM_LOAD_STORE_CAP
+	if (ujval & CHERI_PERM_STORE_CAP)
+		*--cp = 'W';
+	if (ujval & CHERI_PERM_LOAD_CAP)
+		*--cp = 'R';
+#endif
+#ifdef HAS_CHERI_PERM_CAP
+	if (ujval & CHERI_PERM_CAP)
+		*--cp = 'C';
+#endif
+	if (ujval & CHERI_PERM_EXECUTE)
+		*--cp = 'x';
+	if (ujval & CHERI_PERM_STORE)
+		*--cp = 'w';
+	if (ujval & CHERI_PERM_LOAD)
+		*--cp = 'r';
+
+	*--cp = '[';
+	*--cp = ' ';
+
+address:
+	/* address */
+	ujval = cheri_address_get(pointer);
+	scp = cp;
+	cp = __ujtoa(ujval, cp, 16, 0, xdigs);
+	size = scp - cp;
+	if (precision > size) {
+		padding = precision - size;
+		while (padding-- > 0)
+			*--cp = '0';
+	}
+	*--cp = 'x';
+	*--cp = '0';
+
+	return (cp);
+}
+#endif /* __CHERI__ */
 
 static int
 exponent(CHAR *p0, int exp, CHAR fmtch)
