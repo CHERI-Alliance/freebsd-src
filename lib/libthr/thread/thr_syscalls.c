@@ -655,7 +655,9 @@ __thr_interpose_libc(void)
 	SLOT(tcdrain);
 	SLOT(spinlock);
 	SLOT(spinunlock);
+#ifndef __CHERI__
 	SLOT(map_stacks_exec);
+#endif
 #undef SLOT
 
 #define	SLOT(name)					\

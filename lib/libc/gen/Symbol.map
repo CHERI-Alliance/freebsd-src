@@ -609,7 +609,9 @@ FBSDprivate_1.0 {
 
 	__libc_tcdrain;
 
+#ifndef __CHERI__
 	__pthread_map_stacks_exec;
+#endif
 	__fillcontextx;
 	__fillcontextx2;
 	__getcontextx_size;
