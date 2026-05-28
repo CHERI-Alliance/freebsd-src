@@ -265,11 +265,13 @@ overflow:
 	return;
 }
 
+#ifndef __CHERI__
 /*
  * Actual definition of mcount function.  Defined in <machine/profile.h>,
  * which is included by <sys/gmon.h>.
  */
 MCOUNT
+#endif
 
 #ifdef GUPROF
 void
