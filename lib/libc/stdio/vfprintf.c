@@ -47,6 +47,9 @@
 #include <sys/types.h>
 
 #include <ctype.h>
+#ifdef __CHERI__
+#include <cheriintrin.h>
+#endif
 #include <errno.h>
 #include <limits.h>
 #include <locale.h>
@@ -293,7 +296,18 @@ vfprintf(FILE * __restrict fp, const char * __restrict fmt0, va_list ap)
  * conversions, among other things.  We need enough space to
  * write a uintmax_t in binary.
  */
+#ifdef __CHERI__
+/* For CHERI we need enough space to print a capability dump:
+ * 0x0000007ffffecc10 [rwxRW,0x0000007ffffecc10-0x0000007ffffecc50] (invalid,sealed,capmode)
+ *
+ * The current maximum length is 89 chars but in case we decide to
+ * print more info in the future we just use 128 since we have enough
+ * stack space here anyway.
+*/
+#define BUF	128
+#else
 #define BUF	(sizeof(uintmax_t) * CHAR_BIT)
+#endif
 
 /*
  * Non-MT-safe version
@@ -359,6 +373,9 @@ __vfprintf(FILE *fp, locale_t locale, int serrno, const char *fmt0, va_list ap)
 	va_list orgap;          /* original argument pointer */
 	char *convbuf;		/* wide to multibyte conversion result */
 	int savserr;
+#ifdef __CHERI__
+	void *cap;
+#endif
 
 	static const char xdigs_lower[16] = "0123456789abcdef";
 	static const char xdigs_upper[16] = "0123456789ABCDEF";
@@ -871,7 +888,20 @@ fp_common:
 			 * defined manner.''
 			 *	-- ANSI X3J11
 			 */
+#ifdef __CHERI__
+			cap = GETARG(void *);
+			if (flags & ALT) {
+				cp = buf + BUF;
+				cp = __cheri_ptr_alt(cap, cp, xdigs_lower,
+				    prec);
+				size = buf + BUF - cp;
+				flags &= ~ZEROPAD;
+				break;
+			}
+			ujval = cheri_address_get(cap);
+#else
 			ujval = (uintmax_t)(uintptr_t)GETARG(void *);
+#endif
 			base = 16;
 			xdigs = xdigs_lower;
 			flags = flags | INTMAXT;
