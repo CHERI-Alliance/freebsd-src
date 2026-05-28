@@ -129,6 +129,7 @@ round_up(size_t size)
 	return (roundup2(size, _thr_page_size));
 }
 
+#ifndef __CHERI__
 void
 _thr_stack_fix_protection(struct pthread *thrd)
 {
@@ -175,6 +176,7 @@ __thr_map_stacks_exec(void)
 		_thr_stack_fix_protection(thrd);
 	THREAD_LIST_UNLOCK(curthread);
 }
+#endif	 /* !__CHERI__ */
 
 int
 _thr_stack_alloc(struct pthread_attr *attr)

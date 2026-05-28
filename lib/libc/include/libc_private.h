@@ -247,7 +247,9 @@ enum {
 	INTERPOS_kevent,
 	INTERPOS_wait6,
 	INTERPOS_ppoll,
+#ifndef __CHERI__
 	INTERPOS_map_stacks_exec,
+#endif
 	INTERPOS_fdatasync,
 	INTERPOS_clock_nanosleep,
 	INTERPOS__reserved0, /* was distribute_static_tls */
@@ -371,7 +373,9 @@ int _elf_aux_info(int aux, void *buf, int buflen);
 struct dl_phdr_info;
 int __elf_phdr_match_addr(struct dl_phdr_info *, void *);
 void __init_elf_aux_vector(void);
+#ifndef __CHERI__
 void __libc_map_stacks_exec(void);
+#endif
 
 void	_pthread_cancel_enter(int);
 void	_pthread_cancel_leave(int);
