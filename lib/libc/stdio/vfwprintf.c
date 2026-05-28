@@ -48,6 +48,9 @@
 #include <sys/types.h>
 
 #include <ctype.h>
+#ifdef __CHERI__
+#include <cheriintrin.h>
+#endif
 #include <errno.h>
 #include <limits.h>
 #include <locale.h>
@@ -371,7 +374,12 @@ vfwprintf(FILE * __restrict fp, const wchar_t * __restrict fmt0, va_list ap)
  * conversions, among other things.  We need enough space to
  * write a uintmax_t in binary.
  */
+#ifdef __CHERI__
+/* For CHERI we need enough space to print a capability dump */
+#define	BUF	128
+#else
 #define BUF	(sizeof(uintmax_t) * CHAR_BIT)
+#endif
 
 /*
  * Non-MT-safe version
@@ -433,6 +441,9 @@ __vfwprintf(FILE *fp, locale_t locale, const wchar_t *fmt0, va_list ap)
 	va_list orgap;		/* original argument pointer */
 	wchar_t *convbuf;	/* multibyte to wide conversion result */
 	int savserr;
+#if __has_feature(capabilities)
+	void *cap;
+#endif
 
 	static const char xdigs_lower[16] = "0123456789abcdef";
 	static const char xdigs_upper[16] = "0123456789ABCDEF";
@@ -926,7 +937,22 @@ fp_common:
 			 * defined manner.''
 			 *	-- ANSI X3J11
 			 */
+#ifdef __CHERI__
+			{
+				cap = GETARG(void *);
+				ujval = cheri_address_get(cap);
+			}
+			if (flags & ALT) {
+				cp = buf + BUF;
+				cp = __cheri_ptr_alt(cap, cp, xdigs_lower,
+				    prec);
+				size = buf + BUF - cp;
+				flags &= ~ZEROPAD;
+				break;
+			}
+#else
 			ujval = (uintmax_t)(uintptr_t)GETARG(void *);
+#endif
 			base = 16;
 			xdigs = xdigs_lower;
 			flags = flags | INTMAXT;
