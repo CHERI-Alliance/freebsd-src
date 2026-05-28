@@ -17,11 +17,9 @@ SRCS+= \
 	aio_write2.c \
 	alarm.c \
 	arc4random.c \
-	arc4random-compat.c \
 	arc4random_uniform.c \
 	assert.c \
 	basename.c \
-	basename_compat.c \
 	cap_sandboxed.c \
 	check_utility_compat.c \
 	clock.c \
@@ -34,10 +32,8 @@ SRCS+= \
 	ctermid.c \
 	daemon.c \
 	devname.c \
-	devname-compat11.c \
 	dirfd.c \
 	dirname.c \
-	dirname_compat.c \
 	disklabel.c \
 	dlfcn.c \
 	drand48.c \
@@ -61,11 +57,7 @@ SRCS+= \
 	fstab.c \
 	ftok.c \
 	fts.c \
-	fts-compat.c \
-	fts-compat11.c \
-	fts-compat15.c \
 	ftw.c \
-	ftw-compat11.c \
 	getbootfile.c \
 	getbsize.c \
 	getcap.c \
@@ -78,7 +70,6 @@ SRCS+= \
 	getloadavg.c \
 	getlogin.c \
 	getmntinfo.c \
-	getmntinfo-compat11.c \
 	getnetgrent.c \
 	getosreldate.c \
 	getpeereid.c \
@@ -89,7 +80,6 @@ SRCS+= \
 	getutxent.c \
 	getvfsbyname.c \
 	glob.c \
-	glob-compat11.c \
 	initgroups.c \
 	inotify.c \
 	isatty.c \
@@ -105,7 +95,6 @@ SRCS+= \
 	memfd_create.c \
 	mrand48.c \
 	nftw.c \
-	nftw-compat11.c \
 	nice.c \
 	nlist.c \
 	nrand48.c \
@@ -120,12 +109,10 @@ SRCS+= \
 	pw_scan.c \
 	raise.c \
 	readdir.c \
-	readdir-compat11.c \
 	readpassphrase.c \
 	rewinddir.c \
 	scandir.c \
 	scandir_b.c \
-	scandir-compat11.c \
 	sched_getaffinity.c \
 	sched_setaffinity.c \
 	seed48.c \
@@ -169,12 +156,32 @@ SRCS+= \
 	uexterr_set.c \
 	ulimit.c \
 	uname.c \
-	unvis-compat.c \
 	usleep.c \
 	utime.c \
 	utxdb.c \
 	valloc.c \
 	wordexp.c
+
+.if !${MACHINE_ABI:Mpurecap}
+# 4.4BSD compat
+SRCS+= \
+	fts-compat.c \
+	unvis-compat.c
+
+# FreeBSD 11 compat
+SRCS+= \
+	arc4random-compat.c \
+	basename_compat.c \
+	devname-compat11.c \
+	dirname_compat.c \
+	fts-compat11.c \
+	ftw-compat11.c \
+	getmntinfo-compat11.c \
+	glob-compat11.c \
+	nftw-compat11.c \
+	readdir-compat11.c \
+	scandir-compat11.c
+.endif
 
 .if ${COMPILER_FEATURES:Mblocks}
 CFLAGS.fts.c= -fblocks
