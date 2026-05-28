@@ -74,6 +74,7 @@
 #define	SIZET		0x2000	/* z: size_t */
 #define	SHORTSHORT	0x4000	/* hh: char */
 #define	UNSIGNED	0x8000	/* %[oupxX] conversions */
+#define	INTPTRT		0x20000	/* P: intptr_t */
 
 /*
  * Conversion types.
@@ -525,6 +526,9 @@ literal:
 			} else
 				flags |= LONG;
 			goto again;
+		case 'P':
+			flags |= INTPTRT;
+			goto again;
 		case 'q':
 			flags |= LONGLONG;	/* not quite */
 			goto again;
@@ -685,6 +689,8 @@ literal:
 				*va_arg(ap, long long *) = nread;
 			else if (flags & INTMAXT)
 				*va_arg(ap, intmax_t *) = nread;
+			else if (flags & INTPTRT)
+				*va_arg(ap, intptr_t *) = nread;
 			else if (flags & SIZET)
 				*va_arg(ap, size_t *) = nread;
 			else if (flags & PTRDIFFT)
@@ -800,6 +806,8 @@ literal:
 					*va_arg(ap, long long *) = res;
 				else if (flags & INTMAXT)
 					*va_arg(ap, intmax_t *) = res;
+				else if (flags & INTPTRT)
+					*va_arg(ap, intptr_t *) = res;
 				else if (flags & PTRDIFFT)
 					*va_arg(ap, ptrdiff_t *) = res;
 				else if (flags & SIZET)
