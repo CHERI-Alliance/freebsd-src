@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/ingydotnet/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/patperry/timsort.git
+	branch = master
+	commit = 9fc97ae0857e4fbce06c1b6b26b48e427e307895
+	parent = fd231310d001fc9c3d4ce98e23c264ebc448aab2
+	method = merge
+	cmdver = 0.4.6
