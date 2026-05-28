@@ -64,6 +64,9 @@ const char *const sys_signame[NSIG] = {
 	[SIGINFO] =	"INFO",
 	[SIGUSR1] =	"USR1",
 	[SIGUSR2] =	"USR2",
+	[SIGTHR] =	"THR",
+	[SIGLIBRT] =	"LIBRT",
+	[SIGPROT] =	"PROT",
 };
 
 const char *const sys_siglist[NSIG] = {
@@ -99,5 +102,8 @@ const char *const sys_siglist[NSIG] = {
 	[SIGINFO] =	"Information request",
 	[SIGUSR1] =	"User defined signal 1",
 	[SIGUSR2] =	"User defined signal 2",
+	[SIGTHR] =	"Reserved by thread library",
+	[SIGLIBRT] =	"Reserved by real-time library",
+	[SIGPROT] =	"In-address space security exception",
 };
 const int sys_nsig = sizeof(sys_siglist) / sizeof(sys_siglist[0]);
