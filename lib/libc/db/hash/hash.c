@@ -850,7 +850,7 @@ __expand_table(HTAB *hashp)
 static void *
 hash_realloc(SEGMENT **p_ptr, int oldsize, int newsize)
 {
-	void *p;
+	SEGMENT *p;
 
 	if ( (p = malloc(newsize)) ) {
 		memmove(p, *p_ptr, oldsize);
