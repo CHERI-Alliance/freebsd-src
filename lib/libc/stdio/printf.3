@@ -205,7 +205,7 @@ Zero or more of the following flags:
 The value should be converted to an
 .Dq alternate form .
 For
-.Cm c , d , i , n , p , s ,
+.Cm c , d , i , n , s ,
 and
 .Cm u
 conversions, this option has no effect.
@@ -224,6 +224,13 @@ For
 .Cm o
 conversions, the precision of the number is increased to force the first
 character of the output string to a zero.
+For
+.Cm p
+conversions, it has no effect on conventional architectures where pointers are
+integers.
+On architectures with more complex pointer representations,
+.Cm #
+may cause a more detailed, architure specific format to be printed.
 For
 .Cm x
 and
