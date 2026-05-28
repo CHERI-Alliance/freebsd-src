@@ -30,7 +30,7 @@ CFLAGS+=-DNO__SCCSID -DNO__RCSID
 
 LIB=c
 SHLIB_MAJOR= 7
-.if ${MK_SSP} != "no" && \
+.if ${MK_SSP} != "no" && !${MACHINE_ABI:Mpurecap} && \
     (${LIBC_ARCH} == "i386" || ${LIBC_ARCH:Mpowerpc*} != "")
 SHLIB_LDSCRIPT=libc.ldscript
 .else
@@ -72,7 +72,7 @@ LDFLAGS+=	-Wl,--rpath=/usr/lib${COMPAT_libcompat}
 
 LDFLAGS+=-Wl,--auxiliary,libsys.so.7
 
-.if ${MK_SSP} != "no" && \
+.if ${MK_SSP} != "no" && !${MACHINE_ABI:Mpurecap} && \
     (${LIBC_ARCH} == "i386" || ${LIBC_ARCH:Mpowerpc*} != "")
 LIBADD+=	ssp_nonshared
 .endif
@@ -127,7 +127,9 @@ NOASM=
 .include "${LIBC_SRCTOP}/stdtime/Makefile.inc"
 .include "${LIBC_SRCTOP}/string/Makefile.inc"
 .include "${LIBC_SRCTOP}/sys/Makefile.inc"
+.if ${MK_SSP} != "no" && !${MACHINE_ABI:Mpurecap}
 .include "${LIBC_SRCTOP}/secure/Makefile.inc"
+.endif
 .include "${LIBC_SRCTOP}/rpc/Makefile.inc"
 .include "${LIBC_SRCTOP}/uuid/Makefile.inc"
 .include "${LIBC_SRCTOP}/xdr/Makefile.inc"
