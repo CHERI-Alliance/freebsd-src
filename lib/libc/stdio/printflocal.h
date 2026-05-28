@@ -50,6 +50,7 @@
 #define	INTMAXT		0x1000		/* intmax_t */
 #define	CHARINT		0x2000		/* print char using int format */
 #define	FASTINT		0x4000		/* int_fastN_t */
+#define	INTPTRT		0x8000		/* intptr_t */
 
 /*
  * Macros for converting digits to letters and vice versa
@@ -72,6 +73,8 @@ union arg {
 	size_t	sizearg;
 	intmax_t intmaxarg;
 	uintmax_t uintmaxarg;
+	intptr_t intptrarg;
+	uintptr_t uintptrarg;
 	void	*pvoidarg;
 	char	*pchararg;
 	signed char *pschararg;
@@ -82,6 +85,7 @@ union arg {
 	ptrdiff_t *pptrdiffarg;
 	ssize_t	*pssizearg;
 	intmax_t *pintmaxarg;
+	intptr_t *pintptrarg;
 	double	doublearg;
 	long double longdoublearg;
 	wint_t	wintarg;
