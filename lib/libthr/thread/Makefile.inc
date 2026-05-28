@@ -42,7 +42,6 @@ SRCS+= \
 	thr_rwlock.c \
 	thr_rwlockattr.c \
 	thr_self.c \
-	thr_sem.c \
 	thr_setprio.c \
 	thr_setschedparam.c \
 	thr_sig.c \
@@ -58,3 +57,9 @@ SRCS+= \
 	thr_symbols.c \
 	thr_umtx.c \
 	thr_yield.c
+
+.if ${MACHINE_ABI:Npurecap}
+# FreeBSD 10 compat
+SRCS+= \
+	thr_sem.c
+.endif

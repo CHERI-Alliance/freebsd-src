@@ -596,6 +596,7 @@ FBSDprivate_1.0 {
 
 	__libc_interposing_slot;
 
+#ifndef __CHERI__
 	_libc_sem_init_compat;
 	_libc_sem_destroy_compat;
 	_libc_sem_open_compat;
@@ -606,6 +607,7 @@ FBSDprivate_1.0 {
 	_libc_sem_timedwait_compat;
 	_libc_sem_post_compat;
 	_libc_sem_getvalue_compat;
+#endif
 
 	__libc_tcdrain;
 
