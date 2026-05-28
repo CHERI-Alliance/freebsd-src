@@ -362,7 +362,8 @@ usem_wait(struct _usem2 *sem, clockid_t clock_id, int flags,
 		tm_p = &tms;
 		tm_size = sizeof(tms);
 	}
-	retval = _umtx_op(sem, UMTX_OP_SEM2_WAIT, 0, (void *)tm_size, tm_p);
+	retval = _umtx_op(sem, UMTX_OP_SEM2_WAIT, 0,
+	    (void *)(uintptr_t)tm_size, tm_p);
 	if (retval == -1 && errno == EINTR && (flags & TIMER_ABSTIME) == 0 &&
 	    rqtp != NULL && rmtp != NULL) {
 		*rmtp = tms.remain;
