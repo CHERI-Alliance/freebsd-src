@@ -40,7 +40,9 @@
 
 #include "libc_private.h"
 
+#ifndef __CHERI__
 void __pthread_map_stacks_exec(void);
+#endif
 
 int
 __elf_phdr_match_addr(struct dl_phdr_info *phdr_info, void *addr)
@@ -73,6 +75,7 @@ __elf_phdr_match_addr(struct dl_phdr_info *phdr_info, void *addr)
 	return (i != phdr_info->dlpi_phnum);
 }
 
+#ifndef __CHERI__
 void
 __libc_map_stacks_exec(void)
 {
@@ -104,3 +107,4 @@ __pthread_map_stacks_exec(void)
 
 	((void (*)(void))__libc_interposing[INTERPOS_map_stacks_exec])();
 }
+#endif
