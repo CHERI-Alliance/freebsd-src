@@ -1,0 +1,4 @@
+enable name caching in the
+.Pa nsswitch
+subsystem and build the generic caching daemon,
+.Xr nscd 8 .
