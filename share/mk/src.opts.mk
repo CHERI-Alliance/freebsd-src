@@ -322,6 +322,12 @@ __DEFAULT_YES_OPTIONS+=LIB64
 BROKEN_OPTIONS+=LIB64
 .endif
 
+.if ${__T:Maarch64*c*} || ${__T:Mriscv*c*}
+# nscd(8) caching depends on marshaling pointers to the daemon and back
+# and can't work without a rewrite.
+BROKEN_OPTIONS+=NS_CACHING
+.endif
+
 # EFI doesn't exist on powerpc (well, officially) and doesn't work on i386
 .if ${__T:Mpowerpc*} || ${__T} == "i386"
 BROKEN_OPTIONS+=EFI
