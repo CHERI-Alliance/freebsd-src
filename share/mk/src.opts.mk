@@ -326,6 +326,8 @@ BROKEN_OPTIONS+=LIB64
 # nscd(8) caching depends on marshaling pointers to the daemon and back
 # and can't work without a rewrite.
 BROKEN_OPTIONS+=NS_CACHING
+# Not ported
+BROKEN_OPTIONS+=OFED
 .endif
 
 # EFI doesn't exist on powerpc (well, officially) and doesn't work on i386
