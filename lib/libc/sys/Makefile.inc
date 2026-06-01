@@ -16,7 +16,6 @@ SRCS+=	${INTERPOSED:S/$/.c/}
 # Pseudo system calls implemented atop other interfaces.
 SRCS+= \
 	POSIX2x_Fork.c \
-	brk.c \
 	closefrom.c \
 	compat-stub.c \
 	creat.c \
@@ -36,3 +35,7 @@ SRCS+= \
 	wait3.c \
 	waitid.c \
 	waitpid.c
+
+.if !${MACHINE_ABI:Mpurecap}
+SRCS+=	brk.c
+.endif
