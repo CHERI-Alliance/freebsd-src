@@ -529,7 +529,7 @@ Do not build
 .Xr cxgbetool 8
 .Pp
 This is a default setting on
-arm/armv7, riscv/riscv64 and riscv/riscv64c.
+arm/armv7, arm64/aarch64c, riscv/riscv64 and riscv/riscv64c.
 .It Va WITH_CXGBETOOL
 Build
 .Xr cxgbetool 8
@@ -698,7 +698,7 @@ and
 .Xr efivar 8 .
 .Pp
 This is a default setting on
-amd64/amd64, arm/armv7, arm64/aarch64, riscv/riscv64 and riscv/riscv64c.
+amd64/amd64, arm/armv7, arm64/aarch64, arm64/aarch64c, riscv/riscv64 and riscv/riscv64c.
 .It Va WITHOUT_ELFTOOLCHAIN_BOOTSTRAP
 Do not build ELF Tool Chain tools
 (addr2line, nm, size, strings and strip)
@@ -720,7 +720,7 @@ Build Flattened Device Tree support as part of the base system.
 This includes the device tree compiler (dtc) and libfdt support library.
 .Pp
 This is a default setting on
-arm/armv7, arm64/aarch64, powerpc/powerpc64, powerpc/powerpc64le, riscv/riscv64 and riscv/riscv64c.
+arm/armv7, arm64/aarch64, arm64/aarch64c, powerpc/powerpc64, powerpc/powerpc64le, riscv/riscv64 and riscv/riscv64c.
 .It Va WITHOUT_FILE
 Do not build
 .Xr file 1
@@ -769,7 +769,7 @@ Do not build HTML docs.
 Do not build or install HyperV utilities.
 .Pp
 This is a default setting on
-arm/armv7, powerpc/powerpc64, powerpc/powerpc64le, riscv/riscv64 and riscv/riscv64c.
+arm/armv7, arm64/aarch64c, powerpc/powerpc64, powerpc/powerpc64le, riscv/riscv64 and riscv/riscv64c.
 .It Va WITH_HYPERV
 Build or install HyperV utilities.
 .Pp
@@ -942,7 +942,7 @@ On 64-bit platforms, build the 32-bit library set and a
 runtime linker.
 .Pp
 This is a default setting on
-amd64/amd64, arm64/aarch64 and powerpc/powerpc64.
+amd64/amd64, arm64/aarch64, arm64/aarch64c and powerpc/powerpc64.
 .It Va WITHOUT_LLD
 Do not build LLVM's lld linker.
 .It Va WITHOUT_LLDB
@@ -954,7 +954,7 @@ riscv/riscv64 and riscv/riscv64c.
 Build the LLDB debugger.
 .Pp
 This is a default setting on
-amd64/amd64, arm/armv7, arm64/aarch64, i386/i386, powerpc/powerpc64 and powerpc/powerpc64le.
+amd64/amd64, arm/armv7, arm64/aarch64, arm64/aarch64c, i386/i386, powerpc/powerpc64 and powerpc/powerpc64le.
 .It Va WITHOUT_LLD_BOOTSTRAP
 Do not build the LLD linker during the bootstrap phase of
 the build.
@@ -1068,12 +1068,12 @@ powerpc/powerpc64 and powerpc/powerpc64le.
 Build GELI bootloader support.
 .Pp
 This is a default setting on
-amd64/amd64, arm/armv7, arm64/aarch64, i386/i386, riscv/riscv64 and riscv/riscv64c.
+amd64/amd64, arm/armv7, arm64/aarch64, arm64/aarch64c, i386/i386, riscv/riscv64 and riscv/riscv64c.
 .It Va WITHOUT_LOADER_IA32
 Do not build the 32-bit UEFI loader.
 .Pp
 This is a default setting on
-arm/armv7, arm64/aarch64, i386/i386, powerpc/powerpc64, powerpc/powerpc64le, riscv/riscv64 and riscv/riscv64c.
+arm/armv7, arm64/aarch64, arm64/aarch64c, i386/i386, powerpc/powerpc64, powerpc/powerpc64le, riscv/riscv64 and riscv/riscv64c.
 .It Va WITH_LOADER_IA32
 Build the 32-bit UEFI loader.
 .Pp
@@ -1083,7 +1083,7 @@ amd64/amd64.
 Do not build kboot, a linuxboot environment loader
 .Pp
 This is a default setting on
-arm/armv7, i386/i386, powerpc/powerpc64le, riscv/riscv64 and riscv/riscv64c.
+arm/armv7, arm64/aarch64c, i386/i386, powerpc/powerpc64le, riscv/riscv64 and riscv/riscv64c.
 .It Va WITH_LOADER_KBOOT
 Build kboot, a linuxboot environment loader
 .Pp
@@ -1098,12 +1098,12 @@ powerpc/powerpc64 and powerpc/powerpc64le.
 Build LUA bindings for the boot loader.
 .Pp
 This is a default setting on
-amd64/amd64, arm/armv7, arm64/aarch64, i386/i386, riscv/riscv64 and riscv/riscv64c.
+amd64/amd64, arm/armv7, arm64/aarch64, arm64/aarch64c, i386/i386, riscv/riscv64 and riscv/riscv64c.
 .It Va WITHOUT_LOADER_OFW
 Disable building of openfirmware bootloader components.
 .Pp
 This is a default setting on
-amd64/amd64, arm/armv7, arm64/aarch64, i386/i386, riscv/riscv64 and riscv/riscv64c.
+amd64/amd64, arm/armv7, arm64/aarch64, arm64/aarch64c, i386/i386, riscv/riscv64 and riscv/riscv64c.
 .It Va WITH_LOADER_OFW
 Build openfirmware bootloader components.
 .Pp
@@ -1124,7 +1124,7 @@ This option only has an effect on x86.
 Disable building of ubldr.
 .Pp
 This is a default setting on
-amd64/amd64, arm64/aarch64, i386/i386, powerpc/powerpc64le, riscv/riscv64 and riscv/riscv64c.
+amd64/amd64, arm64/aarch64, arm64/aarch64c, i386/i386, powerpc/powerpc64le, riscv/riscv64 and riscv/riscv64c.
 .It Va WITH_LOADER_UBOOT
 Build ubldr.
 .Pp
@@ -1340,7 +1340,7 @@ Do not build
 .Xr mlx5tool 8
 .Pp
 This is a default setting on
-arm/armv7, riscv/riscv64 and riscv/riscv64c.
+arm/armv7, arm64/aarch64c, riscv/riscv64 and riscv/riscv64c.
 .It Va WITH_MLX5TOOL
 Build
 .Xr mlx5tool 8
@@ -1432,7 +1432,7 @@ Build the
 InfiniBand software stack, including kernel modules and userspace libraries.
 .Pp
 This is a default setting on
-amd64/amd64, arm64/aarch64, i386/i386, powerpc/powerpc64, powerpc/powerpc64le, riscv/riscv64 and riscv/riscv64c.
+amd64/amd64, arm64/aarch64, arm64/aarch64c, i386/i386, powerpc/powerpc64, powerpc/powerpc64le, riscv/riscv64 and riscv/riscv64c.
 .It Va WITH_OFED_EXTRA
 Build the non-essential components of the
 .Dq "OpenFabrics Enterprise Distribution"
@@ -1443,7 +1443,7 @@ Enable building LDAP support for kerberos using an openldap client from ports.
 Do not build LLVM's OpenMP runtime.
 .Pp
 This is a default setting on
-arm/armv7.
+arm/armv7 and arm64/aarch64c.
 .It Va WITH_OPENMP
 Build LLVM's OpenMP runtime.
 .Pp
@@ -1494,7 +1494,7 @@ is set explicitly)
 Do not include kernel TLS support in OpenSSL.
 .Pp
 This is a default setting on
-arm/armv7 and i386/i386.
+arm/armv7, arm64/aarch64c and i386/i386.
 .It Va WITH_OPENSSL_KTLS
 Include kernel TLS support in OpenSSL.
 .Pp
@@ -1536,7 +1536,7 @@ Build dynamically linked binaries as
 Position-Independent Executable (PIE).
 .Pp
 This is a default setting on
-amd64/amd64, arm64/aarch64, powerpc/powerpc64, powerpc/powerpc64le, riscv/riscv64 and riscv/riscv64c.
+amd64/amd64, arm64/aarch64, arm64/aarch64c, powerpc/powerpc64, powerpc/powerpc64le, riscv/riscv64 and riscv/riscv64c.
 .It Va WITHOUT_PKGBOOTSTRAP
 Do not build
 .Xr pkg 7
