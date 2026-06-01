@@ -14,6 +14,10 @@
 
 #undef JEMALLOC_BACKGROUND_THREAD
 
+#ifdef __CHERI__
+#  undef JEMALLOC_MAPS_COALESCE
+#endif
+
 /*
  * The following are architecture-dependent, so conditionally define them for
  * each supported architecture.
@@ -22,6 +26,7 @@
 #undef LG_PAGE
 #undef LG_VADDR
 #undef LG_SIZEOF_PTR
+#undef LG_SIZEOF_SIZE_T
 #undef LG_SIZEOF_INT
 #undef LG_SIZEOF_LONG
 #undef LG_SIZEOF_INTMAX_T
@@ -90,7 +95,14 @@
 
 #define	LG_PAGE			PAGE_SHIFT
 #define	LG_SIZEOF_INT		2
+#ifdef __CHERI__
+#define	LG_SIZEOF_LONG		3
+#else
 #define	LG_SIZEOF_LONG		LG_SIZEOF_PTR
+#endif
+#ifndef LG_SIZEOF_SIZE_T
+#define	LG_SIZEOF_SIZE_T	LG_SIZEOF_LONG
+#endif
 #define	LG_SIZEOF_INTMAX_T	3
 
 #undef CPU_SPINWAIT
