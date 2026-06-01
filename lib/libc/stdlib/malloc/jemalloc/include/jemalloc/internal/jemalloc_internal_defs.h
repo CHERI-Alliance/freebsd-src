@@ -52,10 +52,12 @@
 /* and the 8-bit variant support. */
 #define JEMALLOC_GCC_U8_ATOMIC_ATOMICS 
 
+#ifndef __CHERI__
 /* Defined if GCC __sync atomics are available. */
 #define JEMALLOC_GCC_SYNC_ATOMICS 
 /* and the 8-bit variant support. */
 #define JEMALLOC_GCC_U8_SYNC_ATOMICS 
+#endif
 
 /*
  * Defined if __builtin_clz() and __builtin_clzl() are available.
@@ -162,11 +164,13 @@
 /* Use gcc intrinsics for profile backtracing if defined. */
 /* #undef JEMALLOC_PROF_GCC */
 
+#ifdef __CHERI__
 /*
  * JEMALLOC_DSS enables use of sbrk(2) to allocate extents from the data storage
  * segment (DSS).
  */
 #define JEMALLOC_DSS 
+#endif
 
 /* Support memory filling (junk/zero). */
 #define JEMALLOC_FILL 
@@ -246,7 +250,9 @@
  * If defined, explicitly attempt to more uniformly distribute large allocation
  * pointer alignments across all cache indices.
  */
+#ifndef __CHERI__
 #define JEMALLOC_CACHE_OBLIVIOUS 
+#endif
 
 /*
  * If defined, enable logging facilities.  We make this a configure option to
