@@ -943,6 +943,20 @@ runtime linker.
 .Pp
 This is a default setting on
 amd64/amd64, arm64/aarch64, arm64/aarch64c and powerpc/powerpc64.
+.It Va WITHOUT_LIB64
+On CHERI platforms, do not build the 64-bit library set and a
+.Nm ld-elf64.so.1
+runtime linker.
+.Pp
+This is a default setting on
+amd64/amd64, arm/armv7, arm64/aarch64, i386/i386, powerpc/powerpc64, powerpc/powerpc64le and riscv/riscv64.
+.It Va WITH_LIB64
+On CHERI platforms, build the 64-bit library set and a
+.Nm ld-elf64.so.1
+runtime linker.
+.Pp
+This is a default setting on
+arm64/aarch64c and riscv/riscv64c.
 .It Va WITHOUT_LLD
 Do not build LLVM's lld linker.
 .It Va WITHOUT_LLDB
