@@ -49,7 +49,7 @@ entry2acl(acl_entry_t entry)
 {
 	acl_t aclp;
 
-	aclp = (acl_t)(((long)entry >> _ACL_T_ALIGNMENT_BITS) << _ACL_T_ALIGNMENT_BITS);
+	aclp = (acl_t)__builtin_align_down(entry, 1 << _ACL_T_ALIGNMENT_BITS);
 
 	return (aclp);
 }
