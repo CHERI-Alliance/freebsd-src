@@ -381,6 +381,12 @@ static inline void qsort_r(void *base, size_t nmemb, size_t size,
 __BEGIN_DECLS
 #endif
 
+int timsort(void *base, size_t nel, size_t width,
+    int (*compar) (const void *, const void *));
+#ifdef __BLOCKS__
+int	timsort_b(void *, size_t, size_t, int (^)(const void *, const void *));
+#endif
+
 extern char *suboptarg;			/* getsubopt(3) external variable */
 #endif /* __BSD_VISIBLE */
 
