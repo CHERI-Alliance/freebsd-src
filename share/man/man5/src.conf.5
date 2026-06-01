@@ -1421,6 +1421,17 @@ subsystem.
 The generic caching daemon,
 .Xr nscd 8 ,
 will not be built either if this option is set.
+.Pp
+This is a default setting on
+arm64/aarch64c and riscv/riscv64c.
+.It Va WITH_NS_CACHING
+enable name caching in the
+.Pa nsswitch
+subsystem and build the generic caching daemon,
+.Xr nscd 8 .
+.Pp
+This is a default setting on
+amd64/amd64, arm/armv7, arm64/aarch64, i386/i386, powerpc/powerpc64, powerpc/powerpc64le and riscv/riscv64.
 .It Va WITHOUT_NTP
 Do not build
 .Xr ntpd 8
@@ -1433,7 +1444,7 @@ Do not build the
 InfiniBand software stack, including kernel modules and userspace libraries.
 .Pp
 This is a default setting on
-arm/armv7.
+arm/armv7, arm64/aarch64c and riscv/riscv64c.
 When set, it enforces these options:
 .Pp
 .Bl -item -compact
@@ -1446,7 +1457,7 @@ Build the
 InfiniBand software stack, including kernel modules and userspace libraries.
 .Pp
 This is a default setting on
-amd64/amd64, arm64/aarch64, arm64/aarch64c, i386/i386, powerpc/powerpc64, powerpc/powerpc64le, riscv/riscv64 and riscv/riscv64c.
+amd64/amd64, arm64/aarch64, i386/i386, powerpc/powerpc64, powerpc/powerpc64le and riscv/riscv64.
 .It Va WITH_OFED_EXTRA
 Build the non-essential components of the
 .Dq "OpenFabrics Enterprise Distribution"
