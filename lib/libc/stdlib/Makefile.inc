@@ -38,8 +38,6 @@ MISRCS+= \
 	lldiv.c \
 	lsearch.c \
 	memalignment.c \
-	merge.c \
-	mergesort_b.c \
 	ptsname.c \
 	qsort.c \
 	qsort_r.c \
@@ -76,6 +74,16 @@ MISRCS+= \
 	tfind.c \
 	tsearch.c \
 	twalk.c
+
+.if ${MACHINE_ABI:Mpurecap}
+# XXX: add ${MK_MERGESORT_IS_TIMSORT}
+.PATH:	${SRCTOP}/contrib/patperry-timsort
+MISRCS+=	timsort.c timsort_b.c
+CFLAGS.timsort.c+=	-DTIMSORT_IS_MERGESORT
+CFLAGS.timsort_b.c+=	-I${SRCTOP}/contrib/patperry-timsort -DTIMSORT_IS_MERGESORT
+.else
+MISRCS+=	merge.c mergesort_b.c
+.endif
 
 CFLAGS.qsort.c+= -Wsign-compare
 
