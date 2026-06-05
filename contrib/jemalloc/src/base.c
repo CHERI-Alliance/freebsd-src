@@ -488,6 +488,9 @@ base_alloc_edata(tsdn_t *tsdn, base_t *base) {
 		return NULL;
 	}
 	edata_esn_set(edata, esn);
+#ifdef __CHERI__
+	edata = cheri_bounds_set_exact(edata, sizeof(*edata));
+#endif
 	return edata;
 }
 
