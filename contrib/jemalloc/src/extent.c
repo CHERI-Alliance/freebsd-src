@@ -88,6 +88,10 @@ ecache_alloc(tsdn_t *tsdn, pac_t *pac, ehooks_t *ehooks, ecache_t *ecache,
 	    size, alignment, zero, &commit, false, guarded);
 	assert(edata == NULL || edata_pai_get(edata) == EXTENT_PAI_PAC);
 	assert(edata == NULL || edata_guarded_get(edata) == guarded);
+#ifdef __CHERI__
+	if (edata != NULL)
+		edata = cheri_bounds_set_exact(edata, sizeof(*edata));
+#endif
 	return edata;
 }
 
