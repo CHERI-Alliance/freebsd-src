@@ -3,7 +3,11 @@ SHLIBDIR?=	/lib
 
 .include <src.opts.mk>
 
+.if ${MACHINE_ABI:Mpurecap}
+SRCDIR=		${SRCTOP}/contrib/subrepo-cheri-libcxxrt/src
+.else
 SRCDIR=		${SRCTOP}/contrib/libcxxrt
+.endif
 
 SHLIB_MAJOR=	1
 
