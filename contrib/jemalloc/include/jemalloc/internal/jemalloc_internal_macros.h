@@ -108,4 +108,27 @@
  */
 JEMALLOC_DIAGNOSTIC_DISABLE_SPURIOUS
 
+#ifdef __CHERI__
+#include <cheri/cheric.h>
+#include <cheriintrin.h>
+
+#  define JEMALLOC_BOUND_PTR(ptr, size) ({				\
+	typeof(ptr) _ptr = (ptr);					\
+	size_t _size = (size);						\
+	(_ptr == NULL ? NULL :						\
+	 cheri_perms_and(cheri_bounds_set_exact(_ptr,			\
+	    _size == 0 ? 1 : _size),					\
+	    CHERI_PERMS_USERSPACE_DATA & ~CHERI_PERM_SW_VMEM));		\
+})
+
+/*
+ * If the size rounds up to requiring the omnipotent capability then
+ * size will be 0.
+ */
+#  define JEMALLOC_ROUND_SIZE(size) cheri_representable_length(size)
+#else
+#  define JEMALLOC_BOUND_PTR(ptr, size) (ptr)
+#  define JEMALLOC_ROUND_SIZE(size) (size)
+#endif
+
 #endif /* JEMALLOC_INTERNAL_MACROS_H */
