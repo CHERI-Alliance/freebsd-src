@@ -8,6 +8,63 @@
 #include "jemalloc/internal/thread_event.h"
 #include "jemalloc/internal/witness.h"
 
+JEMALLOC_ALWAYS_INLINE void *
+unbound_ptr(tsdn_t *tsdn, void *ptr) {
+	void *ubptr;
+
+#ifdef __CHERI__
+	/*
+	 * These checks catch the most egregious attacks from an adversary
+	 * who can't manipulate the bounds of capabilities can manipulate
+	 * the offset or storage of a pointer passed to free() or realloc().
+	 *
+	 * XXX: Further validation of the pointer relative to the extent
+	 * metadata would be useful to prevent attacks where bounds are
+	 * manipulated.
+	 */
+	if (unlikely(!cheri_tag_get(ptr))) {
+		return NULL;
+	}
+	if (unlikely(cheri_offset_get(ptr) != 0)) {
+		return NULL;
+	}
+	if (unlikely(cheri_is_sealed(ptr))) {
+		return NULL;
+	}
+
+	emap_full_alloc_ctx_t full_alloc_ctx;
+	bool missing = emap_full_alloc_ctx_try_lookup(tsdn, &arena_emap_global,
+	    ptr, &full_alloc_ctx);
+	if (missing) {
+		return NULL;
+	}
+
+	if (full_alloc_ctx.edata == NULL) {
+		return NULL;
+	}
+
+
+	ubptr = cheri_address_set(edata_addr_get(full_alloc_ctx.edata),
+	    (ptraddr_t)ptr);
+	/*
+	 * Compare pointer addresses to work around an issue where
+	 * LLVM's GVN pass replaces ubptr with ptr in the assert
+	 * about equal bases on riscv64.
+	 *
+	 * This works around:
+	 * https://github.com/CTSRD-CHERI/llvm-project/issues/619
+	 */
+	assert((ptraddr_t)ptr == (ptraddr_t)ubptr);
+	assert(cheri_base_get(ubptr) ==
+	    cheri_base_get(edata_addr_get(full_alloc_ctx.edata)));
+	assert(cheri_length_get(ubptr) ==
+	    cheri_length_get(edata_addr_get(full_alloc_ctx.edata)));
+#else
+	ubptr = ptr;
+#endif
+	return (ubptr);
+}
+
 /*
  * Translating the names of the 'i' functions:
  *   Abbreviations used in the first part of the function name (before
@@ -117,7 +174,8 @@ idalloctm(tsdn_t *tsdn, void *ptr, tcache_t *tcache,
 	    tsd_reentrancy_level_get(tsdn_tsd(tsdn)) != 0) {
 		assert(tcache == NULL);
 	}
-	arena_dalloc(tsdn, ptr, tcache, alloc_ctx, slow_path);
+	arena_dalloc(tsdn, unbound_ptr(tsdn, ptr), tcache, alloc_ctx,
+	    slow_path);
 }
 
 JEMALLOC_ALWAYS_INLINE void
@@ -257,6 +315,7 @@ malloc_initialized(void) {
 JEMALLOC_ALWAYS_INLINE void *
 imalloc_fastpath(size_t size, void *(fallback_alloc)(size_t)) {
 	LOG("core.malloc.entry", "size: %zu", size);
+	size = JEMALLOC_ROUND_SIZE(size);
 	if (tsd_get_allocates() && unlikely(!malloc_initialized())) {
 		return fallback_alloc(size);
 	}
@@ -326,12 +385,12 @@ imalloc_fastpath(size_t size, void *(fallback_alloc)(size_t)) {
 	ret = cache_bin_alloc_easy(bin, &tcache_success);
 	if (tcache_success) {
 		fastpath_success_finish(tsd, allocated_after, bin, ret);
-		return ret;
+		return JEMALLOC_BOUND_PTR(ret, usize);
 	}
 	ret = cache_bin_alloc(bin, &tcache_success);
 	if (tcache_success) {
 		fastpath_success_finish(tsd, allocated_after, bin, ret);
-		return ret;
+		return JEMALLOC_BOUND_PTR(ret, usize);
 	}
 
 	return fallback_alloc(size);
