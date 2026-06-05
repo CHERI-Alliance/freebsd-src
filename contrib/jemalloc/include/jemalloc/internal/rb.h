@@ -71,7 +71,7 @@ struct {								\
       & ((ssize_t)-2)))
 #define rbtn_right_set(a_type, a_field, a_node, a_right) do {		\
     (a_node)->a_field.rbn_right_red = (a_type *) (((uintptr_t) a_right)	\
-      | (((uintptr_t) (a_node)->a_field.rbn_right_red) & ((size_t)1)));	\
+      | (((ptraddr_t) (a_node)->a_field.rbn_right_red) & ((size_t)1)));	\
 } while (0)
 
 /* Color accessors. */
