@@ -144,7 +144,7 @@ rtree_leaf_maskbits(void) {
 
 JEMALLOC_ALWAYS_INLINE uintptr_t
 rtree_leafkey(uintptr_t key) {
-	uintptr_t mask = ~((ZU(1) << rtree_leaf_maskbits()) - 1);
+	ptraddr_t mask = ~((ZU(1) << rtree_leaf_maskbits()) - 1);
 	return (key & mask);
 }
 
@@ -160,7 +160,7 @@ rtree_subkey(uintptr_t key, unsigned level) {
 	unsigned cumbits = rtree_levels[level].cumbits;
 	unsigned shiftbits = ptrbits - cumbits;
 	unsigned maskbits = rtree_levels[level].bits;
-	uintptr_t mask = (ZU(1) << maskbits) - 1;
+	ptraddr_t mask = (ZU(1) << maskbits) - 1;
 	return ((key >> shiftbits) & mask);
 }
 
