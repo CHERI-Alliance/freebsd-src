@@ -53,3 +53,6 @@
 
 /* sizeof(void *) == 2^LG_SIZEOF_PTR. */
 #define LG_SIZEOF_PTR 3
+
+/* size of an integer address == 2^LG_SIZEOF_PTRADDR_T. */
+#define LG_SIZEOF_PTRADDR_T LG_SIZEOF_PTR
