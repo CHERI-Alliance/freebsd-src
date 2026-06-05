@@ -29,6 +29,9 @@ SRCS+=	xprintf.c xprintf_float.c xprintf_int.c xprintf_str.c
 SRCS+=	xprintf_errno.c xprintf_hexdump.c xprintf_quote.c 
 SRCS+=	xprintf_time.c xprintf_vis.c
 
+CFLAGS.vfprintf.c=-Wno-error=ignored-attributes
+CFLAGS.vfwprintf.c=-Wno-error=ignored-attributes
+
 SYM_MAPS+=	${LIBC_SRCTOP}/stdio/Symbol.map
 
 MAN+=	fclose.3 ferror.3 fflush.3 fgetln.3 fgets.3 fgetwln.3 fgetws.3 \
