@@ -77,6 +77,12 @@ _libc_other_objects+=syncicache abs
 _libc_other_objects+=syncicache
 .endif
 
+.if ${MACHINE_ABI:Mpurecap}
+# In purecap, mergesort uses timsort
+_libc_other_objects+=timsort
+SRCS:=${SRCS:Nmerge.c}
+.endif
+
 # Extract all the .o files from libc_nossp_pic.a and libsys_pic.a. This
 # ensures that we don't accidentally pull in the interposing table or
 # similar by linking directly against libc_nossp_pic.a
