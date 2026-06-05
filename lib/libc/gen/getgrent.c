@@ -1325,7 +1325,7 @@ compat_group(void *retval, void *mdata, va_list ap)
 #define set_lookup_type(x, y) do { 				\
 	int i;							\
 	for (i = 0; i < (int)(nitems(x) - 1); i++)		\
-		x[i].mdata = (void *)y;				\
+		x[i].mdata = (void *)(uintptr_t)y;		\
 } while (0)
 
 	fresh = 0;
