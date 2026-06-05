@@ -289,8 +289,11 @@ bitmap_ffu(const bitmap_t *bitmap, const bitmap_info_t *binfo, size_t min_bit) {
 			return (i << LG_BITMAP_GROUP_NBITS) + bit;
 		}
 		i++;
+		if (i >= binfo->ngroups) {
+			break;
+		}
 		g = bitmap[i];
-	} while (i < binfo->ngroups);
+	} while (true);
 	return binfo->nbits;
 #endif
 }
