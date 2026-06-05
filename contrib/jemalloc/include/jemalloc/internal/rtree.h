@@ -15,7 +15,7 @@
  */
 
 /* Number of high insignificant bits. */
-#define RTREE_NHIB ((1U << (LG_SIZEOF_PTR+3)) - LG_VADDR)
+#define RTREE_NHIB ((1U << (LG_SIZEOF_PTRADDR_T+3)) - LG_VADDR)
 /* Number of low insigificant bits. */
 #define RTREE_NLIB LG_PAGE
 /* Number of significant bits. */

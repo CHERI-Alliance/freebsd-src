@@ -26,7 +26,7 @@
 #undef LG_PAGE
 #undef LG_VADDR
 #undef LG_SIZEOF_PTR
-#undef LG_SIZEOF_SIZE_T
+#undef LG_SIZEOF_PTRADDR_T
 #undef LG_SIZEOF_INT
 #undef LG_SIZEOF_LONG
 #undef LG_SIZEOF_INTMAX_T
@@ -100,9 +100,7 @@
 #else
 #define	LG_SIZEOF_LONG		LG_SIZEOF_PTR
 #endif
-#ifndef LG_SIZEOF_SIZE_T
-#define	LG_SIZEOF_SIZE_T	LG_SIZEOF_LONG
-#endif
+#define	LG_SIZEOF_PTRADDR_T	LG_SIZEOF_LONG
 #define	LG_SIZEOF_INTMAX_T	3
 
 #undef CPU_SPINWAIT
