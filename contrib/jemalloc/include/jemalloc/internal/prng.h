@@ -43,12 +43,12 @@ prng_state_next_u64(uint64_t state) {
 
 JEMALLOC_ALWAYS_INLINE size_t
 prng_state_next_zu(size_t state) {
-#if LG_SIZEOF_PTR == 2
+#if LG_SIZEOF_PTRADDR_T == 2
 	return (state * PRNG_A_32) + PRNG_C_32;
-#elif LG_SIZEOF_PTR == 3
+#elif LG_SIZEOF_PTRADDR_T == 3
 	return (state * PRNG_A_64) + PRNG_C_64;
 #else
-#error Unsupported pointer size
+#error Unsupported address size
 #endif
 }
 
