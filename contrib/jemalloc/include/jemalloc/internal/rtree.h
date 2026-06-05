@@ -35,6 +35,14 @@
 #  define RTREE_LEAF_COMPACT
 #endif
 
+#ifdef __CHERI__
+/*
+ * We don't currently have enough low bits to store the state in
+ * le_bits so we can't use the compact format.
+ */
+#undef RTREE_LEAF_COMPACT
+#endif
+
 typedef struct rtree_node_elm_s rtree_node_elm_t;
 struct rtree_node_elm_s {
 	atomic_p_t	child; /* (rtree_{node,leaf}_elm_t *) */
