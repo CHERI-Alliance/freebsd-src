@@ -273,7 +273,7 @@ arena_slab_reg_alloc_batch(edata_t *slab, const bin_info_t *bin_info,
 		 * hot loop below.
 		 */
 		uintptr_t base = (uintptr_t)edata_addr_get(slab);
-		uintptr_t regsize = (uintptr_t)bin_info->reg_size;
+		size_t regsize = bin_info->reg_size;
 		while (pop--) {
 			size_t bit = cfs_lu(&g);
 			size_t regind = shift + bit;
