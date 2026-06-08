@@ -150,6 +150,8 @@ The presence of the
 environment variable overrides
 .Ev LIBPTHREAD_SPLITSTACK_MAIN ;
 it is kept for backward-compatibility.
+On CHERI targets, neither of these environmental variables has any effect
+and the main thread retains its full initial stack.
 .Pp
 The size of stacks for threads created by the process at run-time
 with the
