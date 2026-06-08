@@ -280,8 +280,15 @@ _pthread_attr_getstack(const pthread_attr_t * __restrict attr,
 	if (attr == NULL || *attr == NULL || stackaddr == NULL ||
 	    stacksize == NULL)
 		return (EINVAL);
-
+#ifdef __CHERI__
+	/*
+	 * Don't allow arbitrary callers to futz with the stack of
+	 * arbitrary threads.
+	 */
+	*stackaddr = cheri_tag_clear((*attr)->stackaddr_attr);
+#else
 	*stackaddr = (*attr)->stackaddr_attr;
+#endif
 	*stacksize = (*attr)->stacksize_attr;
 	return (0);
 }
@@ -296,7 +303,15 @@ _thr_attr_getstackaddr(const pthread_attr_t *attr, void **stackaddr)
 	if (attr == NULL || *attr == NULL || stackaddr == NULL)
 		return (EINVAL);
 
+#ifdef __CHERI__
+	/*
+	 * Don't allow arbitrary callers to futz with the stack of
+	 * arbitrary threads.
+	 */
+	*stackaddr = cheri_tag_clear((*attr)->stackaddr_attr);
+#else
 	*stackaddr = (*attr)->stackaddr_attr;
+#endif
 	return (0);
 }
 
