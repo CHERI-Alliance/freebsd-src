@@ -102,6 +102,10 @@
 #include <sys/sysctl.h>
 #include "un-namespace.h"
 
+#ifdef __CHERI__
+#include <cheriintrin.h>
+#endif
+
 #include "thr_private.h"
 
 static size_t	_get_kern_cpuset_size(void);
@@ -385,11 +389,15 @@ __weak_reference(_thr_attr_setguardsize, pthread_attr_setguardsize);
 __weak_reference(_thr_attr_setguardsize, _pthread_attr_setguardsize);
 
 int
-_thr_attr_setguardsize(pthread_attr_t *attr, size_t guardsize)
+_thr_attr_setguardsize(pthread_attr_t *attr, size_t guardsize __maybe_unused)
 {
 
 	if (attr == NULL || *attr == NULL)
 		return (EINVAL);
+#ifdef __CHERI__
+	if (guardsize != 0)
+		return (EINVAL);
+#endif
 
 	(*attr)->guardsize_attr = guardsize;
 	return (0);
