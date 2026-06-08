@@ -57,6 +57,11 @@
 #include <unistd.h>
 #include "un-namespace.h"
 
+#ifdef __CHERI__
+#include <cheri/cheric.h>	/* for cheri_stack_get */
+#include <cheriintrin.h>
+#endif
+
 #include "libc_private.h"
 #include "thr_private.h"
 
@@ -444,6 +449,17 @@ init_main_thread(struct pthread *thread)
 bool
 __thr_get_main_stack_base(char **base)
 {
+#ifdef __CHERI__
+	/*
+	 * In the CheriABI world, the maximum possible stack's address
+	 * space has already been allocated so we leave the whole thing
+	 * for the initial thread.  We don't use the *base as a
+	 * capability so strip the tag.
+	 */
+	char *sp = (char *)cheri_tag_clear(cheri_stack_get());
+	*base = cheri_offset_set(sp, cheri_length_get(sp));
+	return (true);
+#else
 	size_t len;
 	int mib[2];
 
@@ -457,11 +473,17 @@ __thr_get_main_stack_base(char **base)
 		return (true);
 
 	return (false);
+#endif
 }
 
 bool
 __thr_get_main_stack_lim(size_t *lim)
 {
+#ifdef __CHERI__
+	/* See above. */
+	*lim = cheri_length_get(cheri_stack_get());
+	return (true);
+#else
 	struct rlimit rlim;
 
 	if (elf_aux_info(AT_USRSTACKLIM, lim, sizeof(*lim)) == 0)
@@ -473,12 +495,16 @@ __thr_get_main_stack_lim(size_t *lim)
 	}
 
 	return (false);
+#endif
 }
 
 static void
 init_private(void)
 {
-	char *env, *env_bigstack, *env_splitstack;
+#ifndef __CHERI__
+	char *env_bigstack, *env_splitstack;
+#endif
+	char *env;
 
 	_thr_umutex_init(&_mutex_static_lock);
 	_thr_umutex_init(&_cond_static_lock);
@@ -505,9 +531,18 @@ init_private(void)
 		/* Find the stack top */
 		if (!__thr_get_main_stack_base(&_usrstack))
 			PANIC("Cannot get kern.usrstack");
+#ifdef __CHERI__
+		/*
+		 * For CheriABI, always use the maxium possible stack
+		 * space for the main thread as we've committed to the
+		 * address space use at exec time.
+		 */
+		{
+#else
 		env_bigstack = getenv("LIBPTHREAD_BIGSTACK_MAIN");
 		env_splitstack = getenv("LIBPTHREAD_SPLITSTACK_MAIN");
 		if (env_bigstack != NULL || env_splitstack == NULL) {
+#endif
 			if (!__thr_get_main_stack_lim(&_thr_stack_initial))
 				PANIC("Cannot get stack rlimit");
 		}
