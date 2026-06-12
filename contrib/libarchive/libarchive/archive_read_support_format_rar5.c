@@ -469,12 +469,12 @@ static int cdeque_pop_front(struct cdeque* d, void** value) {
 
 /* Convenience function to cast filter_info** to void **. */
 static void** cdeque_filter_p(struct filter_info** f) {
-	return (void**) (size_t) f;
+	return (void**)(uintptr_t) f;
 }
 
 /* Convenience function to cast filter_info* to void *. */
 static void* cdeque_filter(struct filter_info* f) {
-	return (void**) (size_t) f;
+	return (void**)(uintptr_t) f;
 }
 
 /* Destroys this circular deque object. Deallocates the memory of the
