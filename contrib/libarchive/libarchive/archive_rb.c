@@ -48,7 +48,7 @@
 #define	RB_FATHER(rb) \
     ((struct archive_rb_node *)((rb)->rb_info & ~RB_FLAG_MASK))
 #define	RB_SET_FATHER(rb, father) \
-    ((void)((rb)->rb_info = (uintptr_t)(father)|((rb)->rb_info & RB_FLAG_MASK)))
+    ((void)((rb)->rb_info = (uintptr_t)(father)|((ptraddr_t)(rb)->rb_info & RB_FLAG_MASK)))
 
 #define	RB_SENTINEL_P(rb)	((rb) == NULL)
 #define	RB_LEFT_SENTINEL_P(rb)	RB_SENTINEL_P((rb)->rb_left)
@@ -67,16 +67,15 @@
 #define	RB_BLACK_P(rb) 		(RB_SENTINEL_P(rb) || ((rb)->rb_info & RB_FLAG_RED) == 0)
 #define	RB_MARK_RED(rb) 	((void)((rb)->rb_info |= RB_FLAG_RED))
 #define	RB_MARK_BLACK(rb) 	((void)((rb)->rb_info &= ~RB_FLAG_RED))
-#define	RB_INVERT_COLOR(rb) 	((void)((rb)->rb_info ^= RB_FLAG_RED))
 #define	RB_ROOT_P(rbt, rb)	((rbt)->rbt_root == (rb))
 #define	RB_SET_POSITION(rb, position) \
     ((void)((position) ? ((rb)->rb_info |= RB_FLAG_POSITION) : \
     ((rb)->rb_info &= ~RB_FLAG_POSITION)))
 #define	RB_ZERO_PROPERTIES(rb)	((void)((rb)->rb_info &= ~RB_FLAG_MASK))
 #define	RB_COPY_PROPERTIES(dst, src) \
-    ((void)((dst)->rb_info ^= ((dst)->rb_info ^ (src)->rb_info) & RB_FLAG_MASK))
+    ((void)((dst)->rb_info ^= ((ptraddr_t)(dst)->rb_info ^ (ptraddr_t)(src)->rb_info) & RB_FLAG_MASK))
 #define RB_SWAP_PROPERTIES(a, b) do { \
-    uintptr_t xorinfo = ((a)->rb_info ^ (b)->rb_info) & RB_FLAG_MASK; \
+    uintptr_t xorinfo = ((ptraddr_t)(a)->rb_info ^ (ptraddr_t)(b)->rb_info) & RB_FLAG_MASK; \
     (a)->rb_info ^= xorinfo; \
     (b)->rb_info ^= xorinfo; \
   } while (/*CONSTCOND*/ 0)
