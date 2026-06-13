@@ -88,7 +88,7 @@ UefiDevicePathLibCatPrint (
   ...
   )
 {
-  UINTN    Count;
+  UINT64   Count;
   VA_LIST  Args;
 
   VA_START (Args, Fmt);
