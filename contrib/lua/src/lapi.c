@@ -469,13 +469,12 @@ LUA_API lua_State *lua_tothread (lua_State *L, int idx) {
 ** Returns a pointer to the internal representation of an object.
 ** Note that ANSI C does not allow the conversion of a pointer to
 ** function to a 'void*', so the conversion here goes through
-** a 'size_t'. (As the returned pointer is only informative, this
-** conversion should not be a problem.)
+** a 'uintptr_t'.
 */
 LUA_API const void *lua_topointer (lua_State *L, int idx) {
   const TValue *o = index2value(L, idx);
   switch (ttypetag(o)) {
-    case LUA_VLCF: return cast_voidp(cast_sizet(fvalue(o)));
+    case LUA_VLCF: return cast_voidp(cast(uintptr_t, fvalue(o)));
     case LUA_VUSERDATA: case LUA_VLIGHTUSERDATA:
       return touserdata(o);
     default: {
