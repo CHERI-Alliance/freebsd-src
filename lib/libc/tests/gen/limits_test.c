@@ -86,13 +86,17 @@ CHECK_UTYPE(wchar_t, WCHAR);
 CHECK_STYPE(wchar_t, WCHAR);
 #endif
 CHECK_STYPE(intmax_t, INTMAX);
+#ifndef __CHERI__
 CHECK_STYPE(intptr_t, INTPTR);
+#endif
 CHECK_STYPE(ptrdiff_t, PTRDIFF);
 CHECK_STYPE(wint_t, WINT);
 CHECK_STYPE(sig_atomic_t, SIG_ATOMIC);
 
 CHECK_UTYPE(uintmax_t, UINTMAX);
+#ifndef __CHERI__
 CHECK_UTYPE(uintptr_t, UINTPTR);
+#endif
 CHECK_UTYPE(size_t, SIZE);
 
 static_assert(BITINT_MAXWIDTH >= ULLONG_WIDTH,
