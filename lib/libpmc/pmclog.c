@@ -301,7 +301,7 @@ pmclog_get_event(void *cookie, char **data, ssize_t *len,
 
 #define	PMCLOG_GET_CALLCHAIN_SIZE(SZ,E) do {				\
 		(SZ) = ((E) - offsetof(struct pmclog_callchain, pl_pc))	\
-			/ sizeof(uintfptr_t);				\
+			/ sizeof(ptraddr_t);				\
 	} while (0);
 
 	switch (ev->pl_type = PMCLOG_HEADER_TO_TYPE(h)) {
@@ -314,7 +314,7 @@ pmclog_get_event(void *cookie, char **data, ssize_t *len,
 		for (npc = 0; npc < ev->pl_u.pl_cc.pl_npc; npc++)
 			PMCLOG_READADDR(le,ev->pl_u.pl_cc.pl_pc[npc]);
 		for (;npc < PMC_CALLCHAIN_DEPTH_MAX; npc++)
-			ev->pl_u.pl_cc.pl_pc[npc] = (uintfptr_t) 0;
+			ev->pl_u.pl_cc.pl_pc[npc] = (ptraddr_t) 0;
 		break;
 	case PMCLOG_TYPE_CLOSELOG:
 		ev->pl_state = PMCLOG_EOF;

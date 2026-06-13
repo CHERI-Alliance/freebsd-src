@@ -50,7 +50,7 @@ struct pmclog_ev_callchain {
 	uint32_t	pl_cpuflags;
 	uint32_t	pl_cpuflags2;
 	uint32_t	pl_npc;
-	uintfptr_t	pl_pc[PMC_CALLCHAIN_DEPTH_MAX];
+	ptraddr_t	pl_pc[PMC_CALLCHAIN_DEPTH_MAX];
 };
 
 struct pmclog_ev_dropnotify {
@@ -76,18 +76,18 @@ struct pmclog_ev_map_in {
 			uint8_t	pl_pad[3];
 		};
 	};
-	uintfptr_t	pl_start;
+	ptraddr_t	pl_start;
 	char		pl_pathname[PATH_MAX];
 };
 
 struct pmclog_ev_map_out {
 	pid_t		pl_pid;
-	uintfptr_t	pl_start;
-	uintfptr_t	pl_end;
+	ptraddr_t	pl_start;
+	ptraddr_t	pl_end;
 };
 
 struct pmclog_ev_pcsample {
-	uintfptr_t	pl_pc;
+	ptraddr_t	pl_pc;
 	pid_t		pl_pid;
 	pid_t		pl_tid;
 	pmc_id_t	pl_pmcid;
