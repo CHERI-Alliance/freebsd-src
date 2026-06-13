@@ -122,7 +122,7 @@ do_buff_decode(uint8_t *buff, size_t len,
 		if (!suppress) { \
 			if (arg_put) \
 				(*arg_put)(puthook, (letter == 't' ? 'b' : \
-				    letter), (void *)((long)(ARG)), width, \
+				    letter), (void *)((intptr_t)(ARG)), width, \
 				    field_name); \
 			else \
 				*(va_arg(*ap, int *)) = (ARG); \
