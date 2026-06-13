@@ -1247,7 +1247,7 @@ stifle_history(int max)
 		while (history_length > max) {
 			he = remove_history(0);
 			el_free(he->data);
-			el_free((void *)(unsigned long)he->line);
+			el_free((void *)(uintptr_t)he->line);
 			el_free(he);
 		}
 	}
