@@ -429,7 +429,7 @@ GetDevicePathSize (
   //
   // Compute the size and add back in the size of the end device path structure
   //
-  return ((UINTN)DevicePath - (UINTN)Start) + DevicePathNodeLength (DevicePath);
+  return ((UINT64)DevicePath - (UINT64)Start) + DevicePathNodeLength (DevicePath);
 }
 
 /**
@@ -503,8 +503,8 @@ AppendDevicePath (
   )
 {
   UINTN                     Size;
-  UINTN                     Size1;
-  UINTN                     Size2;
+  UINT64                    Size1;
+  UINT64                    Size2;
   EFI_DEVICE_PATH_PROTOCOL  *NewDevicePath;
   EFI_DEVICE_PATH_PROTOCOL  *DevicePath2;
 
