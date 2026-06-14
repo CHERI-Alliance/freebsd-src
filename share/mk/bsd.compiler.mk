@@ -255,7 +255,10 @@ ${X_}COMPILER_FEATURES+=	c++20
 ${X_}COMPILER_FEATURES+=	init-all
 .endif
 .if ${${X_}COMPILER_TYPE} == "clang"
+.if !${MACHINE_ABI:Mpurecap}
+# CHERI LLVM compilers don't support blocks yet
 ${X_}COMPILER_FEATURES+=	blocks
+.endif
 ${X_}COMPILER_FEATURES+=	retpoline
 # PR257638 lld fails with BE compressed debug.  Fixed in main but external tool
 # chains will initially not have the fix.  For now limit the feature to LE
