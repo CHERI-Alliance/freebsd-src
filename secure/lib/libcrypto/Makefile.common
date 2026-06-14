@@ -9,7 +9,9 @@ CFLAGS+=	-DB_ENDIAN
 .if !defined(WITHOUT_AUTO_ASM) && !defined(BOOTSTRAPPING)
 .if ${MACHINE_CPUARCH} == "aarch64" || ${MACHINE_CPUARCH} == "amd64" || \
     ${MACHINE_CPUARCH} == "arm" || ${MACHINE_CPUARCH} == "i386"
+.if ${MACHINE_CPUARCH} != "aarch64" && !${MACHINE_ABI:Mpurecap}
 ASM_${MACHINE_CPUARCH}=
+.endif
 .elif ${MACHINE_ARCH} == "powerpc" || ${MACHINE_ARCH} == "powerpc64" || \
     ${MACHINE_ARCH} == "powerpc64le"
 ASM_${MACHINE_ARCH}=
