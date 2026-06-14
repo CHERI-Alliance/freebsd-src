@@ -494,7 +494,7 @@ procstat_getfiles_kvm(struct procstat *procstat, struct kinfo_proc *kp, int mmap
 	pwd_addr = (unsigned long)(PWDDESC_KVM_LOAD_PWD(&pathsd));
 	if (pwd_addr != 0) {
 		if (!kvm_read_all(kd, pwd_addr, &pwd, sizeof(pwd))) {
-			warnx("can't read fd_pwd at %p", (void *)pwd_addr);
+			warnx("can't read fd_pwd at %#lx", pwd_addr);
 			return (NULL);
 		}
 		haspwd = true;
@@ -2164,8 +2164,8 @@ procstat_getrlimit_kvm(kvm_t *kd, struct kinfo_proc *kp, int which,
 		return (-1);
 	offset = (unsigned long)proc.p_limit + sizeof(struct rlimit) * which;
 	if (!kvm_read_all(kd, offset, rlimit, sizeof(*rlimit))) {
-		warnx("can't read rlimit struct at %p for pid %d",
-		    (void *)offset, kp->ki_pid);
+		warnx("can't read rlimit struct at %#lx for pid %d",
+		    offset, kp->ki_pid);
 		return (-1);
 	}
 	return (0);
