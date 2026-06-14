@@ -29,10 +29,13 @@
 #include <sys/cdefs.h>
 #include <dev/mfi/mfireg.h>
 
-struct iovec32 {
-	u_int32_t	iov_base;
-	int		iov_len;
-};
+#ifdef COMPAT_FREEBSD32
+#include <sys/mount.h>
+#include <compat/freebsd32/freebsd32.h>
+#endif
+#ifdef COMPAT_FREEBSD64
+#include <compat/freebsd64/freebsd64.h>
+#endif
 
 #define MFIQ_FREE	0
 #define MFIQ_BIO	1
@@ -58,7 +61,11 @@ union mfi_sense_ptr {
 		uint32_t	low;
 		uint32_t	high;
 	} addr;
-} __packed;
+}
+#ifndef __CHERI__
+__packed
+#endif
+;
 
 #define MAX_IOCTL_SGE	16
 
@@ -75,7 +82,11 @@ struct mfi_ioc_packet {
 	} mfi_frame;
 
 	struct iovec mfi_sgl[MAX_IOCTL_SGE];
-} __packed;
+}
+#ifndef __CHERI__
+__packed
+#endif
+;
 
 #ifdef COMPAT_FREEBSD32
 struct mfi_ioc_packet32 {
@@ -94,6 +105,23 @@ struct mfi_ioc_packet32 {
 } __packed;
 #endif
 
+#ifdef COMPAT_FREEBSD64
+struct mfi_ioc_packet64 {
+	uint16_t	mfi_adapter_no;
+	uint16_t	mfi_pad1;
+	uint32_t	mfi_sgl_off;
+	uint32_t	mfi_sge_count;
+	uint32_t	mfi_sense_off;
+	uint32_t	mfi_sense_len;
+	union {
+		uint8_t raw[128];
+		struct mfi_frame_header hdr;
+	} mfi_frame;
+
+	struct iovec64 mfi_sgl[MAX_IOCTL_SGE];
+} __packed;
+#endif
+
 struct mfi_ioc_aen {
 	uint16_t	aen_adapter_no;
 	uint16_t	aen_pad1;
@@ -103,7 +131,10 @@ struct mfi_ioc_aen {
 
 #define MFI_CMD		_IOWR('M', 1, struct mfi_ioc_packet)
 #ifdef COMPAT_FREEBSD32
-#define MFI_CMD32	_IOWR('M', 1, struct mfi_ioc_packet32)
+#define MFI_CMD32	_IOC_NEWTYPE(MFI_CMD, struct mfi_ioc_packet32)
+#endif
+#ifdef COMPAT_FREEBSD64
+#define MFI_CMD64	_IOC_NEWTYPE(MFI_CMD, struct mfi_ioc_packet64)
 #endif
 #define MFI_SET_AEN	_IOW('M', 3, struct mfi_ioc_aen)
 
@@ -126,19 +157,35 @@ struct mfi_linux_ioc_packet {
 #else
 	struct iovec lioc_sgl[MAX_LINUX_IOCTL_SGE];
 #endif
-} __packed;
+}
+#ifndef __CHERI__
+__packed
+#endif
+;
 
 struct mfi_ioc_passthru {
 	struct mfi_dcmd_frame	ioc_frame;
 	uint32_t		buf_size;
 	uint8_t			*buf;
-} __packed;
+}
+#ifndef __CHERI__
+__packed
+#endif
+;
 
 #ifdef COMPAT_FREEBSD32
 struct mfi_ioc_passthru32 {
 	struct mfi_dcmd_frame	ioc_frame;
 	uint32_t		buf_size;
 	uint32_t		buf;
+} __packed;
+#endif
+
+#ifdef COMPAT_FREEBSD64
+struct mfi_ioc_passthru64 {
+	structmfi_dcmd_frame	ioc_frame;
+	uint32_t		buf_size;
+	uint64_t		buf;
 } __packed;
 #endif
 
