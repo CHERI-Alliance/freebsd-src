@@ -1,0 +1,152 @@
+/*
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
+ * Copyright 2017,2018 Alex Richadson <arichardson@FreeBSD.org>
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+#include "cheri_reloc.h"
+#include "debug.h"
+#include "rtld.h"
+
+#ifdef RTLD_HAS_CAPRELOCS
+int
+process___cap_relocs(Obj_Entry *obj)
+{
+	struct capreloc *start_relocs = (struct capreloc *)obj->cap_relocs;
+	struct capreloc *end_relocs =
+	    (struct capreloc *)(obj->cap_relocs + obj->cap_relocs_size);
+	char *data_base = get_datasegment_cap(obj);
+	bool tight_pcc_bounds;
+
+	if (obj->cap_relocs_processed) {
+		dbg("__cap_relocs for %s have already been processed!",
+		    obj->path);
+		/* TODO: abort / return -1 to prevent this from happening? */
+		return (0);
+	}
+
+	dbg("Processing %lu __cap_relocs for %s (data base = %#lp)\n",
+	    end_relocs - start_relocs, obj->path, data_base);
+
+	tight_pcc_bounds = can_use_tight_pcc_bounds(obj);
+
+	for (const struct capreloc *reloc = start_relocs; reloc < end_relocs;
+	     reloc++) {
+		uintptr_t *dest =
+		    (uintptr_t *)(obj->relocbase + reloc->capability_location);
+		uintptr_t cap;
+		bool can_set_bounds = true;
+
+		if (reloc->object == 0) {
+			/*
+			 * XXXAR: clang fills uninitialized
+			 * capabilities with 0xcacaca..., so we we
+			 * need to explicitly write NULL here.
+			 */
+			*dest = 0;
+			continue;
+		}
+
+		if (reloc->permissions ==
+		    (function_reloc_flag | indirect_reloc_flag)) {
+			obj->irelative_cap_relocs = true;
+			continue;
+		}
+
+		if (reloc->permissions == function_reloc_flag ||
+		    reloc->permissions == (function_reloc_flag |
+		    code_reloc_flag)) {
+			/* code pointer */
+			cap = (uintptr_t)pcc_cap(obj, reloc->object);
+			cap = cheri_perms_clear(cap, FUNC_PTR_REMOVE_PERMS);
+
+			/*
+			 * Do not set tight bounds for functions
+			 * (unless we are in the plt ABI).
+			 */
+			can_set_bounds = tight_pcc_bounds;
+		} else if (reloc->permissions == constant_reloc_flag) {
+			 /* read-only data pointer */
+			cap = (uintptr_t)data_base + reloc->object;
+			cap = cheri_perms_clear(cap, FUNC_PTR_REMOVE_PERMS);
+			cap = cheri_perms_clear(cap, DATA_PTR_REMOVE_PERMS);
+		} else if (reloc->permissions == 0) {
+			/* read-write data */
+			cap = (uintptr_t)data_base + reloc->object;
+			cap = cheri_perms_clear(cap, DATA_PTR_REMOVE_PERMS);
+		} else {
+			_rtld_error("%s: Unknown capreloc type %#zx",
+			    obj->path, reloc->permissions);
+			return (-1);
+		}
+		cap = cheri_perms_clear(cap, CAP_RELOC_REMOVE_PERMS);
+		if (can_set_bounds && reloc->size != 0)
+			cap = cheri_bounds_set(cap, reloc->size);
+		cap += reloc->offset;
+		/* Convert function pointers to sentries */
+		if (reloc->permissions == function_reloc_flag ||
+		    reloc->permissions == (function_reloc_flag |
+		    code_reloc_flag))
+			cap = cheri_sentry_create(cap);
+		*dest = cap;
+	}
+
+	obj->cap_relocs_processed = true;
+	return (0);
+}
+
+int
+process_ifunc___cap_relocs(Obj_Entry *obj)
+{
+	struct capreloc *start_relocs = (struct capreloc *)obj->cap_relocs;
+	struct capreloc *end_relocs =
+	    (struct capreloc *)(obj->cap_relocs + obj->cap_relocs_size);
+	bool tight_pcc_bounds = can_use_tight_pcc_bounds(obj);
+
+	dbg("Processing %lu __cap_relocs for %s IFUNCs\n",
+	    end_relocs - start_relocs, obj->path);
+
+	for (const struct capreloc *reloc = start_relocs; reloc < end_relocs;
+	     reloc++) {
+		uintptr_t *dest =
+		    (uintptr_t *)(obj->relocbase + reloc->capability_location);
+		uintptr_t cap;
+
+		if (reloc->permissions !=
+		    (function_reloc_flag | indirect_reloc_flag))
+			continue;
+
+		cap = (uintptr_t)pcc_cap(obj, reloc->object);
+		cap = cheri_perms_clear(cap,
+		    FUNC_PTR_REMOVE_PERMS | CAP_RELOC_REMOVE_PERMS);
+		if (tight_pcc_bounds && reloc->size != 0)
+			cap = cheri_bounds_set(cap, reloc->size);
+		cap += reloc->offset;
+		cap = cheri_sentry_create(cap);
+		cap = call_ifunc_resolver(cap);
+		*dest = cap;
+	}
+
+	return (0);
+}
+#endif
