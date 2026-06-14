@@ -334,7 +334,9 @@ BROKEN_OPTIONS+=KERBEROS
 BROKEN_OPTIONS+=DTRACE
 # ZFS ported, but skipping for now
 BROKEN_OPTIONS+=ZFS
-# Not ported
+# can't build libc_nonshared ATM
+BROKEN_OPTIONS+=LIB32
+# can't be bothered
 BROKEN_OPTIONS+=IPFILTER
 .endif
 
