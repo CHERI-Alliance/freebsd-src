@@ -281,7 +281,7 @@ static void *ThreadMain(void *) {
   if (verbose) fprintf(stderr, "[%d] got child startup message\n", getpid_());
 
   // Pass the process descriptor back to the main thread.
-  return reinterpret_cast<void *>(pd);
+  return reinterpret_cast<void *>((intptr_t)pd);
 }
 
 TEST(Pdfork, FromThread) {
