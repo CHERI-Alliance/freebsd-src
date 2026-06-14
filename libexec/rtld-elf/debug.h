@@ -50,5 +50,10 @@ extern int debug;
 #define msg(s)		rtld_putstr(s)
 #define trace()		msg(_BASENAME_RTLD ": " __XSTRING(__LINE__) "\n")
 
+#ifdef __CHERI__
+#define PTR_FMT	"%#p"
+#else
+#define PTR_FMT	"%p"
+#endif
 
 #endif /* DEBUG_H */
