@@ -328,6 +328,14 @@ BROKEN_OPTIONS+=LIB64
 BROKEN_OPTIONS+=NS_CACHING
 # Not ported
 BROKEN_OPTIONS+=OFED
+# MIT kerberos not yet ported
+BROKEN_OPTIONS+=KERBEROS
+# DTrace ported, but skipping import for now
+BROKEN_OPTIONS+=DTRACE
+# ZFS ported, but skipping for now
+BROKEN_OPTIONS+=ZFS
+# Not ported
+BROKEN_OPTIONS+=IPFILTER
 .endif
 
 # EFI doesn't exist on powerpc (well, officially) and doesn't work on i386
