@@ -181,8 +181,12 @@ typedef struct {
     RequestBlock_struct	Request;	/* 20 */
     ErrorInfo_struct	error_info;	/* 48 */
     u_int16_t		buf_size;	/* 2 */
-    u_int8_t		*buf;		/* 4 */
-} __packed IOCTL_Command_struct;
+    u_int8_t		*buf;		/* 4/8/16 */
+}
+#ifndef __CHERI__
+__packed
+#endif
+IOCTL_Command_struct;
 
 #ifdef __amd64__
 typedef struct {
