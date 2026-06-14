@@ -142,7 +142,7 @@ alloctape(void)
 		if (buf == NULL)
 			return(0);
 		workers[i].tblock = (char (*)[TP_BSIZE])
-		    (((long)&buf[ntrec + 1] + pgoff) &~ pgoff);
+		    __builtin_align_up(&buf[ntrec + 1], pgoff + 1);
 		workers[i].req = (struct req *)workers[i].tblock - ntrec - 1;
 	}
 	wp = &workers[0];
