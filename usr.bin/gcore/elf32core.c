@@ -1,5 +1,5 @@
-#ifndef __LP64__
-#error "this file must be compiled for LP64."
+#if __SIZEOF_LONG__ == 4
+#error "this file must be compiled for 64-bit architectures."
 #endif
 
 #define __ELF_WORD_SIZE 32
