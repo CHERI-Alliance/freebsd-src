@@ -68,7 +68,7 @@ _thread_vprintf(int fd, const char *fmt, va_list ap)
 	unsigned long r, u;
 	int c;
 	long d;
-	bool isalt, islong;
+	bool isalt, islong, isptr;
 
 	while ((c = *fmt++)) {
 		isalt = false;
@@ -92,7 +92,7 @@ next:			c = *fmt++;
 				goto next;
 			case 'p':
 				pstr(fd, "0x");
-				islong = true;
+				isptr = true;
 				/* FALLTHROUGH */
 			case 'd':
 			case 'u':
@@ -111,7 +111,10 @@ next:			c = *fmt++;
 					} else
 						u = (unsigned long)d;
 				} else {
-					if (islong)
+					if (isptr)
+						/* XXX: support isalt for CHERI */
+						u = (uintptr_t)va_arg(ap, void*);
+					else if (islong)
 						u = va_arg(ap, unsigned long);
 					else
 						u = va_arg(ap, unsigned);
