@@ -331,11 +331,13 @@ static vmem_addr_t
 vmem_buildcap(vmem_t *vm __unused, vmem_addr_t addr __unused,
     vmem_size_t size __unused)
 {
+#ifdef _KERNEL
 #ifdef __CHERI__
 	if (vm->vm_flags & VMEM_CAPABILITY_ARENA) {
 		KASSERT(cheri_tag_get(addr), ("Expected valid capability"));
 		addr = cheri_bounds_set_exact(addr, size);
 	}
+#endif
 #endif
 	return (addr);
 }
@@ -349,6 +351,7 @@ vmem_roundup_align(vmem_t *vm __unused, vmem_size_t align __unused,
 {
 	MPASS((align & vm->vm_quantum_mask) == 0);
 	MPASS((align & (align - 1)) == 0);
+#ifdef _KERNEL
 #ifdef __CHERI__
 	if ((vm->vm_flags & VMEM_CAPABILITY_ARENA) != 0 &&
 	    CHERI_REPRESENTABLE_ALIGNMENT(size) > align) {
@@ -356,6 +359,7 @@ vmem_roundup_align(vmem_t *vm __unused, vmem_size_t align __unused,
 		    vm->vm_quantum_mask) == 0);
 		align = CHERI_REPRESENTABLE_ALIGNMENT(size);
 	}
+#endif
 #endif
 	return (align);
 }
@@ -1276,6 +1280,7 @@ vmem_xalloc_nextfit(vmem_t *vm, vmem_size_t size, vmem_size_t align,
 	int error;
 	vmem_addr_t addr;
 
+#ifdef _KERNEL
 #ifdef __CHERI__
 	/*
 	 * Size and alignment have not been rounded up yet,
@@ -1285,6 +1290,7 @@ vmem_xalloc_nextfit(vmem_t *vm, vmem_size_t size, vmem_size_t align,
 		size = CHERI_REPRESENTABLE_LENGTH(size);
 		align = vmem_roundup_align(vm, align, size);
 	}
+#endif
 #endif
 
 	error = ENOMEM;
@@ -1519,6 +1525,7 @@ vmem_destroy(vmem_t *vm)
 vmem_size_t
 vmem_roundup_size(vmem_t *vm, vmem_size_t size)
 {
+#ifdef _KERNEL
 #ifdef __CHERI__
 	if (vm->vm_flags & VMEM_CAPABILITY_ARENA) {
 		size = CHERI_REPRESENTABLE_LENGTH(size);
@@ -1532,6 +1539,7 @@ vmem_roundup_size(vmem_t *vm, vmem_size_t size)
 		 * must be a power of 2.
 		 */
 	}
+#endif
 #endif
 	return (size + vm->vm_quantum_mask) & ~vm->vm_quantum_mask;
 }
@@ -1714,6 +1722,7 @@ void
 vmem_free(vmem_t *vm, vmem_addr_t addr, vmem_size_t size)
 {
 	MPASS(size > 0);
+#ifdef _KERNEL
 #ifdef __CHERI__
 	if (vm->vm_flags & VMEM_CAPABILITY_ARENA) {
 		if (!cheri_tag_get(addr))
@@ -1723,7 +1732,6 @@ vmem_free(vmem_t *vm, vmem_addr_t addr, vmem_size_t size)
 	}
 #endif
 
-#ifdef _KERNEL
 	if (size <= vm->vm_qcache_max &&
 	    __predict_true(addr >= VMEM_ADDR_QCACHE_MIN)) {
 		qcache_t *qc;
@@ -1742,6 +1750,7 @@ vmem_xfree(vmem_t *vm, vmem_addr_t addr, vmem_size_t size __unused)
 	bt_t *t;
 
 	MPASS(size > 0);
+#ifdef _KERNEL
 #ifdef __CHERI__
 	if (vm->vm_flags & VMEM_CAPABILITY_ARENA) {
 		if (!cheri_tag_get(addr))
@@ -1749,6 +1758,7 @@ vmem_xfree(vmem_t *vm, vmem_addr_t addr, vmem_size_t size __unused)
 		if (cheri_is_sealed(addr))
 			panic("Expect unsealed capability");
 	}
+#endif
 #endif
 
 	VMEM_LOCK(vm);
@@ -1794,6 +1804,7 @@ vmem_add(vmem_t *vm, vmem_addr_t addr, vmem_size_t size, int flags)
 {
 	int error;
 
+#ifdef _KERNEL
 #ifdef __CHERI__
 	if (vm->vm_flags & VMEM_CAPABILITY_ARENA) {
 		KASSERT(cheri_tag_get(addr), ("Expected valid capability"));
@@ -1802,6 +1813,7 @@ vmem_add(vmem_t *vm, vmem_addr_t addr, vmem_size_t size, int flags)
 		    ("Inexact bounds expected %zx found %zx",
 		    (size_t)size, cheri_length_get(addr)));
 	}
+#endif
 #endif
 	flags &= VMEM_FLAGS;
 
