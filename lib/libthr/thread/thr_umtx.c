@@ -143,10 +143,12 @@ __thr_umutex_timedlock(struct umutex *mtx, uint32_t id,
 				return (ENOTRECOVERABLE);
 			/* wait in kernel */
 			ret = _umtx_op_err(mtx, UMTX_OP_MUTEX_WAIT, 0,
-			    (void *)tm_size, __DECONST(void *, tm_p));
+			    (void *)(uintptr_t)tm_size,
+			    __DECONST(void *, tm_p));
 		} else {
 			ret = _umtx_op_err(mtx, UMTX_OP_MUTEX_LOCK, 0, 
-			    (void *)tm_size, __DECONST(void *, tm_p));
+			    (void *)(uintptr_t)tm_size,
+			    __DECONST(void *, tm_p));
 			if (ret == 0 || ret == EOWNERDEAD ||
 			    ret == ENOTRECOVERABLE)
 				break;
@@ -223,7 +225,7 @@ _thr_umtx_timedwait_uint(volatile u_int *mtx, u_int id, int clockid,
 
 	return (_umtx_op_err(__DEVOLATILE(void *, mtx), shared ?
 	    UMTX_OP_WAIT_UINT : UMTX_OP_WAIT_UINT_PRIVATE, id,
-	    (void *)tm_size, __DECONST(void *, tm_p)));
+	    (void *)(uintptr_t)tm_size, __DECONST(void *, tm_p)));
 }
 
 int
@@ -308,7 +310,7 @@ __thr_rwlock_rdlock(struct urwlock *rwlock, int flags,
 		tm_size = sizeof(timeout);
 	}
 	return (_umtx_op_err(rwlock, UMTX_OP_RW_RDLOCK, flags,
-	    (void *)tm_size, tm_p));
+	    (void *)(uintptr_t)tm_size, tm_p));
 }
 
 int
@@ -327,8 +329,8 @@ __thr_rwlock_wrlock(struct urwlock *rwlock, const struct timespec *tsp)
 		tm_p = &timeout;
 		tm_size = sizeof(timeout);
 	}
-	return (_umtx_op_err(rwlock, UMTX_OP_RW_WRLOCK, 0, (void *)tm_size,
-	    tm_p));
+	return (_umtx_op_err(rwlock, UMTX_OP_RW_WRLOCK, 0,
+	    (void *)(uintptr_t)tm_size, tm_p));
 }
 
 int
