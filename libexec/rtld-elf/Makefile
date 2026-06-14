@@ -110,6 +110,12 @@ beforeinstall:
 
 .PATH: ${RTLD_ELF_DIR}/${RTLD_ARCH} ${SRCTOP}/lib/csu/common
 
+.if ${MACHINE_CPU:Mcheri} && !defined(NEED_COMPAT)
+.PATH: ${RTLD_ELF_DIR}/cheri
+SRCS+=		cheri_reloc.c
+CFLAGS+=	-I${RTLD_ELF_DIR}/cheri
+.endif
+
 .if ${.CURDIR} == ${RTLD_ELF_DIR}
 HAS_TESTS=
 SUBDIR.${MK_TESTS}+= tests

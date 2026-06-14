@@ -1,10 +1,22 @@
 /*-
  * Copyright (c) 1999, 2000 John D. Polstra.
  * Copyright (c) 2014 the FreeBSD Foundation
+ * Copyright 2018-2020 Alex Richardson <arichardson@FreeBSD.org>
+ * Copyright 2020 Jessica Clarke <jrtc27@FreeBSD.org>
+ * Copyright 2020 Brett F. Gutstein
  * All rights reserved.
  *
  * Portions of this software were developed by Andrew Turner
  * under sponsorship from the FreeBSD Foundation.
+ *
+ * Portions of this software were developed by SRI International and the
+ * University of Cambridge Computer Laboratory under DARPA/AFRL contract
+ * FA8750-10-C-0237 ("CTSRD"), as part of the DARPA CRASH research programme.
+ *
+ * This software was developed by SRI International and the University of
+ * Cambridge Computer Laboratory (Department of Computer Science and
+ * Technology) under DARPA contract HR0011-18-C-0016 ("ECATS"), as part of the
+ * DARPA SSITH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -44,12 +56,16 @@ struct Struct_Obj_Entry;
     bool variant_pcs : 1;	/* Object has a variant pcs function */
 
 /* Return the address of the .dynamic section in the dynamic linker. */
+#ifdef __CHERI__
+#define	rtld_dynamic(obj) (&_DYNAMIC)
+#else
 #define	rtld_dynamic(obj)						\
 ({									\
 	Elf_Addr _dynamic_addr;						\
 	asm volatile("adr	%0, _DYNAMIC" : "=&r"(_dynamic_addr));	\
 	(const Elf_Dyn *)_dynamic_addr;					\
 })
+#endif
 
 bool arch_digest_dynamic(struct Struct_Obj_Entry *obj, const Elf_Dyn *dynp);
 
@@ -57,12 +73,21 @@ bool arch_digest_note(struct Struct_Obj_Entry *obj, const Elf_Note *note);
 
 #define	arch_fix_auxv(a, ai)		do {} while (0)
 
-Elf_Addr reloc_jmpslot(Elf_Addr *where, Elf_Addr target,
+uintptr_t reloc_jmpslot(uintptr_t *where, uintptr_t target,
     const struct Struct_Obj_Entry *defobj, const struct Struct_Obj_Entry *obj,
     const Elf_Rel *rel);
 
+#ifdef __CHERI__
+
+#define	make_function_pointer(def, defobj) \
+	make_function_cap(def, defobj)
+
+#else /* __CHERI__ */
+
 #define	make_function_pointer(def, defobj) \
 	((defobj)->relocbase + (def)->st_value)
+
+#endif /* __CHERI__ */
 
 #define	call_initfini_pointer(obj, target) \
 	(((InitFunc)(target))())
@@ -80,18 +105,34 @@ extern struct __ifunc_arg_t ifunc_arg;
  * compare the argument with 0 to see if it is set.
  */
 #define	call_ifunc_resolver(ptr)					      \
-	(((Elf_Addr (*)(uint64_t, const struct __ifunc_arg_t *, uint64_t,     \
+	(((uintptr_t (*)(uint64_t, const struct __ifunc_arg_t *, uint64_t,    \
 	    uint64_t, uint64_t, uint64_t, uint64_t, uint64_t))ptr)(	      \
 	    ifunc_arg._hwcap, &ifunc_arg, 0, 0, 0, 0, 0, 0))
 
 #define	round(size, align)				\
 	(((size) + (align) - 1) & ~((align) - 1))
+
+#if !defined(TLS_TGOT) || defined(TLS_TGOT_COMPAT)
 #define	calculate_first_tls_offset(size, align, offset)	\
-	round(16, align)
+	round(TLS_TCB_SIZE, align)
 #define	calculate_tls_offset(prev_offset, prev_size, size, align, offset) \
 	round(prev_offset + prev_size, align)
 #define calculate_tls_post_size(align) \
 	round(TLS_TCB_SIZE, align) - TLS_TCB_SIZE
+#endif
+
+#ifdef TLS_TGOT
+#ifdef TLS_TGOT_COMPAT
+size_t calculate_first_tgot_offset(size_t size, size_t align, size_t offset);
+size_t calculate_tgot_offset(size_t prev_offset, size_t prev_size, size_t size,
+    size_t align, size_t offset);
+#else
+#define	calculate_first_tgot_offset(size, align, offset)	\
+	TLS_TCB_SIZE
+#define	calculate_tgot_offset(prev_offset, prev_size, size, align, offset) \
+	round(prev_offset + prev_size, align)
+#endif
+#endif
 
 typedef struct {
     unsigned long ti_module;
@@ -101,5 +142,16 @@ typedef struct {
 extern void *__tls_get_addr(tls_index *ti);
 
 #define md_abi_variant_hook(x)
+
+extern void (*rtld_bind_start_fptr)(void);
+#if !defined(TLS_TGOT) || defined(TLS_TGOT_COMPAT)
+extern void *(*rtld_tlsdesc_static_fptr)(void *);
+extern void *(*rtld_tlsdesc_undef_fptr)(void *);
+extern void *(*rtld_tlsdesc_dynamic_fptr)(void *);
+#endif
+#ifdef TLS_TGOT
+extern void *(*rtld_tgot_tlsdesc_static_fptr)(void *);
+extern void *(*rtld_tgot_tlsdesc_dynamic_fptr)(void *);
+#endif
 
 #endif
