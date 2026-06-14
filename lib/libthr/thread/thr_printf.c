@@ -27,6 +27,7 @@
  */
 
 #include <stdarg.h>
+#include <stdbool.h>
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -67,18 +68,18 @@ _thread_vprintf(int fd, const char *fmt, va_list ap)
 	unsigned long r, u;
 	int c;
 	long d;
-	int islong, isalt;
+	bool isalt, islong;
 
 	while ((c = *fmt++)) {
-		isalt = 0;
-		islong = 0;
+		isalt = false;
+		islong = false;
 		if (c == '%') {
 next:			c = *fmt++;
 			if (c == '\0')
 				return;
 			switch (c) {
 			case '#':
-				isalt = 1;
+				isalt = true;
 				goto next;
 			case 'c':
 				pchar(fd, va_arg(ap, int));
@@ -87,11 +88,11 @@ next:			c = *fmt++;
 				pstr(fd, va_arg(ap, char *));
 				continue;
 			case 'l':
-				islong = 1;
+				islong = true;
 				goto next;
 			case 'p':
 				pstr(fd, "0x");
-				islong = 1;
+				islong = true;
 				/* FALLTHROUGH */
 			case 'd':
 			case 'u':
