@@ -466,6 +466,9 @@ preload_modinfo_type(struct sbuf *sbp, int type)
 	case MODINFOMD_SHTDWNSPLASH:
 		sbuf_cat(sbp, "MODINFOMD_SHTDWNSPLASH");
 		break;
+	case MODINFOMD_PHDR:
+		sbuf_cat(sbp, "MODINFOMD_PHDR");
+		break;
 #ifdef MODINFOMD_BOOT_HARTID
 	case MODINFOMD_BOOT_HARTID:
 		sbuf_cat(sbp, "MODINFOMD_BOOT_HARTID");
@@ -548,6 +551,7 @@ preload_modinfo_value(struct sbuf *sbp, uint32_t *bptr, int type, int len)
 #ifdef MODINFOMD_EFI_MAP
 	case MODINFO_METADATA | MODINFOMD_EFI_MAP:
 #endif
+	case MODINFO_METADATA | MODINFOMD_PHDR:
 		/* Don't print data buffers. */
 		sbuf_cat(sbp, "buffer contents omitted");
 		break;
