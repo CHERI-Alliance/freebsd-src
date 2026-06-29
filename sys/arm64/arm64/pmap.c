@@ -369,9 +369,8 @@ vm_paddr_t dmap_phys_base;	/* The start of the dmap region */
 vm_paddr_t dmap_phys_max;	/* The limit of the dmap region */
 #ifdef __CHERI__
 void *dmap_capability;		/* Root capability for the dmap region */
-#else
-vm_offset_t dmap_max_addr;	/* The virtual address limit of the dmap */
 #endif
+vm_offset_t dmap_max_addr;	/* The virtual address limit of the dmap */
 static int dmap_attr = VM_MEMATTR_WRITE_BACK;
 
 extern pt_entry_t pagetable_l0_ttbr1[];
@@ -1376,9 +1375,7 @@ pmap_bootstrap_dmap(vm_size_t kernlen)
 
 	dmap_phys_base = physmap[0] & ~L1_OFFSET;
 	dmap_phys_max = 0;
-#ifndef __CHERI__
 	dmap_max_addr = 0;
-#endif
 
 	for (i = 0; i < physmap_idx; i += 2) {
 		bs_state.pa = physmap[i] & ~L3_OFFSET;
@@ -1430,9 +1427,7 @@ pmap_bootstrap_dmap(vm_size_t kernlen)
 
 		if (bs_state.pa > dmap_phys_max) {
 			dmap_phys_max = bs_state.pa;
-#ifndef __CHERI__
 			dmap_max_addr = bs_state.va;
-#endif
 		}
 	}
 
