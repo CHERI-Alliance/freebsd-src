@@ -37,8 +37,10 @@
 #include <vm/vm.h>
 #include <vm/vm_page.h>
 
+#ifdef MTE
 /* Version of MTE implemented. 0 == unimplemented */
 static u_int __read_mostly mte_version = 0;
+#endif
 
 /*
  * FEAT_MTE (mte_version == 1) has userspace instructions, but no tag
@@ -49,6 +51,7 @@ static u_int __read_mostly mte_version = 0;
 
 struct thread *mte_switch(struct thread *);
 
+#ifdef MTE
 #define load_tags(addr) ({						\
 	uint64_t __val;							\
 	asm volatile(							\
@@ -79,6 +82,7 @@ mte_update_sctlr(struct thread *td, uint64_t sctlr)
 	td->td_md.md_sctlr &= ~(SCTLR_ATA0 | SCTLR_TCF0_MASK);
 	td->td_md.md_sctlr |= sctlr;
 }
+#endif
 
 /**
  * Clear/sync the allocation tags for a given page. This should be done on
@@ -88,6 +92,7 @@ mte_update_sctlr(struct thread *td, uint64_t sctlr)
 void
 mte_sync_tags(vm_page_t page)
 {
+#ifdef MTE
 	char *addr;
 	size_t block_size;
 
@@ -109,6 +114,7 @@ mte_sync_tags(vm_page_t page)
 		    ".arch_extension nomemtag" : : "r" (addr));
 
 	page->md.pv_flags |= PV_MTE_TAGGED;
+#endif
 }
 
 /**
@@ -118,6 +124,7 @@ mte_sync_tags(vm_page_t page)
 void
 mte_copy_tags(vm_page_t srcpage, vm_page_t dstpage, char *src, char *dst)
 {
+#ifdef MTE
 	size_t block_size;
 	uint64_t tags;
 
@@ -134,38 +141,45 @@ mte_copy_tags(vm_page_t srcpage, vm_page_t dstpage, char *src, char *dst)
 		set_tags(tags, dst);
 	}
 	dstpage->md.pv_flags |= PV_MTE_TAGGED;
+#endif
 }
 
 void
 mte_fork(struct thread *new_td, struct thread *orig_td)
 {
+#ifdef MTE
 	if (!MTE_HAS_TAG_CHECK)
 		return;
 
 	mte_update_sctlr(new_td,
 	    orig_td->td_md.md_sctlr & SCTLR_TCF0_MASK);
 	new_td->td_md.md_gcr = orig_td->td_md.md_gcr;
+#endif
 }
 
 void
 mte_exec(struct thread *td)
 {
+#ifdef MTE
 	if (!MTE_HAS_TAG_CHECK)
 		return;
 
 	mte_update_sctlr(td, SCTLR_TCF0_NONE);
 	td->td_md.md_gcr = GCR_RRND;
+#endif
 }
 
 void
 mte_copy_thread(struct thread *new_td, struct thread *orig_td)
 {
+#ifdef MTE
 	if (!MTE_HAS_TAG_CHECK)
 		return;
 
 	mte_update_sctlr(new_td,
 	    orig_td->td_md.md_sctlr & SCTLR_TCF0_MASK);
 	new_td->td_md.md_gcr = orig_td->td_md.md_gcr;
+#endif
 }
 
 /* Only for kernel threads */
@@ -184,8 +198,10 @@ mte_thread0(struct thread *td)
 struct thread *
 mte_switch(struct thread *td)
 {
+#ifdef MTE
 	if (MTE_HAS_TAG_CHECK) {
 		WRITE_SPECIALREG(GCR_EL1_REG, td->td_md.md_gcr);
 	}
+#endif
 	return (td);
 }
