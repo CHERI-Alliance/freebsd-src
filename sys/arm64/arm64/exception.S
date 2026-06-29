@@ -102,6 +102,7 @@
 
 	ldr	PTR(19), [PTR(18), #(PC_CURTHREAD)]
 
+#ifdef MTE
 	ldr	PTR(1), [PTR(19), #TD_MD_SCTLR]
 	/*
 	 * If the upper bit in SCTLR_EL1.TCF0 is set we are either in async
@@ -124,6 +125,7 @@
 .arch_extension nolse
 
 2:
+#endif
 #ifdef PAC
 	mov	PTR(0), PTR(19)
 	bl	ptrauth_exit_el0
@@ -153,12 +155,14 @@
 .if \el == 0
 	ldr	PTR(0), [PTR(18), #PC_CURTHREAD]
 
+#ifdef MTE
 	ldr	PTR(1), [PTR(0), #TD_MD_SCTLR]
 	/* See above for why we check this field */
 	tbz	x1, #(SCTLR_TCF0_SHIFT + 1), 1f
 	dsb	ish
 	msr	TFSRE0_EL1_REG, xzr
 1:
+#endif
 
 	mov	PTR(1), PTRN(sp)
 	bl	dbg_monitor_exit

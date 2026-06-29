@@ -13,6 +13,7 @@ nooptions	DDB		# Not yet
 nooptions	COMPAT_FREEBSD32 # Not ported, doesn't work on Morello core
 nooptions	netmap		# Stores user and kernel pointers in uint64_t
 nooptions	PERTHREAD_SSP	# Not relevant in purecap
+nooptions	MTE		# Not ported and no hardware
 nooptions	PAC		# Doesn't build with Morello LLVM
 
 nodevice	dpaa2		# Stores pointers in rman_res_t
