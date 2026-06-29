@@ -555,7 +555,7 @@ its_device_get(device_t dev, struct its_device_list *dev_list, device_t child,
 
 
 static int
-gicv5_its_intr(void *arg, uintptr_t irq)
+gicv5_its_intr(void *arg, unsigned long irq)
 {
 	struct gicv5_its_softc *sc = arg;
 	struct gicv5_its_irqsrc *gi;
