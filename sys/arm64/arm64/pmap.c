@@ -7255,6 +7255,7 @@ pmap_copy_page(vm_page_t msrc, vm_page_t mdst)
 	void *src = VM_PAGE_TO_DMAP(msrc);
 	void *dst = VM_PAGE_TO_DMAP(mdst);
 
+#ifdef MTE
 	/*
 	 * On a page copy, check whether the src page has MTE tags. If it does,
 	 * we must copy the tags before copying the contents of the page.
@@ -7263,6 +7264,7 @@ pmap_copy_page(vm_page_t msrc, vm_page_t mdst)
 		mte_copy_tags(msrc, mdst, src, dst);
 	else
 		mdst->md.pv_flags &= ~PV_MTE_TAGGED;
+#endif
 	pagecopy_cleartags((void *)src, (void *)dst);
 }
 
@@ -7273,6 +7275,7 @@ pmap_copy_page_tags(vm_page_t msrc, vm_page_t mdst)
 	void *src = VM_PAGE_TO_DMAP(msrc);
 	void *dst = VM_PAGE_TO_DMAP(mdst);
 
+#ifdef MTE
 	/*
 	 * On a page copy, check whether the src page has MTE tags. If it does,
 	 * we must copy the tags before copying the contents of the page.
@@ -7281,6 +7284,7 @@ pmap_copy_page_tags(vm_page_t msrc, vm_page_t mdst)
 		mte_copy_tags(msrc, mdst, src, dst);
 	else
 		mdst->md.pv_flags &= ~PV_MTE_TAGGED;
+#endif
 	pagecopy(src, dst);
 }
 #endif
