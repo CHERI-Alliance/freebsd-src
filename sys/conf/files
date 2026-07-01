@@ -4164,6 +4164,7 @@ libkern/jenkins_hash.c		standard
 libkern/murmur3_32.c		standard
 libkern/memcchr.c		standard
 libkern/memchr.c		standard
+libkern/memcpy_data.c		optional cpu_cheri
 libkern/memmem.c		optional gdb
 libkern/qsort.c			standard
 libkern/qsort_r.c		standard
