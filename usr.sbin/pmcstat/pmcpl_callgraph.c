@@ -285,7 +285,7 @@ pmcstat_cgnode_print(struct pmcstat_cgnode *cg, int depth, uint32_t total)
 		    pmcstat_string_unintern(sym->ps_name));
 	else
 		(void) fprintf(args.pa_graphfile, "%p",
-		    (void *) (cg->pcg_image->pi_vaddr + cg->pcg_func));
+		    (void *)(intptr_t)(cg->pcg_image->pi_vaddr + cg->pcg_func));
 
 	if (pmcstat_previous_filename_printed !=
 	    cg->pcg_image->pi_fullpath) {
@@ -490,13 +490,13 @@ pmcstat_cgnode_topprint(struct pmcstat_cgnode *cg,
 	sym = pmcstat_symbol_search(cg->pcg_image, cg->pcg_func);
 	if (sym == NULL) {
 		snprintf(ns, sizeof(ns), "%p",
-		    (void *)(cg->pcg_image->pi_vaddr + cg->pcg_func));
+		    (void *)(intptr_t)(cg->pcg_image->pi_vaddr + cg->pcg_func));
 	} else {
 		switch (args.pa_flags & (FLAG_SKIP_TOP_FN_RES | FLAG_SHOW_OFFSET)) {
 		case FLAG_SKIP_TOP_FN_RES | FLAG_SHOW_OFFSET:
 		case FLAG_SKIP_TOP_FN_RES:
 			snprintf(ns, sizeof(ns), "%p",
-			    (void *)(cg->pcg_image->pi_vaddr + cg->pcg_func));
+			    (void *)(intptr_t)(cg->pcg_image->pi_vaddr + cg->pcg_func));
 			break;
 		case FLAG_SHOW_OFFSET:
 			snprintf(ns, sizeof(ns), "%s+%#0" PRIx64,
@@ -567,7 +567,7 @@ pmcstat_cgnode_topprint(struct pmcstat_cgnode *cg,
 			    pmcstat_string_unintern(sym->ps_name));
 		} else
 			ns_len = snprintf(ns, sizeof(ns), "%p",
-			    (void *)pcg->pcg_func);
+			    (void *)(intptr_t)pcg->pcg_func);
 
 		len = ns_len + vs_len + 1;
 		if (width - len < 0) {
