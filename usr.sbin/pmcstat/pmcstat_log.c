@@ -294,7 +294,7 @@ pmcstat_image_addr2line(struct pmcstat_image *image, ptraddr_t addr,
 		return (0);
 	}
 
-	fprintf(image->pi_addr2line, "%p\n", (void *)addr);
+	fprintf(image->pi_addr2line, "%p\n", (void *)(intptr_t)addr);
 
 	if (fgets(funcname, funcname_len, image->pi_addr2line) == NULL) {
 		warnx("WARNING: addr2line function name read error");
@@ -518,7 +518,8 @@ pmcstat_print_log(void)
 				npc = 0;
 			for (; npc < ev.pl_u.pl_cc.pl_npc; npc++)
 				PMCSTAT_PRINT_ENTRY("...", "%p",
-				    (void *) ev.pl_u.pl_cc.pl_pc[npc]);
+				    (void *)(intptr_t)
+				    ev.pl_u.pl_cc.pl_pc[npc]);
 			break;
 		case PMCLOG_TYPE_CLOSELOG:
 			PMCSTAT_PRINT_ENTRY("closelog",);
@@ -541,14 +542,14 @@ pmcstat_print_log(void)
 		case PMCLOG_TYPE_MAP_IN:
 			PMCSTAT_PRINT_ENTRY("map-in","%d %p \"%s\"",
 			    ev.pl_u.pl_mi.pl_pid,
-			    (void *) ev.pl_u.pl_mi.pl_start,
+			    (void *)(intptr_t)ev.pl_u.pl_mi.pl_start,
 			    ev.pl_u.pl_mi.pl_pathname);
 			break;
 		case PMCLOG_TYPE_MAP_OUT:
 			PMCSTAT_PRINT_ENTRY("map-out","%d %p %p",
 			    ev.pl_u.pl_mo.pl_pid,
-			    (void *) ev.pl_u.pl_mo.pl_start,
-			    (void *) ev.pl_u.pl_mo.pl_end);
+			    (void *)(intptr_t)ev.pl_u.pl_mo.pl_start,
+			    (void *)(intptr_t)ev.pl_u.pl_mo.pl_end);
 			break;
 		case PMCLOG_TYPE_PMCALLOCATE:
 			PMCSTAT_PRINT_ENTRY("allocate","0x%x \"%s\" 0x%x",
@@ -589,8 +590,8 @@ pmcstat_print_log(void)
 			PMCSTAT_PRINT_ENTRY("exec","0x%x %d %p %p \"%s\"",
 			    ev.pl_u.pl_x.pl_pmcid,
 			    ev.pl_u.pl_x.pl_pid,
-			    (void *)ev.pl_u.pl_x.pl_baseaddr,
-			    (void *)ev.pl_u.pl_x.pl_dynaddr,
+			    (void *)(intptr_t)ev.pl_u.pl_x.pl_baseaddr,
+			    (void *)(intptr_t)ev.pl_u.pl_x.pl_dynaddr,
 			    ev.pl_u.pl_x.pl_pathname);
 			break;
 		case PMCLOG_TYPE_PROCEXIT:
