@@ -209,8 +209,9 @@ struct syscall_decode {
 	/*
 	 * Syscall return type:
 	 * 0: no return value (e.g. exit)
-	 * 1: normal return value (a single int/long/pointer)
+	 * 1: normal return value (a single int/long)
 	 * 2: off_t return value (two values for 32-bit ABIs)
+	 * 3: pointer
 	 */
 	u_int ret_type;
 	u_int nargs;		     /* number of meaningful arguments */

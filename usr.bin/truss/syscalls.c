@@ -77,6 +77,10 @@
 #include <unistd.h>
 #include <vis.h>
 
+#ifdef __CHERI__
+#include <cheri/cheric.h>
+#endif
+
 #include "truss.h"
 #include "extern.h"
 #include "syscall.h"
@@ -386,7 +390,7 @@ static const struct syscall_decode decoded_syscalls[] = {
 	  .args = { { Ptr, 0 }, { Sizet, 1 } } },
 	{ .name = "mlockall", .ret_type = 1, .nargs = 1,
 	  .args = { { Mlockall, 0 } } },
-	{ .name = "mmap", .ret_type = 1, .nargs = 6,
+	{ .name = "mmap", .ret_type = 3, .nargs = 6,
 	  .args = { { Ptr, 0 }, { Sizet, 1 }, { Mprot, 2 }, { Mmapflags, 3 },
 		    { Int, 4 }, { QuadHex, 5 } } },
 	{ .name = "modfind", .ret_type = 1, .nargs = 1,
@@ -1752,6 +1756,7 @@ print_arg(struct syscall_arg *sc, syscallarg_t *args, syscallarg_t *retval,
 		union {
 			int32_t strarray32[PAGE_SIZE / sizeof(int32_t)];
 			int64_t strarray64[PAGE_SIZE / sizeof(int64_t)];
+			intptr_t strarray_ptr[PAGE_SIZE / sizeof(intptr_t)];
 			char buf[PAGE_SIZE];
 		} u;
 		char *string;
@@ -1799,6 +1804,8 @@ print_arg(struct syscall_arg *sc, syscallarg_t *args, syscallarg_t *retval,
 				straddr = user_ptr32_to_psaddr(u.strarray32[i]);
 			} else if (pointer_size == 8) {
 				straddr = (psaddr_t)u.strarray64[i];
+			} else if (pointer_size == sizeof(intptr_t)) {
+				straddr = (psaddr_t)u.strarray_ptr[i];
 			} else {
 				errx(1, "Unsupported pointer size: %zu",
 				    pointer_size);
@@ -2883,6 +2890,15 @@ print_syscall_ret(struct trussinfo *trussinfo, int error, syscallarg_t *retval)
 #endif
 		fprintf(trussinfo->outfile, " = %jd (0x%jx)\n", (intmax_t)off,
 		    (intmax_t)off);
+	} else if (sc->decode.ret_type == 3) {
+#ifdef __CHERI__
+		char tmp[128];
+		strfcap(tmp, sizeof(tmp), "%T%C", retval[0]);
+		fprintf(trussinfo->outfile, " = %s\n", tmp);
+#else
+		fprintf(trussinfo->outfile, " = %p\n",
+		    (void *)(intptr_t)retval[0]);
+#endif
 	} else {
 		fprintf(trussinfo->outfile, " = %jd (0x%jx)\n",
 		    (intmax_t)retval[0], (intmax_t)retval[0]);
