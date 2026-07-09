@@ -35,13 +35,33 @@
 #include <sysdecode.h>
 #include "rtld_utrace.h"
 
-#ifdef __LP64__
+#if defined(__aarch64__) || defined(__amd64__) || defined(__powerpc64__)
+#define	HAS_FREEBSD32
+#endif
+
+#ifdef __CHERI__
+#define	HAS_FREEBSD64
+#endif
+
+#ifdef HAS_FREEBSD32
 struct utrace_rtld32 {
 	char sig[4];
 	int event;
 	uint32_t handle;
 	uint32_t mapbase;
 	uint32_t mapsize;
+	int refcnt;
+	char name[MAXPATHLEN];
+};
+#endif
+
+#ifdef HAS_FREEBSD64
+struct utrace_rtld64 {
+	char sig[4];
+	int event;
+	uint64_t handle;
+	uint64_t mapbase;
+	uint64_t mapsize;
 	int refcnt;
 	char name[MAXPATHLEN];
 };
@@ -137,11 +157,19 @@ struct utrace_malloc {
 	void *r;
 };
 
-#ifdef __LP64__
+#ifdef HAS_FREEBSD32
 struct utrace_malloc32 {
 	uint32_t p;
 	uint32_t s;
 	uint32_t r;
+};
+#endif
+
+#ifdef HAS_FREEBSD64
+struct utrace_malloc64 {
+	uint64_t p;
+	uint64_t s;
+	uint64_t r;
 };
 #endif
 
@@ -163,12 +191,19 @@ print_utrace_malloc(FILE *fp, void *p)
 int
 sysdecode_utrace(FILE *fp, void *p, size_t len)
 {
-#ifdef __LP64__
+#if defined(HAS_FREEBSD32) || defined(HAS_FREEBSD32)
 	struct utrace_rtld ur;
-	struct utrace_rtld32 *pr;
 	struct utrace_malloc um;
+#ifdef HAS_FREEBSD32
+	struct utrace_rtld32 *pr;
 	struct utrace_malloc32 *pm;
 #endif
+#ifdef HAS_FREEBSD64
+	struct utrace_rtld64 *r64;
+	struct utrace_malloc64 *m64;
+#endif
+#endif
+
 	static const char rtld_utrace_sig[RTLD_UTRACE_SIG_SZ] __nonstring =
 	    RTLD_UTRACE_SIG;
 
@@ -181,7 +216,7 @@ sysdecode_utrace(FILE *fp, void *p, size_t len)
 		return (1);
 	}
 
-#ifdef __LP64__
+#ifdef HAS_FREEBSD32
 	if (len == sizeof(struct utrace_rtld32) && bcmp(p, rtld_utrace_sig,
 	    sizeof(rtld_utrace_sig)) == 0) {
 		pr = p;
@@ -203,6 +238,32 @@ sysdecode_utrace(FILE *fp, void *p, size_t len)
 		    (void *)(uintptr_t)pm->p;
 		um.s = pm->s;
 		um.r = (void *)(uintptr_t)pm->r;
+		print_utrace_malloc(fp, &um);
+		return (1);
+	}
+#endif
+
+#ifdef HAS_FREEBSD64
+	if (len == sizeof(struct utrace_rtld64) && bcmp(p, rtld_utrace_sig,
+	    sizeof(rtld_utrace_sig)) == 0) {
+		r64 = p;
+		memset(&ur, 0, sizeof(ur));
+		memcpy(ur.sig, r64->sig, sizeof(ur.sig));
+		ur.event = r64->event;
+		ur.handle = (void *)(uintptr_t)r64->handle;
+		ur.mapbase = (void *)(uintptr_t)r64->mapbase;
+		ur.mapsize = r64->mapsize;
+		ur.refcnt = r64->refcnt;
+		memcpy(ur.name, r64->name, sizeof(ur.name));
+		return (print_utrace_rtld(fp, &ur));
+	}
+
+	if (len == sizeof(struct utrace_malloc64)) {
+		m64 = p;
+		memset(&um, 0, sizeof(um));
+		um.p = (void *)(uintptr_t)m64->p;
+		um.s = m64->s;
+		um.r = (void *)(uintptr_t)m64->r;
 		print_utrace_malloc(fp, &um);
 		return (1);
 	}
