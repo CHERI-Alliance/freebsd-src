@@ -90,6 +90,11 @@ CXXFLAGS+= -fzero-call-used-regs=${ZEROREG_TYPE}
 
 # macOS linker doesn't understand the --fatal-warnings flag
 .if ${LINKER_TYPE} != "mac"
+.if ${MACHINE_ABI:Mpurecap}
+# ld.lld: error: could not determine size of cap reloc against local object snl_f_p_empty
+# ld.lld: warning: could not determine size of cap reloc against function (in GOT) __je_prof_bt_hash
+LD_FATAL_WARNINGS=no
+.endif
 .if defined(LD_FATAL_WARNINGS) && ${LD_FATAL_WARNINGS} == "no"
 LDFLAGS+=	-Wl,--no-fatal-warnings
 .else
