@@ -169,7 +169,7 @@ mutex2_threadfunc(void *arg)
 		PTHREAD_REQUIRE(pthread_mutex_unlock(&mutex));
 	}
 
-	return (void *)count;
+	return (void *)(intptr_t)count;
 }
 
 ATF_TC(mutex2);
@@ -287,7 +287,7 @@ mutex3_threadfunc(void *arg)
 		PTHREAD_REQUIRE(pthread_mutex_unlock(&static_mutex));
 	}
 
-	return (void *)count;
+	return (void *)(intptr_t)count;
 }
 
 ATF_TC(mutex3);
