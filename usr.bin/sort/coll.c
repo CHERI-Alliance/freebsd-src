@@ -121,7 +121,7 @@ struct key_value *
 get_key_from_keys_array(struct keys_array *ka, size_t ind)
 {
 
-	return ((struct key_value *)((caddr_t)ka->key +
+	return ((struct key_value *)(void *)((caddr_t)ka->key +
 	    ind * (sizeof(struct key_value) + key_hint_size())));
 }
 
