@@ -334,10 +334,14 @@ BROKEN_OPTIONS+=KERBEROS
 BROKEN_OPTIONS+=DTRACE
 # ZFS ported, but skipping for now
 BROKEN_OPTIONS+=ZFS
+# Too many CDDL bits are actually DTRACE or ZFS
+BROKEN_OPTIONS+=CDDL
 # can't build libc_nonshared ATM
 BROKEN_OPTIONS+=LIB32
 # can't be bothered
 BROKEN_OPTIONS+=IPFILTER
+# No point
+BROKEN_OPTIONS+=TOOLCHAIN
 .endif
 
 # EFI doesn't exist on powerpc (well, officially) and doesn't work on i386
