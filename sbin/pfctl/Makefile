@@ -31,4 +31,9 @@ LIBADD=	m md pfctl
 HAS_TESTS=
 SUBDIR.${MK_TESTS}+= tests
 
+.if ${MACHINE_ABI:Mpurecap}
+# ld.lld: error: could not determine size of cap reloc against local object snl_f_p_empty
+LDFLAGS+=-Wl,--warning-limit=0
+.endif
+
 .include <bsd.prog.mk>
