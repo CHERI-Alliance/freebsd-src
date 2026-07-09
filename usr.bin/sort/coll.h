@@ -95,7 +95,11 @@ struct key_hint
 		struct M_hint		Mh;
 		struct R_hint		Rh;
 	}			v;
-};
+}
+#ifdef __CHERI_
+__aligned(sizeof(void *))
+#endif
+;
 
 /*
  * Key value
@@ -104,7 +108,11 @@ struct key_value
 {
 	struct bwstring		*k; /* key string */
 	struct key_hint		 hint[0]; /* key sort hint */
-} __packed;
+}
+#ifndef __CHERI__
+__packed
+#endif
+;
 
 /*
  * Set of keys container object.
