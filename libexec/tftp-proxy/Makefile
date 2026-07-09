@@ -1,3 +1,5 @@
+.include <src.opts.mk>
+
 .PATH:	${SRCTOP}/contrib/pf/tftp-proxy
 
 PACKAGE= pf
@@ -9,5 +11,10 @@ CFLAGS+= -I${SRCTOP}/lib/libpfctl -I${OBJTOP}/lib/libpfctl
 LIBADD= pfctl
 
 WARNS?=	3
+
+.if ${MACHINE_ABI:Mpurecap}
+# ld.lld: error: could not determine size of cap reloc against local object snl_f_p_empty
+LDFLAGS+=-Wl,--error-limit=0
+.endif
 
 .include <bsd.prog.mk>

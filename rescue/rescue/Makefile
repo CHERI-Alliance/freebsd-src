@@ -125,6 +125,11 @@ CRUNCH_PROGS_sbin+= ipfw
 .if ${MK_PF} != "no"
 CRUNCH_PROGS_sbin+= pfctl
 CRUNCH_LIBS_pfctl+= ${LIBPFCTL} ${LIBNV}
+
+.if ${MACHINE_ABI:Mpurecap}
+# ld.lld: error: could not determine size of cap reloc against local object snl_f_p_empty
+LDFLAGS+=-Wl,--error-limit=0
+.endif
 .endif
 
 .if ${MK_ROUTED} != "no"
