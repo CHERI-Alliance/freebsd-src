@@ -69,6 +69,7 @@ map_object(int fd, const char *path, const struct stat *sb, bool ismain)
 	Elf_Phdr *phdyn;
 	Elf_Phdr *phinterp;
 	Elf_Phdr *phtls;
+	Elf_Phdr *phtgot;
 	caddr_t mapbase;
 	size_t mapsize;
 	Elf_Addr base_vaddr;
@@ -107,7 +108,7 @@ map_object(int fd, const char *path, const struct stat *sb, bool ismain)
 	phsize = hdr->e_phnum * sizeof(phdr[0]);
 	phlimit = phdr + hdr->e_phnum;
 	nsegs = -1;
-	phdyn = phinterp = phtls = NULL;
+	phdyn = phtgot = phinterp = phtls = NULL;
 	phdr_vaddr = 0;
 	note_start = 0;
 	note_end = 0;
@@ -148,6 +149,10 @@ map_object(int fd, const char *path, const struct stat *sb, bool ismain)
 
 		case PT_TLS:
 			phtls = phdr;
+			break;
+
+		case PT_CHERI_TGOT:
+			phtgot = phdr;
 			break;
 
 		case PT_GNU_STACK:
@@ -337,6 +342,18 @@ map_object(int fd, const char *path, const struct stat *sb, bool ismain)
 		obj->tlsinitsize = phtls->p_filesz;
 		obj->tlsinit = obj->relocbase + phtls->p_vaddr;
 	}
+	if (phtgot != NULL) {
+#ifdef TLS_TGOT
+		obj->tgotsize = phtgot->p_memsz;
+		obj->tgotalign = phtgot->p_align;
+		obj->tgotpoffset = phtgot->p_offset;
+		obj->tgotinitsize = phtgot->p_filesz;
+		obj->tgotinit = mapbase + phtgot->p_vaddr;
+#else
+		_rtld_error("%s: TGOT not supported", path);
+		goto error;
+#endif
+	}
 	obj->stack_flags = stack_flags;
 	if (note_start < note_end)
 		digest_notes(obj, (const Elf_Note *)note_start,
@@ -444,8 +461,14 @@ obj_free(Obj_Entry *obj)
 {
 	Objlist_Entry *elm;
 
+#if !defined(TLS_TGOT) || defined(TLS_TGOT_COMPAT)
 	if (obj->tls_static)
 		free_tls_offset(obj);
+#endif
+#ifdef TLS_TGOT
+	if (obj->tgot_static)
+		free_tgot_offset(obj);
+#endif
 	while (obj->needed != NULL) {
 		Needed_Entry *needed = obj->needed;
 
