@@ -115,4 +115,7 @@ __ElfType(Auxinfo);
     (HWCAP_ISA_I | HWCAP_ISA_M | HWCAP_ISA_A | HWCAP_ISA_F | HWCAP_ISA_D)
 #define	HWCAP_ISA_B		HWCAP_ISA_BIT('b')
 
+/* Per-ABI max (and default) stack permissions. */
+#define	PF_GNU_STACK_MAX	(PF_R | PF_W | PF_X)
+
 #endif /* !_MACHINE_ELF_H_ */
