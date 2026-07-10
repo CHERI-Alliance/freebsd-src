@@ -113,7 +113,7 @@ map_object(int fd, const char *path, const struct stat *sb, bool ismain)
 	note_map = NULL;
 	note_map_len = 0;
 	segs = xcalloc(hdr->e_phnum, sizeof(segs[0]));
-	stack_flags = PF_X | PF_R | PF_W;
+	stack_flags = PF_GNU_STACK_MAX;
 	while (phdr < phlimit) {
 		switch (phdr->p_type) {
 		case PT_INTERP:
@@ -156,6 +156,8 @@ map_object(int fd, const char *path, const struct stat *sb, bool ismain)
 			break;
 
 		case PT_GNU_STACK:
+			if (!check_gnu_stack(phdr->p_flags, path))
+				goto error;
 			stack_flags = phdr->p_flags;
 			break;
 

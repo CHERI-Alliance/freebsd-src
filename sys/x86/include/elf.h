@@ -152,4 +152,7 @@ __ElfType(Auxinfo);
 
 #endif /* __i386__, __amd64__ */
 
+/* Per-ABI max (and default) stack permissions. */
+#define	PF_GNU_STACK_MAX	(PF_R | PF_W | PF_X)
+
 #endif /* !_MACHINE_ELF_H_ */

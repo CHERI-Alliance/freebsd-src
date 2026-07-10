@@ -108,4 +108,7 @@ __ElfType(Auxinfo);
 #define	HWCAP2_SHA2		0x00000008
 #define	HWCAP2_CRC32		0x00000010
 
+/* Per-ABI max (and default) stack permissions. */
+#define	PF_GNU_STACK_MAX	(PF_R | PF_W | PF_X)
+
 #endif /* !_MACHINE_ELF_H_ */
