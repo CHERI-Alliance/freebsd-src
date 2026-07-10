@@ -200,7 +200,7 @@ map_object(int fd, const char *path, const struct stat *sb, bool ismain)
 	base_vlimit = rtld_round_page(segs[nsegs]->p_vaddr +
 	    segs[nsegs]->p_memsz);
 	mapsize = base_vlimit - base_vaddr;
-	base_addr = (caddr_t)base_vaddr;
+	base_addr = (caddr_t)(uintptr_t)base_vaddr;
 	base_flags = MAP_GUARD;
 	if (npagesizes > 1 &&  rtld_round_page(segs[0]->p_filesz) >=
 	    pagesizes[1])
@@ -208,7 +208,8 @@ map_object(int fd, const char *path, const struct stat *sb, bool ismain)
 	if (base_vaddr != 0)
 		base_flags |= MAP_FIXED | MAP_EXCL;
 
-	mapbase = mmap(base_addr, mapsize, PROT_NONE, base_flags, -1, 0);
+	mapbase = mmap(base_addr, mapsize, PROT_NONE | PROT_MAX(_PROT_ALL),
+	    base_flags, -1, 0);
 	if (mapbase == MAP_FAILED) {
 		_rtld_error("%s: mmap of entire address space failed: %s",
 		    path, rtld_strerror(errno));
@@ -216,7 +217,8 @@ map_object(int fd, const char *path, const struct stat *sb, bool ismain)
 	}
 	if (base_addr != NULL && mapbase != base_addr) {
 		_rtld_error(
-		    "%s: mmap returned wrong address: wanted %p, got %p",
+		    "%s: mmap returned wrong address: wanted " PTR_FMT
+		    ", got " PTR_FMT,
 		    path, base_addr, mapbase);
 		goto error1;
 	}
