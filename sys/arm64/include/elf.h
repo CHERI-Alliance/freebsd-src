@@ -282,6 +282,9 @@ __ElfType(Auxinfo);
 #define	HWCAP32_2_CRC32		0x00000010
 #endif
 
+/* Per-ABI max (and default) stack permissions. */
+#define	PF_GNU_STACK_MAX	(PF_R | PF_W | PF_X)
+
 #ifdef __CHERI__
 void elf_reloc_self(const Elf_Dyn *dynp, void *data_cap, const void *code_cap);
 #endif

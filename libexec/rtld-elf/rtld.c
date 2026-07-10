@@ -1774,7 +1774,7 @@ digest_phdr(const Elf_Phdr *phdr, int phnum, caddr_t entry, const char *path)
 		break;
 	}
 
-	obj->stack_flags = PF_X | PF_R | PF_W;
+	obj->stack_flags = PF_GNU_STACK_MAX;
 
 	for (ph = phdr; ph < phlimit; ph++) {
 		switch (ph->p_type) {
@@ -1816,6 +1816,10 @@ digest_phdr(const Elf_Phdr *phdr, int phnum, caddr_t entry, const char *path)
 			break;
 
 		case PT_GNU_STACK:
+			if (!check_gnu_stack(phdr->p_flags, path)) {
+				obj_free(obj);
+				return (NULL);
+			}
 			obj->stack_flags = ph->p_flags;
 			break;
 
@@ -2514,7 +2518,7 @@ parse_rtld_phdr(Obj_Entry *obj)
 	bool first_seg;
 
 	first_seg = true;
-	obj->stack_flags = PF_X | PF_R | PF_W;
+	obj->stack_flags = PF_GNU_STACK_MAX;
 	for (ph = obj->phdr; ph < obj->phdr + obj->phnum; ph++) {
 		switch (ph->p_type) {
 		case PT_LOAD:
@@ -2526,6 +2530,8 @@ parse_rtld_phdr(Obj_Entry *obj)
 			    ph->p_memsz) - obj->vaddrbase;
 			break;
 		case PT_GNU_STACK:
+			if (!check_gnu_stack(ph->p_flags, obj->path))
+				rtld_die();
 			obj->stack_flags = ph->p_flags;
 			break;
 		case PT_NOTE:
@@ -3105,6 +3111,10 @@ load_kpreload(const void *addr)
 			phdyn = phdr;
 			break;
 		case PT_GNU_STACK:
+			if (!check_gnu_stack(phdr->p_flags, kname)) {
+				obj_free(obj);
+				return (-1);
+			}
 			/* Absense of PT_GNU_STACK implies stack_flags == 0. */
 			obj->stack_flags = phdr->p_flags;
 			break;
@@ -6351,6 +6361,23 @@ static int
 obj_enforce_relro(Obj_Entry *obj)
 {
 	return (obj_remap_relro(obj, PROT_READ));
+}
+
+bool
+check_gnu_stack(Elf_Word p_flags, const char *path)
+{
+	if ((p_flags & ~PF_MASKSTACK) != 0) {
+		_rtld_error("%s: invalid p_flags in PT_GNU_STACK %x",
+		    path, p_flags & ~PF_MASKSTACK);
+		return (false);
+	}
+	if ((p_flags & ~PF_GNU_STACK_MAX) != 0) {
+		_rtld_error("%s: invalid perm in PT_GNU_STACK %x",
+		    path, p_flags & ~PF_GNU_STACK_MAX);
+		return (false);
+	}
+
+	return (true);
 }
 
 static void
