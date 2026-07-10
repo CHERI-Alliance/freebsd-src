@@ -90,8 +90,8 @@ map_object(int fd, const char *path, const struct stat *sb, bool ismain)
 	Elf_Addr bss_vlimit;
 	caddr_t bss_addr;
 	Elf_Word stack_flags;
-	Elf_Addr note_start;
-	Elf_Addr note_end;
+	caddr_t note_start;
+	caddr_t note_end;
 	char *note_map;
 	size_t note_map_len;
 	Elf_Addr text_end;
@@ -171,12 +171,10 @@ map_object(int fd, const char *path, const struct stat *sb, bool ismain)
 					    path, errno);
 					goto error;
 				}
-				note_start = (Elf_Addr)(note_map +
-				    phdr->p_offset -
+				note_start = (note_map + phdr->p_offset -
 				    rtld_trunc_page(phdr->p_offset));
 			} else {
-				note_start = (Elf_Addr)(char *)hdr +
-				    phdr->p_offset;
+				note_start = (char *)hdr + phdr->p_offset;
 			}
 			note_end = note_start + phdr->p_filesz;
 			break;
@@ -339,7 +337,8 @@ map_object(int fd, const char *path, const struct stat *sb, bool ismain)
 	}
 	obj->stack_flags = stack_flags;
 	if (note_start < note_end)
-		digest_notes(obj, note_start, note_end);
+		digest_notes(obj, (const Elf_Note *)note_start,
+		    (const Elf_Note *)note_end);
 finish:
 	if (note_map != NULL && note_map != MAP_FAILED)
 		munmap(note_map, note_map_len);
