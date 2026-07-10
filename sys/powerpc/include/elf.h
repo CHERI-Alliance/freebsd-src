@@ -143,4 +143,7 @@ __ElfType(Auxinfo);
 
 #define	AT_OLD_COUNT	27	/* Count of defined aux entry types. */
 
+/* Per-ABI max (and default) stack permissions. */
+#define	PF_GNU_STACK_MAX	(PF_R | PF_W | PF_X)
+
 #endif /* !_MACHINE_ELF_H_ */
