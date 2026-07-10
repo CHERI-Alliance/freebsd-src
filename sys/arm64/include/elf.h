@@ -283,7 +283,11 @@ __ElfType(Auxinfo);
 #endif
 
 /* Per-ABI max (and default) stack permissions. */
+#ifdef __ELF_CHERI
+#define	PF_GNU_STACK_MAX	(PF_R | PF_W)
+#else
 #define	PF_GNU_STACK_MAX	(PF_R | PF_W | PF_X)
+#endif
 
 #ifdef __CHERI__
 void elf_reloc_self(const Elf_Dyn *dynp, void *data_cap, const void *code_cap);
