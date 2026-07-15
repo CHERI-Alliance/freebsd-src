@@ -241,8 +241,6 @@ static void rtld_set_var_loadfltr(struct ld_env_var_desc *lvd);
 void r_debug_state(struct r_debug *, struct link_map *) __noinline __exported;
 void _r_debug_postinit(struct link_map *) __noinline __exported;
 
-int __sys_openat(int, const char *, int, ...);
-
 /*
  * Data declarations.
  */
@@ -3895,7 +3893,7 @@ try_fds_open(const char *name, const char *path)
 	if (dirfd_path != dirfd)
 		return (-1);
 
-	fd = __sys_openat(dirfd, n + 1, O_RDONLY | O_CLOEXEC | O_VERIFY);
+	fd = openat(dirfd, n + 1, O_RDONLY | O_CLOEXEC | O_VERIFY);
 	return (fd);
 }
 
@@ -4044,7 +4042,7 @@ search_library_pathfds(const char *name, const char *path, int *fdp)
 			    fdstr);
 			break;
 		}
-		fd = __sys_openat(dirfd, name, O_RDONLY | O_CLOEXEC | O_VERIFY);
+		fd = openat(dirfd, name, O_RDONLY | O_CLOEXEC | O_VERIFY);
 		if (fd >= 0) {
 			*fdp = fd;
 			len = strlen(fdstr) + strlen(name) + 3;
