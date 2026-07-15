@@ -432,6 +432,17 @@ get_elf_header(int fd, const char *path, const struct stat *sbp,
 	if (!check_elf_headers(hdr, path))
 		goto error;
 
+#ifdef __CHERI__
+	if (!ELF_IS_CHERI(hdr))
+#else
+	if (ELF_IS_CHERI(hdr))
+#endif
+	{
+		_rtld_error("cannot load %s since it is%s CheriABI",
+		    path, ELF_IS_CHERI(hdr) ? "" : " not");
+		goto error;
+	}
+
 	/*
 	 * We rely on the program header being in the first page.  This is
 	 * not strictly required by the ABI specification, but it seems to
