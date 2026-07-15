@@ -57,8 +57,13 @@ _libsys_other_objects= fstat fstatat fstatfs syscall \
     cerror geteuid getegid sigfastblock munmap mprotect \
     sysarch __sysctl issetugid __getcwd utrace getpid \
     thr_self thr_kill pread mmap lseek _exit \
-    getdirentries _close _fcntl _open _openat _read \
+    getdirentries _close _read \
     _sigprocmask _write readlink ___realpathat
+.if ${MACHINE_ABI:Mpurecap}
+_libsys_other_objects+=	__fcntl __open __openat
+.else
+_libsys_other_objects+=	_fcntl _open _openat
+.endif
 # A few other bits from libc_nossp_pic:
 _libc_other_objects= sigsetjmp lstat stat _setjmp setjmp setjmperr
 
