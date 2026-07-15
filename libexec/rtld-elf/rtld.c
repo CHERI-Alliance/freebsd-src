@@ -319,7 +319,12 @@ int rtld_set_var(const char *name, const char *val) __exported;
 
 /* Only here to fix -Wmissing-prototypes warnings */
 int __getosreldate(void);
+#ifdef __CHERI__
+func_ptr_type _rtld(Elf_Auxinfo *aux, func_ptr_type *exit_proc,
+    Obj_Entry **objp);
+#else
 func_ptr_type _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp);
+#endif
 Elf_Addr _rtld_bind(Plt_Entry *plt, Elf_Size reloff);
 
 int npagesizes;
@@ -550,7 +555,9 @@ rtld_trunc_page(uintptr_t x)
 }
 
 /*
- * Main entry point for dynamic linking.  The first argument is the
+ * Main entry point for dynamic linking.
+ *
+ * On traditional architectures, the first argument is the
  * stack pointer.  The stack is expected to be laid out as described
  * in the SVR4 ABI specification, Intel 386 Processor Supplement.
  * Specifically, the stack pointer points to a word containing
@@ -559,6 +566,12 @@ rtld_trunc_page(uintptr_t x)
  * sequence of pointers to environment strings.  Finally, there is a
  * sequence of "auxiliary vector" entries.
  *
+ * On CHERI architectures, the first argument is a pointer to the ELF
+ * "auxiliary vector" and we find ARGC, ARGV and ENVV via entries in
+ * there.  The null-termination of ARGV and ENVV is maintained, but no
+ * guarantees are made about the location of any allocations except
+ * that they are properly bounded and not on the stack.
+ *
  * The second argument points to a place to store the dynamic linker's
  * exit procedure pointer and the third to a place to store the main
  * program's object.
@@ -566,9 +579,16 @@ rtld_trunc_page(uintptr_t x)
  * The return value is the main program's entry point.
  */
 func_ptr_type
+#ifdef __CHERI__
+_rtld(Elf_Auxinfo *aux, func_ptr_type *exit_proc, Obj_Entry **objp)
+#else
 _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
+#endif
 {
-	Elf_Auxinfo *aux, *auxp, *auxpf, *aux_info[AT_COUNT], auxtmp;
+	Elf_Auxinfo *auxp, *aux_info[AT_COUNT];
+#ifndef __CHERI__
+	Elf_Auxinfo *aux, *auxpf, auxtmp;
+#endif
 	Objlist_Entry *entry;
 	Obj_Entry *last_interposer, *obj, *preload_tail;
 	const Elf_Phdr *phdr;
@@ -576,7 +596,7 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
 	RtldLockState lockstate;
 	struct stat st;
 	Elf_Addr *argcp;
-	char **argv, **env, **envp, *kexecpath;
+	char **argv, **env, *kexecpath;
 	const char *argv0, *binpath;
 #if !defined(TLS_TGOT) || defined(TLS_TGOT_COMPAT)
 	const char *static_tls_extra;
@@ -585,6 +605,9 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
 	const char *static_tgot_extra;
 #endif
 	struct ld_env_var_desc *lvd;
+#ifndef __CHERI__
+	char **envp;
+#endif
 	caddr_t imgentry;
 	char buf[MAXPATHLEN];
 	int argc, fd, i, mib[4], old_osrel, osrel, phnum, rtld_argc;
@@ -598,6 +621,7 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
 	 * and string constants, and to call static and global functions.
 	 */
 
+#ifndef __CHERI__
 	/* Find the auxiliary vector on the stack. */
 	argcp = sp;
 	argc = *sp++;
@@ -607,6 +631,7 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
 	while (*sp++ != 0) /* Skip over environment, and NULL terminator */
 		;
 	aux = (Elf_Auxinfo *)sp;
+#endif
 
 	/* Digest the auxiliary vector. */
 	for (i = 0; i < AT_COUNT; i++)
@@ -616,6 +641,13 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
 			aux_info[auxp->a_type] = auxp;
 	}
 	arch_fix_auxv(aux, aux_info);
+
+#ifdef __CHERI__
+	argcp = &aux_info[AT_ARGC]->a_un.a_val;
+	argc = *argcp;
+	argv = (char **)aux_info[AT_ARGV]->a_un.a_ptr;
+	env = (char **)aux_info[AT_ENVV]->a_un.a_ptr;
+#endif
 
 	/* Initialize and relocate ourselves. */
 	assert(aux_info[AT_BASE] != NULL);
