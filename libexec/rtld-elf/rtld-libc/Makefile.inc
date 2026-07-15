@@ -83,13 +83,22 @@ _libc_other_objects+=timsort
 SRCS:=${SRCS:Nmerge.c}
 .endif
 
+.if ${MACHINE_ABI:Mpurecap}
+_libc_obj_suffix=pico
+_libc_pic_path=${LIBC_PIC}
+.else
+_libc_obj_suffix=nossppico
+_libc_pic_path=${LIBC_NOSSP_PIC}
+.endif
+
+
 # Extract all the .o files from libc_nossp_pic.a and libsys_pic.a. This
 # ensures that we don't accidentally pull in the interposing table or
 # similar by linking directly against libc_nossp_pic.a
 _rtld_libc_objs=
 .for _obj in ${_libc_other_objects}
-_rtld_libc_objs+=${_obj}.nossppico
-CLEANFILES+=${_obj}.nossppico
+_rtld_libc_objs+=${_obj}.${_libc_obj_suffix}
+CLEANFILES+=${_obj}.${_libc_obj_suffix}
 # LDFLAGS+=	-Wl,--trace-symbol=${_obj}
 .endfor
 _rtld_libsys_objs=
@@ -106,9 +115,9 @@ CLEANFILES+=${_obj}.pico
 # XXX: we add dependencies on the source libraries in ../Makefile after
 # bsd.prog.mk includes bsd.libnames.mk since variables in dependencies are
 # expanded when parsed.
-rtld_libc.a: ${SRCTOP}/libexec/rtld-elf/rtld-libc/Makefile.inc
+rtld_libc.a: ${_libc_pic_path} ${LIBSYS_PIC} ${SRCTOP}/libexec/rtld-elf/rtld-libc/Makefile.inc
 	@rm -f ${.TARGET}
-	${AR} x ${LIBC_NOSSP_PIC} ${_rtld_libc_objs}
+	${AR} x ${_libc_pic_path} ${_rtld_libc_objs}
 	${AR} x ${LIBSYS_PIC} ${_rtld_libsys_objs}
 	${AR} cr ${.TARGET} ${_rtld_libc_objs} ${_rtld_libsys_objs}
 CLEANFILES+=rtld_libc.a
