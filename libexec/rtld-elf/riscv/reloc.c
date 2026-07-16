@@ -73,6 +73,7 @@ init_pltgot(Plt_Entry *plt)
 	}
 }
 
+#ifndef __CHERI__
 int
 do_copy_relocations(Obj_Entry *dstobj)
 {
@@ -130,6 +131,7 @@ do_copy_relocations(Obj_Entry *dstobj)
 
 	return (0);
 }
+#endif /* !__CHERI__ */
 
 /*
  * Process the PLT relocations.
