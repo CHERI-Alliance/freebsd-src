@@ -1729,9 +1729,15 @@ digest_dynamic1(Obj_Entry *obj, int early, const Elf_Dyn **dyn_rpath,
 			break;
 
 		case DT_INIT:
+#ifdef __CHERI__
+			_rtld_error("%s: _init not supported for CheriABI",
+			    obj->path);
+			return (false);
+#else
 			obj->init = (uintptr_t)(obj->relocbase +
 			    dynp->d_un.d_ptr);
 			break;
+#endif
 
 		case DT_PREINIT_ARRAY:
 			obj->preinit_array = (uintptr_t *)(obj->relocbase +
@@ -1754,9 +1760,15 @@ digest_dynamic1(Obj_Entry *obj, int early, const Elf_Dyn **dyn_rpath,
 			break;
 
 		case DT_FINI:
+#ifdef __CHERI__
+			_rtld_error("%s: _fini not supported for CheriABI",
+			    obj->path);
+			return (false);
+#else
 			obj->fini = (uintptr_t)(obj->relocbase +
 			    dynp->d_un.d_ptr);
 			break;
+#endif
 
 		case DT_FINI_ARRAY:
 			obj->fini_array = (uintptr_t *)(obj->relocbase +
