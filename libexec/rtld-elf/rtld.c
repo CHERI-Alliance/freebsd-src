@@ -325,7 +325,7 @@ func_ptr_type _rtld(Elf_Auxinfo *aux, func_ptr_type *exit_proc,
 #else
 func_ptr_type _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp);
 #endif
-Elf_Addr _rtld_bind(Plt_Entry *plt, Elf_Size reloff);
+uintptr_t _rtld_bind(Plt_Entry *plt, Elf_Size reloff);
 
 int npagesizes;
 static int osreldate;
@@ -1207,22 +1207,22 @@ void *
 rtld_resolve_ifunc(const Obj_Entry *obj, const Elf_Sym *def)
 {
 	void *ptr;
-	Elf_Addr target;
+	uintptr_t target;
 
 	ptr = (void *)make_function_pointer(def, obj);
 	target = call_ifunc_resolver(ptr);
 	return ((void *)target);
 }
 
-Elf_Addr
+uintptr_t
 _rtld_bind(Plt_Entry *plt, Elf_Size reloff)
 {
 	const Elf_Rel *rel;
 	const Elf_Sym *def;
 	const Obj_Entry *defobj;
 	Obj_Entry *obj;
-	Elf_Addr *where;
-	Elf_Addr target;
+	uintptr_t *where;
+	uintptr_t target;
 	RtldLockState lockstate;
 
 	obj = plt->obj;
@@ -1235,7 +1235,7 @@ relock:
 	else
 		rel = (const Elf_Rel *)((const char *)plt->rela + reloff);
 
-	where = (Elf_Addr *)(obj->relocbase + rel->r_offset);
+	where = (uintptr_t *)(obj->relocbase + rel->r_offset);
 	def = find_symdef(ELF_R_SYM(rel->r_info), obj, &defobj, SYMLOOK_IN_PLT,
 	    NULL, &lockstate);
 	if (def == NULL)
@@ -1245,9 +1245,9 @@ relock:
 			lock_release(rtld_bind_lock, &lockstate);
 			goto relock;
 		}
-		target = (Elf_Addr)rtld_resolve_ifunc(defobj, def);
+		target = (uintptr_t)rtld_resolve_ifunc(defobj, def);
 	} else {
-		target = (Elf_Addr)(defobj->relocbase + def->st_value);
+		target = (uintptr_t)make_function_pointer(def, defobj);
 	}
 
 	dbg("\"%s\" in \"%s\" ==> %p in \"%s\"", defobj->strtab + def->st_name,
