@@ -69,7 +69,7 @@
 #include "rtld_utrace.h"
 
 /* Types. */
-typedef void (*func_ptr_type)(void);
+typedef const void *func_ptr_type;
 typedef void *(*path_enum_proc)(const char *path, size_t len, void *arg);
 
 /* Variables that cannot be static: */
@@ -1166,9 +1166,9 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
 	    obj_main->entry);
 
 	/* Return the exit procedure and the program entry point. */
-	*exit_proc = rtld_exit_ptr;
+	*exit_proc = (const void *)rtld_exit_ptr;
 	*objp = obj_main;
-	return ((func_ptr_type)obj_main->entry);
+	return (obj_main->entry);
 }
 
 /*
