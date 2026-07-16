@@ -259,8 +259,11 @@ _rtld_relocate_nonplt_self(Elf_Dyn *dynp, Elf_Auxinfo *aux)
 #endif /* __CHERI__ */
 
 int
-do_copy_relocations(Obj_Entry *dstobj)
+do_copy_relocations(Obj_Entry *dstobj __maybe_unused)
 {
+#ifdef __CHERI__
+	/* Copy relocations are not supported in CheriABI */
+#else
 	const Obj_Entry *srcobj, *defobj;
 	const Elf_Rela *relalim;
 	const Elf_Rela *rela;
@@ -311,6 +314,7 @@ do_copy_relocations(Obj_Entry *dstobj)
 		srcaddr = (const void *)(defobj->relocbase + srcsym->st_value);
 		memcpy(dstaddr, srcaddr, size);
 	}
+#endif
 
 	return (0);
 }
