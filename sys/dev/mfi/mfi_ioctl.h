@@ -140,6 +140,7 @@ struct mfi_ioc_aen {
 
 #define MAX_LINUX_IOCTL_SGE	16
 
+#ifdef _KERNEL
 struct mfi_linux_ioc_packet {
 	uint16_t	lioc_adapter_no;
 	uint16_t	lioc_pad1;
@@ -162,6 +163,7 @@ struct mfi_linux_ioc_packet {
 __packed
 #endif
 ;
+#endif
 
 struct mfi_ioc_passthru {
 	struct mfi_dcmd_frame	ioc_frame;
