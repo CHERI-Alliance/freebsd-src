@@ -485,6 +485,7 @@ extern bool ld_fast_sigblock;
 #ifdef __CHERI__
 bool create_pcc_caps(Obj_Entry *, const char *);
 const char *pcc_cap(const Obj_Entry *, Elf_Off);
+void narrow_object_bounds(Obj_Entry *obj);
 
 #define get_codesegment_cap(obj)				\
 	(cheri_perms_clear((obj)->text_rodata_cap, CAP_RELOC_REMOVE_PERMS))
