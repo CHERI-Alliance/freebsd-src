@@ -332,7 +332,11 @@ static int osreldate;
 size_t *pagesizes;
 size_t page_size;
 
-static int stack_prot = PROT_READ | PROT_WRITE | PROT_EXEC;
+static int stack_prot = PROT_READ | PROT_WRITE
+#ifndef __CHERI__
+    | PROT_EXEC
+#endif
+    ;
 static int max_stack_flags;
 
 void *tls_get_addr_common_fptr = &tls_get_addr_common;
