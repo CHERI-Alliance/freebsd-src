@@ -1094,6 +1094,10 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
 
 	map_stacks_exec(NULL);
 
+#ifdef __CHERI__
+	obj_main->crt_no_init = true;
+#endif
+
 	if (!obj_main->crt_no_init) {
 		/*
 		 * Make sure we don't call the main program's init and fini
