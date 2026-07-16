@@ -101,3 +101,29 @@ pcc_cap(const Obj_Entry *obj, Elf_Off offset)
 	}
 	return (NULL);
 }
+
+void
+narrow_object_bounds(Obj_Entry *obj)
+{
+	/*
+	 * Set tight bounds on the individual members now (for the ones
+	 * that we iterate over) instead of inheriting the relocbase
+	 * bounds to avoid any overflows at runtime.
+	 */
+	set_bounds_if_nonnull(obj->rel, obj->relsize);
+	set_bounds_if_nonnull(obj->rela, obj->relasize);
+	for (unsigned long i = 0; i < obj->nplts; i++) {
+		Plt_Entry *plt = &obj->plts[i];
+		set_bounds_if_nonnull(plt->rel, plt->relsize);
+		set_bounds_if_nonnull(plt->rela, plt->relasize);
+	}
+	set_bounds_if_nonnull(obj->strtab, obj->strsize);
+	set_bounds_if_nonnull(obj->phdr, obj->phnum * sizeof(*obj->phdr));
+
+	set_bounds_if_nonnull(obj->preinit_array,
+	    obj->preinit_array_num * sizeof(*obj->preinit_array));
+	set_bounds_if_nonnull(obj->init_array,
+	    obj->init_array_num * sizeof(*obj->init_array));
+	set_bounds_if_nonnull(obj->fini_array,
+	    obj->fini_array_num * sizeof(*obj->fini_array));
+}
