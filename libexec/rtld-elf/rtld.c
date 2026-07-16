@@ -1939,6 +1939,9 @@ digest_dynamic2(Obj_Entry *obj, const Elf_Dyn *dyn_rpath,
 	}
 	if (dyn_soname != NULL)
 		object_add_name(obj, obj->strtab + dyn_soname->d_un.d_val);
+#ifdef __CHERI__
+	narrow_object_bounds(obj);
+#endif
 	return (true);
 }
 
