@@ -867,10 +867,10 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
 	ld_utrace = ld_get_env_var(LD_UTRACE);
 
 	set_ld_elf_hints_path();
-	dbg("%s is initialized, base address = %p", __progname,
+	dbg("%s is initialized, base address = " PTR_FMT, __progname,
 	    (caddr_t)aux_info[AT_BASE]->a_un.a_ptr);
-	dbg("RTLD dynamic = %p", obj_rtld.dynamic);
-	dbg("RTLD pltgot  = %p", obj_rtld.nplts == 0 ? NULL :
+	dbg("RTLD dynamic = " PTR_FMT, obj_rtld.dynamic);
+	dbg("RTLD pltgot  = " PTR_FMT, obj_rtld.nplts == 0 ? NULL :
 	    obj_rtld.plts[0].pltgot);
 
 	dbg("initializing thread locks");
