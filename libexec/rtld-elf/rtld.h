@@ -483,6 +483,18 @@ enum {
 	LD_NO_DL_ITERATE_PHDR_AFTER_FORK,
 };
 
+static inline const char*
+strtab_value(const Obj_Entry* obj, size_t offset)
+{
+	return (obj->strtab + offset);
+}
+
+static inline const char*
+symname(const Obj_Entry* obj, size_t r_symndx)
+{
+	return (strtab_value(obj, obj->symtab[r_symndx].st_name));
+}
+
 #ifdef TLS_TGOT
 typedef char *(*tls_get_block_cb)(struct tcb *, int);
 #endif
