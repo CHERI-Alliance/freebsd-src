@@ -1807,6 +1807,14 @@ digest_dynamic1(Obj_Entry *obj, int early, const Elf_Dyn **dyn_rpath,
 			break;
 
 #ifdef RTLD_HAS_CAPRELOCS
+		case DT_CHERI___CAPRELOCS:
+			obj->cap_relocs = (obj->relocbase + dynp->d_un.d_ptr);
+			break;
+
+		case DT_CHERI___CAPRELOCSSZ:
+			obj->cap_relocs_size = dynp->d_un.d_val;
+			break;
+
 		case DT_CHERI___TGOTCAPRELOCS:
 #ifdef TLS_TGOT
 			obj->tgot_cap_relocs = (obj->relocbase +
@@ -2814,6 +2822,10 @@ init_rtld(caddr_t mapbase, Elf_Auxinfo **aux_info)
 	objtmp.phdr = (Elf_Phdr *)((char *)mapbase + ehdr->e_phoff);
 	objtmp.phnum = ehdr->e_phnum;
 #ifdef __CHERI__
+#ifdef RTLD_HAS_CAPRELOCS
+	objtmp.cap_relocs_processed = true;
+#endif
+
 	objtmp.text_rodata_cap = objtmp.relocbase;
 	fix_obj_mapping_cap_permissions(&objtmp, "RTLD");
 	if (!create_pcc_caps(&objtmp, "RTLD"))
@@ -3805,6 +3817,12 @@ relocate_object(Obj_Entry *obj, bool bind_now, Obj_Entry *rtldobj, int flags,
 		return (-1);
 	reloc_relr(obj);
 
+#ifdef RTLD_HAS_CAPRELOCS
+	/* Process the __cap_relocs section to initialize global capabilities */
+	if (obj->cap_relocs_size && process___cap_relocs(obj) != 0)
+		return (-1);
+#endif
+
 	/* Re-protected the text segment. */
 	if (obj->textrel && reloc_textrel_prot(obj, false) != 0)
 		return (-1);
@@ -3880,6 +3898,9 @@ resolve_object_ifunc(Obj_Entry *obj, bool bind_now, int flags,
 		return (0);
 	obj->ifuncs_resolved = true;
 	if (!obj->irelative && !obj->irelative_nonplt &&
+#ifdef RTLD_HAS_CAPRELOCS
+	    !obj->irelative_cap_relocs &&
+#endif
 	    !((obj->bind_now || bind_now) && obj->gnu_ifunc) &&
 	    !obj->non_plt_gnu_ifunc)
 		return (0);
@@ -3887,6 +3908,10 @@ resolve_object_ifunc(Obj_Entry *obj, bool bind_now, int flags,
 	    (obj->irelative && reloc_iresolve(obj, lockstate) == -1) ||
 	    (obj->irelative_nonplt &&
 	    reloc_iresolve_nonplt(obj, lockstate) == -1) ||
+#ifdef RTLD_HAS_CAPRELOCS
+	    (obj->irelative_cap_relocs &&
+	    process_ifunc___cap_relocs(obj) == -1) ||
+#endif
 	    ((obj->bind_now || bind_now) && obj->gnu_ifunc &&
 	    reloc_gnu_ifunc(obj, flags, lockstate) == -1) ||
 	    (obj->non_plt_gnu_ifunc &&
