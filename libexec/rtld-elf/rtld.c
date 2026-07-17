@@ -1465,7 +1465,7 @@ count_plts(const Elf_Dyn *dynp)
 			break;
 		}
 	}
-	return (MAX(MAX(jmprel, pltrelsz), pltgot));
+	return (rtld_max(rtld_max(jmprel, pltrelsz), pltgot));
 }
 
 
