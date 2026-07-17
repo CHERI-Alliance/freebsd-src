@@ -7268,12 +7268,18 @@ check_gnu_stack(Elf_Word p_flags, const char *path)
 }
 
 static void
-map_stacks_exec(RtldLockState *lockstate)
+map_stacks_exec(RtldLockState *lockstate __maybe_unused)
 {
+#ifndef __CHERI__
 	void (*thr_map_stacks_exec)(void);
+#endif
 
 	if ((max_stack_flags & PF_X) == 0 || (stack_prot & PROT_EXEC) != 0)
 		return;
+#ifdef __CHERI__
+	_rtld_error("Exec stacks not supported in CheriABI");
+	rtld_die();
+#else
 	thr_map_stacks_exec = (void (*)(void))(
 	    uintptr_t)get_program_var_addr("__pthread_map_stacks_exec",
 	    lockstate);
@@ -7281,6 +7287,7 @@ map_stacks_exec(RtldLockState *lockstate)
 		stack_prot |= PROT_EXEC;
 		thr_map_stacks_exec();
 	}
+#endif
 }
 
 #if !defined(TLS_TGOT) || defined(TLS_TGOT_COMPAT)
