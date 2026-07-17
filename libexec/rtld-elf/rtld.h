@@ -42,6 +42,18 @@
 #include "rtld_lock.h"
 #include "rtld_machdep.h"
 
+#define rtld_min(X, Y) ({	\
+	typeof (X) x_ = (X);	\
+	typeof (Y) y_ = (Y);	\
+	(x_ < y_) ? x_ : y_;	\
+    })
+
+#define rtld_max(X, Y) ({	\
+	typeof (X) x_ = (X);	\
+	typeof (Y) y_ = (Y);	\
+	(x_ > y_) ? x_ : y_;	\
+    })
+
 #define NEW(type)	((type *) xmalloc(sizeof(type)))
 #define CNEW(type)	((type *) xcalloc(1, sizeof(type)))
 
