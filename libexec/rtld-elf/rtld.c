@@ -1990,7 +1990,7 @@ digest_phdr(const Elf_Phdr *phdr, int phnum, caddr_t entry, const char *path)
 	Obj_Entry *obj;
 	const Elf_Phdr *phlimit = phdr + phnum;
 	const Elf_Phdr *ph;
-	Elf_Addr note_start, note_end;
+	caddr_t note_start, note_end;
 	int nsegs = 0;
 
 	obj = obj_new();
@@ -2063,9 +2063,10 @@ digest_phdr(const Elf_Phdr *phdr, int phnum, caddr_t entry, const char *path)
 			break;
 
 		case PT_NOTE:
-			note_start = (Elf_Addr)obj->relocbase + ph->p_vaddr;
+			note_start = obj->relocbase + ph->p_vaddr;
 			note_end = note_start + ph->p_filesz;
-			digest_notes(obj, note_start, note_end);
+			digest_notes(obj, (const Elf_Note *)note_start,
+			    (const Elf_Note *)note_end);
 			break;
 		}
 	}
@@ -2091,13 +2092,14 @@ digest_phdr(const Elf_Phdr *phdr, int phnum, caddr_t entry, const char *path)
 }
 
 void
-digest_notes(Obj_Entry *obj, Elf_Addr note_start, Elf_Addr note_end)
+digest_notes(Obj_Entry *obj, const Elf_Note *note_start,
+    const Elf_Note *note_end)
 {
 	const Elf_Note *note;
 	const char *note_name;
 	uintptr_t p;
 
-	for (note = (const Elf_Note *)note_start; (Elf_Addr)note < note_end;
+	for (note = note_start; note < note_end;
 	    note = (const Elf_Note *)((const char *)(note + 1) +
 		roundup2(note->n_namesz, sizeof(Elf32_Addr)) +
 		roundup2(note->n_descsz, sizeof(Elf32_Addr)))) {
@@ -2765,7 +2767,7 @@ static void
 parse_rtld_phdr(Obj_Entry *obj)
 {
 	const Elf_Phdr *ph;
-	Elf_Addr note_start, note_end;
+	Elf_Note *note_start, *note_end;
 	bool first_seg;
 
 	first_seg = true;
@@ -2786,8 +2788,10 @@ parse_rtld_phdr(Obj_Entry *obj)
 			obj->stack_flags = ph->p_flags;
 			break;
 		case PT_NOTE:
-			note_start = (Elf_Addr)obj->relocbase + ph->p_vaddr;
-			note_end = note_start + ph->p_filesz;
+			note_start = (Elf_Note *)((char *)obj->relocbase +
+			    ph->p_vaddr);
+			note_end = (Elf_Note *)((char *)note_start +
+			    ph->p_filesz);
 			digest_notes(obj, note_start, note_end);
 			break;
 		}
