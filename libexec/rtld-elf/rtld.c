@@ -4702,6 +4702,9 @@ dladdr(const void *addr, Dl_info *info)
 	}
 	info->dli_fname = obj->path;
 	info->dli_fbase = obj->mapbase;
+#ifdef __CHERI__
+	info->dli_fbase = cheri_perms_and(info->dli_fbase, 0);
+#endif
 	info->dli_saddr = (void *)0;
 	info->dli_sname = NULL;
 
@@ -4725,6 +4728,9 @@ dladdr(const void *addr, Dl_info *info)
 		 * then reject it.
 		 */
 		symbol_addr = obj->relocbase + def->st_value;
+#ifdef __CHERI__
+		symbol_addr = cheri_perms_and(symbol_addr, 0);
+#endif
 		if (symbol_addr > addr || symbol_addr < info->dli_saddr)
 			continue;
 
