@@ -1694,7 +1694,7 @@ digest_dynamic1(Obj_Entry *obj, int early, const Elf_Dyn **dyn_rpath,
 
 				if (obj->linkmap.l_refname == NULL)
 					obj->linkmap.l_refname =
-					    (char *)dynp->d_un.d_val;
+					    (char *)(uintptr_t)dynp->d_un.d_val;
 			}
 			break;
 
