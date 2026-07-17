@@ -126,4 +126,8 @@ narrow_object_bounds(Obj_Entry *obj)
 	    obj->init_array_num * sizeof(*obj->init_array));
 	set_bounds_if_nonnull(obj->fini_array,
 	    obj->fini_array_num * sizeof(*obj->fini_array));
+
+#ifdef RTLD_HAS_CAPRELOCS
+	set_bounds_if_nonnull(obj->cap_relocs, obj->cap_relocs_size);
+#endif
 }
