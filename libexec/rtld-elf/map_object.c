@@ -132,7 +132,7 @@ map_object(int fd, const char *path, const struct stat *sb, bool ismain)
 				goto error;
 			}
 			if ((segs[nsegs]->p_flags & PF_X) == PF_X) {
-				text_end = MAX(text_end,
+				text_end = rtld_max(text_end,
 				    rtld_round_page(segs[nsegs]->p_vaddr +
 				    segs[nsegs]->p_memsz));
 			}
