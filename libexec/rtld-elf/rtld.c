@@ -1985,7 +1985,11 @@ digest_phdr(const Elf_Phdr *phdr, int phnum, caddr_t entry, const char *path)
 		if (ph->p_type != PT_PHDR)
 			continue;
 
+#ifdef __CHERI__
+		obj->phdr = cheri_bounds_set(phdr, ph->p_memsz);
+#else
 		obj->phdr = phdr;
+#endif
 		obj->phnum = ph->p_memsz / sizeof(*ph);
 		obj->relocbase = __DECONST(char *, phdr) - ph->p_vaddr;
 		break;
