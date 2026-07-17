@@ -235,6 +235,8 @@ typedef struct Struct_Obj_Entry {
     unsigned long tgotrelasize;	/* Size in bytes of TGOT added relocation info */
 #endif
 #ifdef RTLD_HAS_CAPRELOCS
+    caddr_t cap_relocs;		/* start of the __cap_relocs section */
+    size_t cap_relocs_size;	/* size of the __cap_relocs section */
 #ifdef TLS_TGOT
     caddr_t tgot_cap_relocs;	/* start of the __tgot_cap_relocs section */
     size_t tgot_cap_relocs_size;/* size of the __tgot_cap_relocs section */
@@ -338,6 +340,10 @@ typedef struct Struct_Obj_Entry {
     bool marker : 1;		/* marker on the global obj list */
     bool unholdfree : 1;	/* unmap upon last unhold */
     bool doomed : 1;		/* Object cannot be referenced */
+#ifdef RTLD_HAS_CAPRELOCS
+    bool cap_relocs_processed : 1; /* __cap_relocs section has been processed */
+    bool irelative_cap_relocs : 1; /* __cap_relocs has IRELATIVE relocs */
+#endif
 
     MD_OBJ_ENTRY
 
@@ -564,5 +570,10 @@ int reloc_tgot(Obj_Entry *, struct tcb *, void *, int flags, tls_get_block_cb,
 void ifunc_init(Elf_Auxinfo *[__min_size(AT_COUNT)]);
 void init_pltgot(Plt_Entry *);
 void allocate_initial_tls(Obj_Entry *);
+
+#ifdef RTLD_HAS_CAPRELOCS
+int process___cap_relocs(Obj_Entry *);
+int process_ifunc___cap_relocs(Obj_Entry *);
+#endif
 
 #endif /* } */
