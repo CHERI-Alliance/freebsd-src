@@ -39,6 +39,10 @@
 #include <setjmp.h>
 #include <stddef.h>
 
+#ifdef __CHERI__
+#include <cheri/cheric.h>
+#endif
+
 #include "rtld_lock.h"
 #include "rtld_machdep.h"
 
