@@ -43,6 +43,21 @@ ENTRY(_start)
 	ldr	x0, [x0]	/* load argc */
 	add	x2, x1, x0, lsl #3 /* env is after argv */
 	add	x2, x2, #8	/* argv is null terminated */
+#if defined(__CHERI__) && !defined(PIC)
+	mov	x19, x0		/* save argc */
+	mov	x20, x1		/* save argv */
+	mov	x21, x2		/* save env */
+	mov	x22, x3		/* save cleanup */
+	/*
+	 * __process_cap_relocs(env)
+	 */
+	mov	x0, x21
+	bl	__process_cap_relocs
+	mov	x0, x19		/* restore argc */
+	mov	x1, x20		/* restore argv */
+	mov	x2, x21		/* restore env */
+	mov	x3, x22		/* restore cleanup */
+#endif
 #ifdef PIC
 	adrp	x4, :got:main
 	ldr	x4, [x4, :got_lo12:main]
