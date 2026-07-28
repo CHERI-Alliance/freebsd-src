@@ -300,6 +300,7 @@ invalid:
 	SIGBUS,			\
 	SIGFPE,			\
 	SIGILL,			\
+	SIGPROT,		\
 	SIGSEGV,		\
 	SIGSYS,			\
 	SIGXCPU,		\
