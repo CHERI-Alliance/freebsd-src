@@ -295,21 +295,40 @@ invalid:
 	 * We catch or block signals rather than ignore them,
 	 * so that they get reset on exec.
 	 */
-	handle(disaster, SIGABRT, SIGFPE, SIGILL, SIGSEGV, SIGBUS, SIGSYS,
-	    SIGXCPU, SIGXFSZ, 0);
-	handle(transition_handler, SIGHUP, SIGINT, SIGEMT, SIGTERM, SIGTSTP,
-	    SIGUSR1, SIGUSR2, SIGWINCH, 0);
+#define DISASTER_SIGNALS	\
+	SIGABRT,		\
+	SIGBUS,			\
+	SIGFPE,			\
+	SIGILL,			\
+	SIGSEGV,		\
+	SIGSYS,			\
+	SIGXCPU,		\
+	SIGXFSZ
+
+#define TRANSITION_SIGNALS	\
+	SIGEMT,			\
+	SIGHUP,			\
+	SIGINT,			\
+	SIGTERM,		\
+	SIGTSTP,		\
+	SIGUSR1,		\
+	SIGUSR2,		\
+	SIGWINCH
+
+	handle(disaster, DISASTER_SIGNALS, 0);
+	handle(transition_handler, TRANSITION_SIGNALS, 0);
 	handle(alrm_handler, SIGALRM, 0);
 	sigfillset(&mask);
-	delset(&mask, SIGABRT, SIGFPE, SIGILL, SIGSEGV, SIGBUS, SIGSYS,
-	    SIGXCPU, SIGXFSZ, SIGHUP, SIGINT, SIGEMT, SIGTERM, SIGTSTP,
-	    SIGALRM, SIGUSR1, SIGUSR2, SIGWINCH, 0);
+	delset(&mask, DISASTER_SIGNALS, TRANSITION_SIGNALS, SIGALRM, 0);
 	sigprocmask(SIG_SETMASK, &mask, NULL);
 	sigemptyset(&sa.sa_mask);
 	sa.sa_flags = 0;
 	sa.sa_handler = SIG_IGN;
 	sigaction(SIGTTIN, &sa, NULL);
 	sigaction(SIGTTOU, &sa, NULL);
+
+#undef DISASTER_SIGNALS
+#undef TRANSITION_SIGNALS
 
 	/*
 	 * Paranoia.
