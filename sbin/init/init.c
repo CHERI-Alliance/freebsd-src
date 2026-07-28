@@ -43,7 +43,6 @@
 #include <sys/uio.h>
 #include <sys/wait.h>
 
-#include <db.h>
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -61,6 +60,7 @@
 #include <time.h>
 #include <ttyent.h>
 #include <unistd.h>
+#include <uthash.h>
 
 #ifdef SECURE
 #include <pwd.h>
@@ -157,11 +157,13 @@ typedef struct init_session {
 	char	*se_type;		/* default terminal type */
 	struct	init_session *se_prev;
 	struct	init_session *se_next;
+	UT_hash_handle	hh;
 } session_t;
 
 static void free_session(session_t *);
 static session_t *new_session(session_t *, struct ttyent *);
 static session_t *sessions;
+static session_t *session_hash;
 
 static char **construct_argv(char *);
 static void start_window_system(session_t *);
@@ -177,11 +179,9 @@ static void setprocresources(const char *);
 #endif
 static bool clang;
 
-static int start_session_db(void);
 static void add_session(session_t *);
 static void del_session(session_t *);
 static session_t *find_session(pid_t);
-static DB *session_db;
 
 /*
  * The mother of all processes.
@@ -1199,39 +1199,18 @@ run_script(const char *script)
 }
 
 /*
- * Open the session database.
- *
- * NB: We could pass in the size here; is it necessary?
- */
-static int
-start_session_db(void)
-{
-	if (session_db && (*session_db->close)(session_db))
-		emergency("session database close: %m");
-	if ((session_db = dbopen(NULL, O_RDWR, 0, DB_HASH, NULL)) == NULL) {
-		emergency("session database open: %m");
-		return (1);
-	}
-	return (0);
-
-}
-
-/*
  * Add a new login session.
  */
 static void
 add_session(session_t *sp)
 {
-	DBT key;
-	DBT data;
+	session_t *tmp;
 
-	key.data = &sp->se_process;
-	key.size = sizeof sp->se_process;
-	data.data = &sp;
-	data.size = sizeof sp;
+	HASH_FIND_INT(session_hash, &sp->se_process, tmp);
+	if (tmp != NULL)
+		emergency("insert %d: already there", sp->se_process);
 
-	if ((*session_db->put)(session_db, &key, &data, 0))
-		emergency("insert %d: %m", sp->se_process);
+	HASH_ADD_INT(session_hash, se_process, sp);
 }
 
 /*
@@ -1240,13 +1219,7 @@ add_session(session_t *sp)
 static void
 del_session(session_t *sp)
 {
-	DBT key;
-
-	key.data = &sp->se_process;
-	key.size = sizeof sp->se_process;
-
-	if ((*session_db->del)(session_db, &key, 0))
-		emergency("delete %d: %m", sp->se_process);
+	HASH_DEL(session_hash, sp);
 }
 
 /*
@@ -1255,16 +1228,11 @@ del_session(session_t *sp)
 static session_t *
 find_session(pid_t pid)
 {
-	DBT key;
-	DBT data;
 	session_t *ret;
 
-	key.data = &pid;
-	key.size = sizeof pid;
-	if ((*session_db->get)(session_db, &key, &data, 0) != 0)
-		return 0;
-	bcopy(data.data, (char *)&ret, sizeof(ret));
-	return ret;
+	HASH_FIND_INT(session_hash, &pid, ret);
+
+	return (ret);
 }
 
 /*
@@ -1419,8 +1387,6 @@ read_ttys(void)
 		free_session(sp);
 	}
 	sessions = 0;
-	if (start_session_db())
-		return (state_func_t) single_user;
 
 	/*
 	 * Allocate a session entry for each active port.
