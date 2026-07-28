@@ -12,6 +12,7 @@ CFLAGS.init.c+=-DRESCUE
 SRCS+=	reroot_seed.embed.s
 ACFLAGS.reroot_seed.embed.s+=-I${OBJTOP}/sbin/reroot_seed
 .endif
+CFLAGS+=-I${SRCTOP}/contrib/uthash/src
 LIBADD=	util crypt
 
 CONFTTYSNAME=	ttys
