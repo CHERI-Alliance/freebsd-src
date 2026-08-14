@@ -36,16 +36,29 @@
 #ifndef _MACHINE_TLS_H_
 #define	_MACHINE_TLS_H_
 
+#ifdef __CHERI__
+#include <sys/_tls_tgot.h>
+#else
 #include <sys/_tls_variant_i.h>
+#endif
 
+#ifdef __CHERI__
+#define	TLS_DTV_OFFSET	0
+#else
 #define	TLS_DTV_OFFSET	0x800
+#endif
 #define	TLS_TCB_ALIGN	16
 #define	TLS_TP_OFFSET	0
 
 static __inline void
 _tcb_set(struct tcb *tcb)
 {
+#ifdef __CHERI__
+	__asm __volatile("cincoffset ctp, %0, %1" :: "C" (tcb),
+	    "I" (TLS_TCB_SIZE));
+#else
 	__asm __volatile("addi tp, %0, %1" :: "r" (tcb), "I" (TLS_TCB_SIZE));
+#endif
 }
 
 static __inline struct tcb *
@@ -53,7 +66,12 @@ _tcb_get(void)
 {
 	struct tcb *tcb;
 
+#ifdef __CHERI__
+	__asm __volatile("cincoffset %0, ctp, %1" : "=C" (tcb) :
+	    "I" (-TLS_TCB_SIZE));
+#else
 	__asm __volatile("addi %0, tp, %1" : "=r" (tcb) : "I" (-TLS_TCB_SIZE));
+#endif
 	return (tcb);
 }
 
