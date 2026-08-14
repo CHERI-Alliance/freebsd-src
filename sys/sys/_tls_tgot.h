@@ -1,10 +1,8 @@
 /*-
- * Copyright (c) 2005 David Xu <davidxu@freebsd.org>.
- * Copyright (c) 2014 the FreeBSD Foundation
- * All rights reserved.
+ * SPDX-License-Identifier: BSD-2-Clause
  *
- * Portions of this software were developed by Andrew Turner
- * under sponsorship from the FreeBSD Foundation
+ * Copyright (c) 2005 David Xu <davidxu@freebsd.org>.
+ * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,46 +26,35 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifdef __arm__
-#include <arm/tls.h>
-#else /* !__arm__ */
+#ifndef _SYS_TLS_TGOT_H_
+#define	_SYS_TLS_TGOT_H_
 
-#ifndef _MACHINE_TLS_H_
-#define	_MACHINE_TLS_H_
+/*
+ * TGOT TLS uses the same TCB layout across architectures.
+ */
 
-#ifdef __CHERI_TGOT_TLS__
-#include <sys/_tls_tgot.h>
-#else
-#include <sys/_tls_variant_i.h>
-#endif
+#define	TLS_TGOT
 
-#define	TLS_DTV_OFFSET	0
-#define	TLS_TCB_ALIGN	16
-#define	TLS_TP_OFFSET	0
+struct pthread;
+struct dtv_defer;
 
-static __inline void
-_tcb_set(struct tcb *tcb)
-{
-#ifdef __CHERI__
-	__asm __volatile("msr   ctpidr_el0, %0" :: "C" (tcb));
-#else
-	__asm __volatile("msr	tpidr_el0, %x0" :: "r" (tcb));
-#endif
-}
+struct dtv_slot {
+	char			*dtvs_tls;
+	char			*dtvs_tgot;
+};
 
-static __inline struct tcb *
-_tcb_get(void)
-{
-	struct tcb *tcb;
+struct dtv {
+	size_t			dtv_gen;
+	size_t			dtv_size;
+	struct dtv_defer	*dtv_defer;
+	struct dtv_slot		dtv_slots[];
+};
 
-#ifdef __CHERI__
-	__asm __volatile("mrs   %0, ctpidr_el0" : "=C" (tcb));
-#else
-	__asm __volatile("mrs	%x0, tpidr_el0" : "=r" (tcb));
-#endif
-	return (tcb);
-}
+struct tcb {
+	struct dtv		* __kerncap tcb_dtv;	/* required by rtld */
+	struct pthread		* __kerncap tcb_thread;
+};
 
-#endif /* !_MACHINE_TLS_H_ */
+#define	TLS_TCB_SIZE	sizeof(struct tcb)
 
-#endif /* !__arm__ */
+#endif /* !_SYS_TLS_TGOT_H_ */
