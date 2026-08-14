@@ -63,9 +63,12 @@ CFLAGS+=	-DNLSPATH=/usr/share/nls/%L/%N.cat
 
 CFLAGS+=	-DVERSION=${VERSION}
 
+# CHERI: no LTO support for CheriABI yet
+.if !${MACHINE_ABI:Mpurecap}
 # prevent floating point incompatibilities caused by -flto on some architectures
 .if ${MACHINE_ARCH} != riscv64
 CFLAGS+=	-flto
+.endif
 .endif
 
 HAS_TESTS=	yes
