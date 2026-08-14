@@ -63,6 +63,11 @@ LDFLAGS+= -Wl,-zbti-report=error
 .endif
 .endif
 
+.if ${MACHINE_ABI:Mpurecap}
+# XXX: should be target default
+CFLAGS+=	-cheri-tgot-tls
+.endif
+
 # Initialize stack variables on function entry
 .if ${OPT_INIT_ALL} != "none"
 .if ${COMPILER_FEATURES:Minit-all}
