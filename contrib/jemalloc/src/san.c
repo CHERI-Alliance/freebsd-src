@@ -17,7 +17,7 @@ ssize_t opt_lg_san_uaf_align = SAN_LG_UAF_ALIGN_DEFAULT;
  *  Initialized in san_init().  When disabled, the mask is set to (uintptr_t)-1
  *  to always fail the nonfast_align check.
  */
-uintptr_t san_cache_bin_nonfast_mask = SAN_CACHE_BIN_NONFAST_MASK_DEFAULT;
+ptraddr_t san_cache_bin_nonfast_mask = SAN_CACHE_BIN_NONFAST_MASK_DEFAULT;
 
 static inline void
 san_find_guarded_addr(edata_t *edata, uintptr_t *guard1, uintptr_t *guard2,
