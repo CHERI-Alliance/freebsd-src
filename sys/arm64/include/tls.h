@@ -35,7 +35,11 @@
 #ifndef _MACHINE_TLS_H_
 #define	_MACHINE_TLS_H_
 
+#ifdef __CHERI_TGOT_TLS__
+#include <sys/_tls_tgot.h>
+#else
 #include <sys/_tls_variant_i.h>
+#endif
 
 #define	TLS_DTV_OFFSET	0
 #define	TLS_TCB_ALIGN	16
@@ -44,7 +48,11 @@
 static __inline void
 _tcb_set(struct tcb *tcb)
 {
+#ifdef __CHERI__
+	__asm __volatile("msr   ctpidr_el0, %0" :: "C" (tcb));
+#else
 	__asm __volatile("msr	tpidr_el0, %x0" :: "r" (tcb));
+#endif
 }
 
 static __inline struct tcb *
@@ -52,7 +60,11 @@ _tcb_get(void)
 {
 	struct tcb *tcb;
 
+#ifdef __CHERI__
+	__asm __volatile("mrs   %0, ctpidr_el0" : "=C" (tcb));
+#else
 	__asm __volatile("mrs	%x0, tpidr_el0" : "=r" (tcb));
+#endif
 	return (tcb);
 }
 
