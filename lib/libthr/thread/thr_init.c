@@ -388,6 +388,9 @@ init_main_thread(struct pthread *thread)
 	/* Setup the thread attributes. */
 	thr_self(&thread->tid);
 	thread->attr = _pthread_attr_default;
+#ifdef __CHERI__
+	/* Don't allocate a red zone for CHERI, bounds do the job. */
+#else
 	/*
 	 * Set up the thread stack.
 	 *
@@ -401,6 +404,7 @@ init_main_thread(struct pthread *thread)
 	    _thr_guard_default, _thr_guard_default, 0, MAP_ANON,
 	    -1, 0) == MAP_FAILED)
 		PANIC("Cannot allocate red zone for initial thread");
+#endif
 
 	/*
 	 * Mark the stack as an application supplied stack so that it
