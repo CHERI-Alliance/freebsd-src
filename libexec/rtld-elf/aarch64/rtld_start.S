@@ -454,7 +454,7 @@ ENTRY(_rtld_tlsdesc_dynamic)
 END(_rtld_tlsdesc_dynamic)
 #endif /* !defined(__CHERI_TGOT_TLS__) || defined(__ARM_MORELLO_TGOT_TLS_COMPAT) */
 
-#ifdef __CHERI__
+#ifdef __CHERI_TGOT_TLS__
 /*
  * void *_rtld_tgot_tlsdesc_static(struct tlsdesc_entry *);
  *
