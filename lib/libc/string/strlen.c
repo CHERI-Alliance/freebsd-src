@@ -70,6 +70,7 @@ static const unsigned long mask80 = 0x8080808080808080;
 		    return (p - str + x);	\
 	} while (0)
 
+#ifndef __CHERI__
 size_t
 strlen(const char *str)
 {
@@ -119,3 +120,17 @@ strlen(const char *str)
 	/* NOTREACHED */
 	return (0);
 }
+#else /* __CHERI__ */
+size_t
+strlen(const char *str)
+{
+	const char *p;
+
+	p = str;
+
+	while (*p != '\0')
+		p++;
+
+	return (p - str);
+	}
+#endif /* __CHERI__ */
