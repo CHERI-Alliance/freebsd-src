@@ -69,14 +69,25 @@ CFLAGS+=-D_PTHREADS_INVARIANTS
 PRECIOUSLIB=
 
 .PATH: ${.CURDIR}/arch/${MACHINE_CPUARCH}/${MACHINE_CPUARCH}
+.if ${MACHINE_ABI:Mpurecap}
+.PATH: ${SRCTOP}/lib/libmalloc_simple
+.else
 .PATH: ${SRCTOP}/libexec/rtld-elf
+.endif
 
 .if exists(${.CURDIR}/arch/${MACHINE_CPUARCH}/Makefile.inc)
 .include "${.CURDIR}/arch/${MACHINE_CPUARCH}/Makefile.inc"
 .endif
 .include "${.CURDIR}/sys/Makefile.inc"
 .include "${.CURDIR}/thread/Makefile.inc"
+
+.if ${MACHINE_ABI:Mpurecap}
+SRCS+=	heap.c malloc.c
+CFLAGS.heap.c+=		-DIN_LIBTHR
+CFLAGS.malloc.c+=	-DIN_LIBTHR
+.else
 SRCS+= rtld_malloc.c
+.endif
 
 LIBSYS_SRCTOP=	${.CURDIR:H}/libsys
 .if exists(${LIBSYS_SRCTOP}/${MACHINE_CPUARCH}/_umtx_op_err.S)
