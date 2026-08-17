@@ -96,5 +96,4 @@ int __getosreldate(void);
 #define _open(...) open(__VA_ARGS__)
 #define _openat(...) openat(__VA_ARGS__)
 
-
 #endif /* _RTLD_AVOID_LIBC_DEPS_H_ */

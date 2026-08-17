@@ -91,13 +91,13 @@ dump_obj_relocations (Obj_Entry *obj)
     for (i = 0; i < obj->nplts; i++) {
 	plt = &obj->plts[i];
         if (plt->relsize) {
-            rtld_printf("PLT Relocations: %ld\n",
+            rtld_printf("PLT[%lu] Relocations: %ld\n", i,
                 (plt->relsize / sizeof(Elf_Rel)));
             dump_Elf_Rel(obj, plt->rel, plt->relsize);
         }
 
         if (plt->relasize) {
-            rtld_printf("PLT Relocations with Addend: %ld\n",
+            rtld_printf("PLT[%lu] Relocations with Addend: %ld\n", i,
                 (plt->relasize / sizeof(Elf_Rela)));
             dump_Elf_Rela(obj, plt->rela, plt->relasize);
         }
