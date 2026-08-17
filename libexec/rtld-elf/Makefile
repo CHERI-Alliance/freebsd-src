@@ -110,10 +110,14 @@ beforeinstall:
 
 .PATH: ${RTLD_ELF_DIR}/${RTLD_ARCH} ${SRCTOP}/lib/csu/common
 
-.if ${MACHINE_CPU:Mcheri} && !defined(NEED_COMPAT)
+.if ${MACHINE_ABI:Mpurecap}
 .PATH: ${RTLD_ELF_DIR}/cheri
 SRCS+=		cheri_bounds.c cheri_reloc.c
 CFLAGS+=	-I${RTLD_ELF_DIR}/cheri
+
+.PATH: ${SRCTOP}/lib/libmalloc_simple
+SRCS+=		heap.c malloc.c
+SRCS:=		${SRCS:Nrtld_malloc.c}
 .endif
 
 .if ${.CURDIR} == ${RTLD_ELF_DIR}
