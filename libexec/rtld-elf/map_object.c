@@ -336,18 +336,20 @@ map_object(int fd, const char *path, const struct stat *sb, bool ismain)
 	if (phinterp != NULL)
 		obj->interp = (const char *)(obj->relocbase +
 		    phinterp->p_vaddr);
-	if (phtls != NULL) {
+	if (phtls != NULL || phtgot != NULL) {
 		if (ismain)
 			obj->tlsindex = 1;
 		else {
 			tls_dtv_generation++;
 			obj->tlsindex = ++tls_max_index;
 		}
+	}
+	if (phtls != NULL) {
 		obj->tlssize = phtls->p_memsz;
 		obj->tlsalign = phtls->p_align;
 		obj->tlspoffset = phtls->p_offset;
 		obj->tlsinitsize = phtls->p_filesz;
-		obj->tlsinit = obj->relocbase + phtls->p_vaddr;
+		obj->tlsinit = mapbase + phtls->p_vaddr;
 	}
 	if (phtgot != NULL) {
 #ifdef TLS_TGOT
@@ -530,8 +532,6 @@ obj_free(Obj_Entry *obj)
 		free(obj->origin_path);
 	if (obj->z_origin)
 		free(__DECONST(void *, obj->rpath));
-	if (obj->plts)
-		free(obj->plts);
 	if (obj->plts)
 		free(obj->plts);
 	if (obj->priv)
