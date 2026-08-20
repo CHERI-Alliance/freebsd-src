@@ -4598,14 +4598,7 @@ do_dlsym(void *handle, const char *name, void *retaddr, const Ver_Entry *ve,
 			sym = (char *)_rtld_tls_get_block(defobj->tlsindex) +
 			    def->st_value;
 #ifdef __CHERI__
-#if defined(__riscv) && !defined(TLS_TGOT)
-			/*
-			 * CHERI-RISC-V's traditional TLS ABI does not set
-			 * bounds; mirror in dlsym
-			 */
-#else
 			sym = cheri_bounds_set(sym, def->st_size);
-#endif
 #endif
 		} else
 			sym = make_data_pointer(def, defobj);
