@@ -1065,9 +1065,11 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
 		SYMLOOK_EARLY, NULL) == -1)
 		rtld_die();
 
+#ifndef __CHERI__
 	dbg("doing copy relocations");
 	if (do_copy_relocations(obj_main) == -1)
 		rtld_die();
+#endif
 
 	if (ld_get_env_var(LD_DUMP_REL_POST) != NULL) {
 		dump_relocations(obj_main);
