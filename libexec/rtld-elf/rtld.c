@@ -2013,9 +2013,9 @@ digest_phdr(const Elf_Phdr *phdr, int phnum, caddr_t entry, const char *path)
 				obj->vaddrbase = rtld_trunc_page(ph->p_vaddr);
 				obj->mapbase = obj->vaddrbase + obj->relocbase;
 			} else { /* Last load segment */
-				obj->mapsize = rtld_round_page(
-				    ph->p_vaddr + ph->p_memsz) -
-				    obj->vaddrbase;
+				obj->mapsize = rtld_max(obj->mapsize,
+				    rtld_round_page(ph->p_vaddr + ph->p_memsz) -
+				    obj->vaddrbase);
 			}
 			nsegs++;
 			break;
@@ -2780,8 +2780,9 @@ parse_rtld_phdr(Obj_Entry *obj)
 				obj->vaddrbase = rtld_trunc_page(ph->p_vaddr);
 				first_seg = false;
 			}
-			obj->mapsize = rtld_round_page(ph->p_vaddr +
-			    ph->p_memsz) - obj->vaddrbase;
+			obj->mapsize = rtld_max(obj->mapsize,
+			    rtld_round_page(ph->p_vaddr +
+			    ph->p_memsz) - obj->vaddrbase);
 			break;
 		case PT_GNU_STACK:
 			if (!check_gnu_stack(ph->p_flags, obj->path))
