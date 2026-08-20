@@ -1534,33 +1534,7 @@ digest_dynamic1(Obj_Entry *obj, int early, const Elf_Dyn **dyn_rpath,
 			obj->rela = (const Elf_Rela *)(obj->relocbase +
 			    dynp->d_un.d_ptr);
 			break;
-		case DT_CHERI_TGOTREL:
-#ifdef TLS_TGOT
-			obj->tgotrel = (const Elf_Rel *)(obj->relocbase +
-			    dynp->d_un.d_ptr);
-			break;
-#else
-			_rtld_error("%s: TGOT not supported", obj->path);
-			return (false);
-#endif
 
-               case DT_CHERI_TGOTRELSZ:
-#ifdef TLS_TGOT
-			obj->tgotrelsize = dynp->d_un.d_val;
-			break;
-#else
-			_rtld_error("%s: TGOT not supported", obj->path);
-			return (false);
-#endif
-
-               case DT_CHERI_TGOTRELT:
-#ifdef TLS_TGOT
-			tgottype = dynp->d_un.d_val;
-			break;
-#else
-			_rtld_error("%s: TGOT not supported", obj->path);
-			return (false);
-#endif
 		case DT_RELASZ:
 			obj->relasize = dynp->d_un.d_val;
 			break;
@@ -1596,6 +1570,34 @@ digest_dynamic1(Obj_Entry *obj, int early, const Elf_Dyn **dyn_rpath,
 		case DT_SYMENT:
 			assert(dynp->d_un.d_val == sizeof(Elf_Sym));
 			break;
+
+		case DT_CHERI_TGOTREL:
+#ifdef TLS_TGOT
+			obj->tgotrel = (const Elf_Rel *)(obj->relocbase +
+			    dynp->d_un.d_ptr);
+			break;
+#else
+			_rtld_error("%s: TGOT not supported", obj->path);
+			return (false);
+#endif
+
+		case DT_CHERI_TGOTRELSZ:
+#ifdef TLS_TGOT
+			obj->tgotrelsize = dynp->d_un.d_val;
+			break;
+#else
+			_rtld_error("%s: TGOT not supported", obj->path);
+			return (false);
+#endif
+
+		case DT_CHERI_TGOTRELT:
+#ifdef TLS_TGOT
+			tgottype = dynp->d_un.d_val;
+			break;
+#else
+			_rtld_error("%s: TGOT not supported", obj->path);
+			return (false);
+#endif
 
 		case DT_STRTAB:
 			obj->strtab = (const char *)(obj->relocbase +
