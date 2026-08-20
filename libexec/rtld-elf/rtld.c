@@ -2886,37 +2886,19 @@ init_rtld(caddr_t mapbase, Elf_Auxinfo **aux_info)
 static void
 init_pagesizes(Elf_Auxinfo **aux_info)
 {
-	static size_t psa[MAXPAGESIZES];
-	int mib[2];
-	size_t len, size;
+	size_t size;
 
-	if (aux_info[AT_PAGESIZES] != NULL &&
-	    aux_info[AT_PAGESIZESLEN] != NULL) {
-		size = aux_info[AT_PAGESIZESLEN]->a_un.a_val;
-		pagesizes = aux_info[AT_PAGESIZES]->a_un.a_ptr;
-	} else {
-		len = 2;
-		if (sysctlnametomib("hw.pagesizes", mib, &len) == 0)
-			size = sizeof(psa);
-		else {
-			/* As a fallback, retrieve the base page size. */
-			size = sizeof(psa[0]);
-			if (aux_info[AT_PAGESZ] != NULL) {
-				psa[0] = aux_info[AT_PAGESZ]->a_un.a_val;
-				goto psa_filled;
-			} else {
-				mib[0] = CTL_HW;
-				mib[1] = HW_PAGESIZE;
-				len = 2;
-			}
-		}
-		if (sysctl(mib, len, psa, &size, NULL, 0) == -1) {
-			_rtld_error("sysctl for hw.pagesize(s) failed");
-			rtld_die();
-		}
-	psa_filled:
-		pagesizes = psa;
+	if (aux_info[AT_PAGESIZES] == NULL) {
+		_rtld_error("missing AT_PAGESIZES");
+		rtld_die();
 	}
+	if (aux_info[AT_PAGESIZESLEN] == NULL) {
+		_rtld_error("missing AT_PAGESIZESLEN");
+		rtld_die();
+	}
+
+	size = aux_info[AT_PAGESIZESLEN]->a_un.a_val;
+	pagesizes = aux_info[AT_PAGESIZES]->a_un.a_ptr;
 	npagesizes = size / sizeof(pagesizes[0]);
 	/* Discard any invalid entries at the end of the array. */
 	while (npagesizes > 0 && pagesizes[npagesizes - 1] == 0)
