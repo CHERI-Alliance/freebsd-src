@@ -258,12 +258,11 @@ _rtld_relocate_nonplt_self(Elf_Dyn *dynp, Elf_Auxinfo *aux)
 }
 #endif /* __CHERI__ */
 
+#ifndef __CHERI__
+/* Copy relocations are not supported in CheriABI */
 int
-do_copy_relocations(Obj_Entry *dstobj __maybe_unused)
+do_copy_relocations(Obj_Entry *dstobj)
 {
-#ifdef __CHERI__
-	/* Copy relocations are not supported in CheriABI */
-#else
 	const Obj_Entry *srcobj, *defobj;
 	const Elf_Rela *relalim;
 	const Elf_Rela *rela;
@@ -314,10 +313,10 @@ do_copy_relocations(Obj_Entry *dstobj __maybe_unused)
 		srcaddr = (const void *)(defobj->relocbase + srcsym->st_value);
 		memcpy(dstaddr, srcaddr, size);
 	}
-#endif
 
 	return (0);
 }
+#endif /* !__CHERI__ */
 
 #if !defined(TLS_TGOT) || defined(TLS_TGOT_COMPAT)
 struct tls_data {
@@ -983,6 +982,11 @@ reloc_non_plt(Obj_Entry *obj, Obj_Entry *obj_rtld, int flags,
 			*where = symval + rela->r_addend;
 			break;
 		case R_AARCH64_COPY:
+#ifdef __CHERI__
+			_rtld_error("%s: Unexpected R_AARCH64_COPY "
+			    "relocation in pure-capability object", obj->path);
+			return (-1);
+#else
 			/*
 			 * These are deferred until all other relocations have
 			 * been done. All we do here is make sure that the
@@ -995,6 +999,7 @@ reloc_non_plt(Obj_Entry *obj, Obj_Entry *obj_rtld, int flags,
 				return (-1);
 			}
 			break;
+#endif
 #ifdef __CHERI__
 		case R_MORELLO_TLSDESC:
 #else
