@@ -3129,9 +3129,16 @@ vn_mmap(struct file *fp, vm_map_t map, vm_pointer_t *addr,
 			maxprot |= VM_PROT_WRITE;
 		else if ((prot & VM_PROT_WRITE) != 0)
 			return (EACCES);
+		if (((prot | cap_maxprot) & VM_PROT_CAP) != 0)
+			return (EACCES);
 	} else {
 		maxprot |= VM_PROT_WRITE;
 		cap_maxprot |= VM_PROT_WRITE;
+
+		/* Permit capability loads and stores for MAP_PRIVATE. */
+		prot = VM_PROT_ADD_CAP(prot);
+		maxprot = VM_PROT_ADD_CAP(maxprot);
+		cap_maxprot = VM_PROT_ADD_CAP(cap_maxprot);
 	}
 	maxprot &= cap_maxprot;
 
