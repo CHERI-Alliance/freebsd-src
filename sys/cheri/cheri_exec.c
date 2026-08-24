@@ -78,7 +78,7 @@ cheri_exec_pcc(struct thread *td, struct image_params *imgp)
 	MPASS(code_length == CHERI_REPRESENTABLE_LENGTH(code_length));
 	KASSERT(code_start < code_end, ("%s: truncated PCC", __func__));
 	return (cheri_capability_build_user_code(td, CHERI_CAP_USER_CODE_PERMS,
-	    code_start, code_length, imgp->entry_addr - code_start));
+	    code_start, code_length, imgp->entry_addr));
 }
 
 void *
