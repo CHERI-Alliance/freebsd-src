@@ -206,9 +206,7 @@ cheri_sysvec_init(struct sysentvec *sv)
 	sv->sv_vmspace_cap = (uintptr_t)
 	    cheri_capability_build_user_rwx_unchecked(
 	    CHERI_CAP_USER_CODE_PERMS | CHERI_CAP_USER_DATA_PERMS |
-	    CHERI_PERMS_SWALL, padded_minuser, user_length,
-	    minuser - padded_minuser);
+	    CHERI_PERMS_SWALL, padded_minuser, user_length, minuser);
 	KASSERT(cheri_tag_get(sv->sv_vmspace_cap),
-	    ("sv_vmspace_cap untagged %#lp",
-	     (void * __capability)sv->sv_vmspace_cap));
+	    ("sv_vmspace_cap untagged %#p", (void *)sv->sv_vmspace_cap));
 }
