@@ -166,7 +166,7 @@
 /*
  * There is a 128-byte region in the superblock reserved for in-core
  * pointers to summary information. Originally this included an array
- * of pointers to blocks of struct csum; now there is just on pointer
+ * of pointers to blocks of struct csum; now there is just one pointer
  * and 64-bits of padding for align it to 16-bytes and the remaining
  * space is padded with fs_ocsp[].
  *
