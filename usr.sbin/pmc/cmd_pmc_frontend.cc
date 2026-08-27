@@ -101,7 +101,7 @@ public:
 
 	virtual void
 	callchain(struct pmclog_ev_callchain &p,
-	    ibsfetchinfo &f, __unused uintfptr_t *cc, __unused int len)
+	    ibsfetchinfo &f, __unused ptraddr_t *cc, __unused int len)
 	{
 		int usermode = PMC_CALLCHAIN_CPUFLAGS_TO_USERMODE(p.pl_cpuflags);
 
