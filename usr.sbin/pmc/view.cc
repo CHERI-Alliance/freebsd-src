@@ -753,7 +753,7 @@ pmcview::process(struct pmclog_ev_callchain &p)
 	int i;
 	uint8_t *hdr = (uint8_t *)&p.pl_pc[0];
 	uint8_t type, len;
-	uintfptr_t *cc = &p.pl_pc[1];
+	ptraddr_t *cc = &p.pl_pc[1];
 	ibsfetchinfo ibsf;
 	ibsopinfo ibso;
 
