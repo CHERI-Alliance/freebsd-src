@@ -420,8 +420,16 @@ struct v4l2_ext_control {
 		uint16_t	*p_u16;
 		uint32_t	*p_u32;
 		void		*ptr;
-	};
-} __packed;
+	}
+#ifndef __CHERI__
+	__packed
+#endif
+	;
+}
+#ifndef __CHERI__
+__packed
+#endif
+;
 
 struct v4l2_ext_controls {
 	union {
@@ -842,13 +850,22 @@ _Static_assert(sizeof(struct v4l2_capability) == 104, "v4l2_capability layout");
 _Static_assert(sizeof(struct v4l2_requestbuffers) == 20,
     "v4l2_requestbuffers layout");
 _Static_assert(sizeof(struct v4l2_querymenu) == 44, "v4l2_querymenu layout");
+#ifdef __CHERI__
+_Static_assert(sizeof(struct v4l2_ext_control) == 32,
+    "v4l2_ext_control layout");
+#else
 _Static_assert(sizeof(struct v4l2_ext_control) == 20,
     "v4l2_ext_control layout");
+#endif
 _Static_assert(sizeof(struct v4l2_tuner) == 84, "v4l2_tuner layout");
 _Static_assert(sizeof(struct v4l2_frequency) == 44, "v4l2_frequency layout");
 _Static_assert(sizeof(struct v4l2_cropcap) == 44, "v4l2_cropcap layout");
 _Static_assert(sizeof(struct v4l2_crop) == 20, "v4l2_crop layout");
-#ifdef __LP64__
+#ifdef __CHERI__
+_Static_assert(__offsetof(struct v4l2_format, fmt) == 16, "v4l2_format layout");
+_Static_assert(sizeof(struct v4l2_format) == 224, "v4l2_format layout");
+_Static_assert(sizeof(struct v4l2_buffer) == 96, "v4l2_buffer layout");
+#elif defined(__LP64__)
 _Static_assert(__offsetof(struct v4l2_format, fmt) == 8, "v4l2_format layout");
 _Static_assert(sizeof(struct v4l2_format) == 208, "v4l2_format layout");
 _Static_assert(sizeof(struct v4l2_buffer) == 88, "v4l2_buffer layout");

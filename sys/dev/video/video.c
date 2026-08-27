@@ -74,7 +74,7 @@ video_pool_alloc(u_int nbufs, size_t buf_size)
 	struct video_buf *vb;
 	size_t map_size;
 	vm_object_t obj;
-	vm_offset_t kva;
+	vm_pointer_t kva;
 	u_int i;
 	int error;
 
