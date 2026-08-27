@@ -597,7 +597,11 @@ _Static_assert(sizeof(struct v4l2_pix_format) == 48, "v4l2_pix_format layout");
 _Static_assert(sizeof(struct v4l2_capability) == 104, "v4l2_capability layout");
 _Static_assert(sizeof(struct v4l2_requestbuffers) == 20,
     "v4l2_requestbuffers layout");
-#ifdef __LP64__
+#ifdef __CHERI__
+_Static_assert(__offsetof(struct v4l2_format, fmt) == 16, "v4l2_format layout");
+_Static_assert(sizeof(struct v4l2_format) == 224, "v4l2_format layout");
+_Static_assert(sizeof(struct v4l2_buffer) == 96, "v4l2_buffer layout");
+#elif defined(__LP64__)
 _Static_assert(__offsetof(struct v4l2_format, fmt) == 8, "v4l2_format layout");
 _Static_assert(sizeof(struct v4l2_format) == 208, "v4l2_format layout");
 _Static_assert(sizeof(struct v4l2_buffer) == 88, "v4l2_buffer layout");
