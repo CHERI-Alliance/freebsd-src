@@ -148,7 +148,7 @@ thread_attach_test(void *(*thread_handler)(void*), const char *jail_name,
 		for (ti = 1; ti < NJAILS; ++ti)
 			ATF_REQUIRE_MSG(
 			    pthread_create(&threads[ti], NULL, thread_handler,
-			    (void*)ti) == 0,
+			    (void*)(uintptr_t)ti) == 0,
 			    "pthread_create: %s", strerror(errno));
 		for (ti = 1; ti < NJAILS; ++ti)
 			ATF_REQUIRE_MSG(
