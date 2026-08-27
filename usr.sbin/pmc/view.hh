@@ -341,15 +341,15 @@ public:
 	virtual void procexec(__unused pid_t pid) { };
 	virtual void procexit(__unused pid_t pid) { };
 	virtual void callchain(struct pmclog_ev_callchain &p,
-	    __unused ibsfetchinfo &f, uintfptr_t *cc, int len) {
+	    __unused ibsfetchinfo &f, ptraddr_t *cc, int len) {
 		callchain(p, cc, len);
 	}
 	virtual void callchain(struct pmclog_ev_callchain &p,
-	    __unused ibsopinfo &o, uintfptr_t *cc, int len) {
+	    __unused ibsopinfo &o, ptraddr_t *cc, int len) {
 		callchain(p, cc, len);
 	}
 	virtual void callchain(struct pmclog_ev_callchain &p,
-	    __unused uintfptr_t *cc, __unused int len) {
+	    __unused ptraddr_t *cc, __unused int len) {
 		callchain(p);
 	}
 	virtual void callchain(__unused struct pmclog_ev_callchain &p) { }
