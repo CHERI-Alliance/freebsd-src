@@ -151,7 +151,9 @@
 
 // NOTE: If function expat_alloc was user facing, EXPAT_MALLOC_ALIGNMENT would
 //       have to take sizeof(long double) into account
-#define EXPAT_MALLOC_ALIGNMENT sizeof(long long) // largest parser (sub)member
+#define EXPAT_MALLOC_ALIGNMENT                                                 \
+  (sizeof(long long) > sizeof(void *) ? sizeof(long long) : sizeof(void *))    \
+  // largest parser (sub)member
 #define EXPAT_MALLOC_PADDING ((EXPAT_MALLOC_ALIGNMENT) - sizeof(size_t))
 
 /* NOTE END */
