@@ -86,7 +86,7 @@ struct nvpair {
 	int		 nvp_magic;
 	char		*nvp_name;
 	int		 nvp_type;
-	uint64_t	 nvp_data;
+	uint64ptr_t	 nvp_data;
 	size_t		 nvp_datasize;
 	size_t		 nvp_nitems;	/* Used only for array types. */
 	nvlist_t	*nvp_list;
@@ -114,7 +114,7 @@ nvpair_assert(const nvpair_t *nvp __unused)
 }
 
 static nvpair_t *
-nvpair_allocv(const char *name, int type, uint64_t data, size_t datasize,
+nvpair_allocv(const char *name, int type, uint64ptr_t data, size_t datasize,
     size_t nitems)
 {
 	nvpair_t *nvp;
@@ -159,7 +159,7 @@ nvpair_append(nvpair_t *nvp, const void *value, size_t valsize, size_t datasize)
 	valp = (unsigned char *)data + oldlen;
 	memcpy(valp, value, valsize);
 
-	nvp->nvp_data = (uint64_t)(uintptr_t)data;
+	nvp->nvp_data = (uintptr_t)data;
 	nvp->nvp_datasize += datasize;
 	nvp->nvp_nitems++;
 	return (0);
@@ -790,7 +790,7 @@ nvpair_unpack_string(bool isbe __unused, nvpair_t *nvp,
 		return (NULL);
 	}
 
-	nvp->nvp_data = (uint64_t)(uintptr_t)nv_strdup((const char *)ptr);
+	nvp->nvp_data = (uintptr_t)nv_strdup((const char *)ptr);
 	if (nvp->nvp_data == 0)
 		return (NULL);
 
@@ -821,7 +821,7 @@ nvpair_unpack_nvlist(bool isbe __unused, nvpair_t *nvp,
 	if (ptr == NULL)
 		return (NULL);
 
-	nvp->nvp_data = (uint64_t)(uintptr_t)value;
+	nvp->nvp_data = (uintptr_t)value;
 	*child = value;
 
 	return (ptr);
@@ -890,7 +890,7 @@ nvpair_unpack_binary(bool isbe __unused, nvpair_t *nvp,
 	ptr += nvp->nvp_datasize;
 	*leftp -= nvp->nvp_datasize;
 
-	nvp->nvp_data = (uint64_t)(uintptr_t)value;
+	nvp->nvp_data = (uintptr_t)value;
 
 	return (ptr);
 }
@@ -923,7 +923,7 @@ nvpair_unpack_bool_array(bool isbe __unused, nvpair_t *nvp,
 		*leftp -= sizeof(*value);
 	}
 
-	nvp->nvp_data = (uint64_t)(uintptr_t)value;
+	nvp->nvp_data = (uintptr_t)value;
 
 	return (ptr);
 }
@@ -959,7 +959,7 @@ nvpair_unpack_number_array(bool isbe, nvpair_t *nvp, const unsigned char *ptr,
 		*leftp -= sizeof(*value);
 	}
 
-	nvp->nvp_data = (uint64_t)(uintptr_t)value;
+	nvp->nvp_data = (uintptr_t)value;
 
 	return (ptr);
 }
@@ -1014,7 +1014,7 @@ nvpair_unpack_string_array(bool isbe __unused, nvpair_t *nvp,
 		ptr += len;
 		*leftp -= len;
 	}
-	nvp->nvp_data = (uint64_t)(uintptr_t)value;
+	nvp->nvp_data = (uintptr_t)value;
 
 	return (ptr);
 out:
@@ -1071,7 +1071,7 @@ nvpair_unpack_descriptor_array(bool isbe, nvpair_t *nvp,
 		*leftp -= sizeof(idx);
 	}
 
-	nvp->nvp_data = (uint64_t)(uintptr_t)array;
+	nvp->nvp_data = (uintptr_t)array;
 
 	return (ptr);
 }
@@ -1105,7 +1105,7 @@ nvpair_unpack_nvlist_array(bool isbe __unused, nvpair_t *nvp,
 			goto fail;
 		if (ii > 0) {
 			tmpnvp = nvpair_allocv(" ", NV_TYPE_NVLIST,
-			    (uint64_t)(uintptr_t)value[ii], 0, 0);
+			    (uintptr_t)value[ii], 0, 0);
 			if (tmpnvp == NULL)
 				goto fail;
 			nvlist_set_array_next(value[ii - 1], tmpnvp);
@@ -1113,7 +1113,7 @@ nvpair_unpack_nvlist_array(bool isbe __unused, nvpair_t *nvp,
 	}
 	nvlist_set_flags(value[nvp->nvp_nitems - 1], NV_FLAG_IN_ARRAY);
 
-	nvp->nvp_data = (uint64_t)(uintptr_t)value;
+	nvp->nvp_data = (uintptr_t)value;
 	*firstel = value[0];
 
 	return (ptr);
@@ -1242,8 +1242,7 @@ nvpair_create_string(const char *name, const char *value)
 		return (NULL);
 	size = strlen(value) + 1;
 
-	nvp = nvpair_allocv(name, NV_TYPE_STRING, (uint64_t)(uintptr_t)data,
-	    size, 0);
+	nvp = nvpair_allocv(name, NV_TYPE_STRING, (uintptr_t)data, size, 0);
 	if (nvp == NULL)
 		nv_free(data);
 
@@ -1265,8 +1264,7 @@ nvpair_create_nvlist(const char *name, const nvlist_t *value)
 	if (nvl == NULL)
 		return (NULL);
 
-	nvp = nvpair_allocv(name, NV_TYPE_NVLIST, (uint64_t)(uintptr_t)nvl, 0,
-	    0);
+	nvp = nvpair_allocv(name, NV_TYPE_NVLIST, (uintptr_t)nvl, 0, 0);
 	if (nvp == NULL)
 		nvlist_destroy(nvl);
 	else
@@ -1313,8 +1311,7 @@ nvpair_create_binary(const char *name, const void *value, size_t size)
 		return (NULL);
 	memcpy(data, value, size);
 
-	nvp = nvpair_allocv(name, NV_TYPE_BINARY, (uint64_t)(uintptr_t)data,
-	    size, 0);
+	nvp = nvpair_allocv(name, NV_TYPE_BINARY, (uintptr_t)data, size, 0);
 	if (nvp == NULL)
 		nv_free(data);
 
@@ -1339,7 +1336,7 @@ nvpair_create_bool_array(const char *name, const bool *value, size_t nitems)
 	size = sizeof(value[0]) * nitems;
 
 	memcpy(data, value, size);
-	nvp = nvpair_allocv(name, NV_TYPE_BOOL_ARRAY, (uint64_t)(uintptr_t)data,
+	nvp = nvpair_allocv(name, NV_TYPE_BOOL_ARRAY, (uintptr_t)data,
 	    size, nitems);
 	if (nvp == NULL) {
 		ERRNO_SAVE();
@@ -1369,8 +1366,8 @@ nvpair_create_number_array(const char *name, const uint64_t *value,
 	size = sizeof(value[0]) * nitems;
 
 	memcpy(data, value, size);
-	nvp = nvpair_allocv(name, NV_TYPE_NUMBER_ARRAY,
-	    (uint64_t)(uintptr_t)data, size, nitems);
+	nvp = nvpair_allocv(name, NV_TYPE_NUMBER_ARRAY, (uintptr_t)data,
+	    size, nitems);
 	if (nvp == NULL) {
 		ERRNO_SAVE();
 		nv_free(data);
@@ -1412,8 +1409,8 @@ nvpair_create_string_array(const char *name, const char * const *value,
 		if (data[ii] == NULL)
 			goto fail;
 	}
-	nvp = nvpair_allocv(name, NV_TYPE_STRING_ARRAY,
-	    (uint64_t)(uintptr_t)data, datasize, nitems);
+	nvp = nvpair_allocv(name, NV_TYPE_STRING_ARRAY, (uintptr_t)data,
+	    datasize, nitems);
 
 fail:
 	if (nvp == NULL) {
@@ -1461,7 +1458,7 @@ nvpair_create_nvlist_array(const char *name, const nvlist_t * const *value,
 			nvpair_t *nvp;
 
 			nvp = nvpair_allocv(" ", NV_TYPE_NVLIST,
-			    (uint64_t)(uintptr_t)nvls[ii], 0, 0);
+			    (uintptr_t)nvls[ii], 0, 0);
 			if (nvp == NULL) {
 				ERRNO_SAVE();
 				nvlist_destroy(nvls[ii]);
@@ -1474,8 +1471,8 @@ nvpair_create_nvlist_array(const char *name, const nvlist_t * const *value,
 	flags = nvlist_flags(nvls[nitems - 1]) | NV_FLAG_IN_ARRAY;
 	nvlist_set_flags(nvls[nitems - 1], flags);
 
-	parent = nvpair_allocv(name, NV_TYPE_NVLIST_ARRAY,
-	    (uint64_t)(uintptr_t)nvls, 0, nitems);
+	parent = nvpair_allocv(name, NV_TYPE_NVLIST_ARRAY, (uintptr_t)nvls,
+	    0, nitems);
 	if (parent == NULL)
 		goto fail;
 
@@ -1523,8 +1520,8 @@ nvpair_create_descriptor_array(const char *name, const int *value,
 		}
 	}
 
-	nvp = nvpair_allocv(name, NV_TYPE_DESCRIPTOR_ARRAY,
-	    (uint64_t)(uintptr_t)fds, sizeof(int64_t) * nitems, nitems);
+	nvp = nvpair_allocv(name, NV_TYPE_DESCRIPTOR_ARRAY, (uintptr_t)fds,
+	    sizeof(int64_t) * nitems, nitems);
 
 fail:
 	if (nvp == NULL) {
@@ -1551,7 +1548,7 @@ nvpair_move_string(const char *name, char *value)
 		return (NULL);
 	}
 
-	nvp = nvpair_allocv(name, NV_TYPE_STRING, (uint64_t)(uintptr_t)value,
+	nvp = nvpair_allocv(name, NV_TYPE_STRING, (uintptr_t)value,
 	    strlen(value) + 1, 0);
 	if (nvp == NULL) {
 		ERRNO_SAVE();
@@ -1578,8 +1575,7 @@ nvpair_move_nvlist(const char *name, nvlist_t *value)
 		return (NULL);
 	}
 
-	nvp = nvpair_allocv(name, NV_TYPE_NVLIST, (uint64_t)(uintptr_t)value,
-	    0, 0);
+	nvp = nvpair_allocv(name, NV_TYPE_NVLIST, (uintptr_t)value, 0, 0);
 	if (nvp == NULL)
 		nvlist_destroy(value);
 	else
@@ -1621,8 +1617,7 @@ nvpair_move_binary(const char *name, void *value, size_t size)
 		return (NULL);
 	}
 
-	nvp = nvpair_allocv(name, NV_TYPE_BINARY, (uint64_t)(uintptr_t)value,
-	    size, 0);
+	nvp = nvpair_allocv(name, NV_TYPE_BINARY, (uintptr_t)value, size, 0);
 	if (nvp == NULL) {
 		ERRNO_SAVE();
 		nv_free(value);
@@ -1642,8 +1637,8 @@ nvpair_move_bool_array(const char *name, bool *value, size_t nitems)
 		return (NULL);
 	}
 
-	nvp = nvpair_allocv(name, NV_TYPE_BOOL_ARRAY,
-	    (uint64_t)(uintptr_t)value, sizeof(value[0]) * nitems, nitems);
+	nvp = nvpair_allocv(name, NV_TYPE_BOOL_ARRAY, (uintptr_t)value,
+	    sizeof(value[0]) * nitems, nitems);
 	if (nvp == NULL) {
 		ERRNO_SAVE();
 		nv_free(value);
@@ -1674,8 +1669,8 @@ nvpair_move_string_array(const char *name, char **value, size_t nitems)
 		size += strlen(value[i]) + 1;
 	}
 
-	nvp = nvpair_allocv(name, NV_TYPE_STRING_ARRAY,
-	    (uint64_t)(uintptr_t)value, size, nitems);
+	nvp = nvpair_allocv(name, NV_TYPE_STRING_ARRAY, (uintptr_t)value,
+	    size, nitems);
 	if (nvp == NULL) {
 		ERRNO_SAVE();
 		for (i = 0; i < nitems; i++)
@@ -1697,8 +1692,8 @@ nvpair_move_number_array(const char *name, uint64_t *value, size_t nitems)
 		return (NULL);
 	}
 
-	nvp = nvpair_allocv(name, NV_TYPE_NUMBER_ARRAY,
-	    (uint64_t)(uintptr_t)value, sizeof(value[0]) * nitems, nitems);
+	nvp = nvpair_allocv(name, NV_TYPE_NUMBER_ARRAY, (uintptr_t)value,
+	    sizeof(value[0]) * nitems, nitems);
 	if (nvp == NULL) {
 		ERRNO_SAVE();
 		nv_free(value);
@@ -1730,7 +1725,7 @@ nvpair_move_nvlist_array(const char *name, nvlist_t **value, size_t nitems)
 			nvpair_t *nvp;
 
 			nvp = nvpair_allocv(" ", NV_TYPE_NVLIST,
-			    (uint64_t)(uintptr_t)value[ii], 0, 0);
+			    (uintptr_t)value[ii], 0, 0);
 			if (nvp == NULL)
 				goto fail;
 			nvlist_set_array_next(value[ii - 1], nvp);
@@ -1739,8 +1734,8 @@ nvpair_move_nvlist_array(const char *name, nvlist_t **value, size_t nitems)
 	flags = nvlist_flags(value[nitems - 1]) | NV_FLAG_IN_ARRAY;
 	nvlist_set_flags(value[nitems - 1], flags);
 
-	parent = nvpair_allocv(name, NV_TYPE_NVLIST_ARRAY,
-	    (uint64_t)(uintptr_t)value, 0, nitems);
+	parent = nvpair_allocv(name, NV_TYPE_NVLIST_ARRAY, (uintptr_t)value,
+	    0, nitems);
 	if (parent == NULL)
 		goto fail;
 
@@ -1782,7 +1777,7 @@ nvpair_move_descriptor_array(const char *name, int *value, size_t nitems)
 	}
 
 	nvp = nvpair_allocv(name, NV_TYPE_DESCRIPTOR_ARRAY,
-	    (uint64_t)(uintptr_t)value, sizeof(value[0]) * nitems, nitems);
+	    (uintptr_t)value, sizeof(value[0]) * nitems, nitems);
 	if (nvp == NULL)
 		goto fail;
 
@@ -2000,7 +1995,7 @@ nvpair_append_nvlist_array(nvpair_t *nvp, const nvlist_t *value)
 		PJDLOG_ASSERT(prev != NULL);
 
 		tmpnvp = nvpair_allocv(" ", NV_TYPE_NVLIST,
-		    (uint64_t)(uintptr_t)nvl, 0, 0);
+		    (uintptr_t)nvl, 0, 0);
 		if (tmpnvp == NULL) {
 			goto fail;
 		}
