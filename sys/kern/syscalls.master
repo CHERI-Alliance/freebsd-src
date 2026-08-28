@@ -615,7 +615,9 @@
 		    u_int to
 		);
 	}
-91	AUE_NULL	RESERVED
+91	AUE_NULL	STD|CAPENABLED {
+		int cheri_cidcap_alloc(void);
+	}
 92	AUE_FCNTL	STD|CAPENABLED {
 		int fcntl(
 		    int fd,
@@ -1493,7 +1495,17 @@
 		    _In_opt_ _Contains_long_ptr_ struct sigevent *sig
 		);
 	}
-258-271	AUE_NULL	RESERVED
+258-259	AUE_NULL	RESERVED
+260	AUE_NULL	STD|CAPENABLED {
+		int cheri_revoke_get_shadow(void);
+	}
+261	AUE_NULL	STD|CAPENABLED {
+		void *cheri_revoke(void);
+	}
+262	AUE_NULL	STD|CAPENABLED {
+		int msetname(void);
+	}
+263-271	AUE_NULL	RESERVED
 272	AUE_O_GETDENTS	COMPAT11|CAPENABLED {
 		int getdents(
 		    int fd,

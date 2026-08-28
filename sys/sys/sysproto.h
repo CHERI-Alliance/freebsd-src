@@ -302,6 +302,9 @@ struct dup2_args {
 	char from_l_[PADL_(u_int)]; u_int from; char from_r_[PADR_(u_int)];
 	char to_l_[PADL_(u_int)]; u_int to; char to_r_[PADR_(u_int)];
 };
+struct cheri_cidcap_alloc_args {
+	syscallarg_t dummy;
+};
 struct fcntl_args {
 	char fd_l_[PADL_(int)]; int fd; char fd_r_[PADR_(int)];
 	char cmd_l_[PADL_(int)]; int cmd; char cmd_r_[PADR_(int)];
@@ -695,6 +698,15 @@ struct lio_listio_args {
 	char acb_list_l_[PADL_(struct aiocb * const *)]; struct aiocb * const * acb_list; char acb_list_r_[PADR_(struct aiocb * const *)];
 	char nent_l_[PADL_(int)]; int nent; char nent_r_[PADR_(int)];
 	char sig_l_[PADL_(struct sigevent *)]; struct sigevent * sig; char sig_r_[PADR_(struct sigevent *)];
+};
+struct cheri_revoke_get_shadow_args {
+	syscallarg_t dummy;
+};
+struct cheri_revoke_args {
+	syscallarg_t dummy;
+};
+struct msetname_args {
+	syscallarg_t dummy;
 };
 struct lchmod_args {
 	char path_l_[PADL_(const char *)]; const char * path; char path_r_[PADR_(const char *)];
@@ -2004,6 +2016,7 @@ int	sys_swapon(struct thread *, struct swapon_args *);
 int	sys_getitimer(struct thread *, struct getitimer_args *);
 int	sys_getdtablesize(struct thread *, struct getdtablesize_args *);
 int	sys_dup2(struct thread *, struct dup2_args *);
+int	sys_cheri_cidcap_alloc(struct thread *, struct cheri_cidcap_alloc_args *);
 int	sys_fcntl(struct thread *, struct fcntl_args *);
 int	sys_select(struct thread *, struct select_args *);
 int	sys_fsync(struct thread *, struct fsync_args *);
@@ -2091,6 +2104,9 @@ int	sys_lchown(struct thread *, struct lchown_args *);
 int	sys_aio_read(struct thread *, struct aio_read_args *);
 int	sys_aio_write(struct thread *, struct aio_write_args *);
 int	sys_lio_listio(struct thread *, struct lio_listio_args *);
+int	sys_cheri_revoke_get_shadow(struct thread *, struct cheri_revoke_get_shadow_args *);
+int	sys_cheri_revoke(struct thread *, struct cheri_revoke_args *);
+int	sys_msetname(struct thread *, struct msetname_args *);
 int	sys_lchmod(struct thread *, struct lchmod_args *);
 int	sys_lutimes(struct thread *, struct lutimes_args *);
 int	sys_preadv(struct thread *, struct preadv_args *);
@@ -2943,6 +2959,7 @@ int	freebsd14_setgroups(struct thread *, struct freebsd14_setgroups_args *);
 #define	SYS_AUE_osethostname	AUE_SYSCTL
 #define	SYS_AUE_getdtablesize	AUE_GETDTABLESIZE
 #define	SYS_AUE_dup2	AUE_DUP2
+#define	SYS_AUE_cheri_cidcap_alloc	AUE_NULL
 #define	SYS_AUE_fcntl	AUE_FCNTL
 #define	SYS_AUE_select	AUE_SELECT
 #define	SYS_AUE_fsync	AUE_FSYNC
@@ -3071,6 +3088,9 @@ int	freebsd14_setgroups(struct thread *, struct freebsd14_setgroups_args *);
 #define	SYS_AUE_aio_read	AUE_AIO_READ
 #define	SYS_AUE_aio_write	AUE_AIO_WRITE
 #define	SYS_AUE_lio_listio	AUE_LIO_LISTIO
+#define	SYS_AUE_cheri_revoke_get_shadow	AUE_NULL
+#define	SYS_AUE_cheri_revoke	AUE_NULL
+#define	SYS_AUE_msetname	AUE_NULL
 #define	SYS_AUE_freebsd11_getdents	AUE_O_GETDENTS
 #define	SYS_AUE_lchmod	AUE_LCHMOD
 #define	SYS_AUE_lutimes	AUE_LUTIMES

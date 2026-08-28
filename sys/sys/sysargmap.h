@@ -71,6 +71,7 @@ static int sysargmask[] = {
 	[SYS_getitimer] = (0x0 | 0x2),
 	[SYS_getdtablesize] = (0x0),
 	[SYS_dup2] = (0x0),
+	[SYS_cheri_cidcap_alloc] = (0x0),
 	[SYS_fcntl] = (0x0 | 0x4),
 	[SYS_select] = (0x0 | 0x2 | 0x4 | 0x8 | 0x10),
 	[SYS_fsync] = (0x0),
@@ -158,6 +159,9 @@ static int sysargmask[] = {
 	[SYS_aio_read] = (0x0 | 0x1),
 	[SYS_aio_write] = (0x0 | 0x1),
 	[SYS_lio_listio] = (0x0 | 0x2 | 0x8),
+	[SYS_cheri_revoke_get_shadow] = (0x0),
+	[SYS_cheri_revoke] = (0x0),
+	[SYS_msetname] = (0x0),
 	[SYS_lchmod] = (0x0 | 0x1),
 	[SYS_lutimes] = (0x0 | 0x1 | 0x2),
 	[SYS_preadv] = (0x0 | 0x2),
@@ -418,6 +422,8 @@ static int sysargmask[] = {
 	[SYS_pdrfork] = (0x0 | 0x1),
 	[SYS_pdwait] = (0x0 | 0x2 | 0x8 | 0x10),
 	[SYS_renameat2] = (0x0 | 0x2 | 0x8),
+	[SYS_pdopenpid] = (0x0),
+	[SYS_pddupfd] = (0x0),
 };
 
 #endif /* !_SYSARGMAP_H_ */

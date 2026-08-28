@@ -131,6 +131,8 @@ FBSDprivate_1.0 {
 	__sys_getdtablesize;
 	_dup2;
 	__sys_dup2;
+	_cheri_cidcap_alloc;
+	__sys_cheri_cidcap_alloc;
 	_fcntl;
 	__sys_fcntl;
 	_select;
@@ -307,6 +309,12 @@ FBSDprivate_1.0 {
 	__sys_aio_write;
 	_lio_listio;
 	__sys_lio_listio;
+	_cheri_revoke_get_shadow;
+	__sys_cheri_revoke_get_shadow;
+	_cheri_revoke;
+	__sys_cheri_revoke;
+	_msetname;
+	__sys_msetname;
 	_lchmod;
 	__sys_lchmod;
 	_lutimes;

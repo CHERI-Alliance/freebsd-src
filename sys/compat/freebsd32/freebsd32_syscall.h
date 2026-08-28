@@ -95,6 +95,7 @@
 				/* 88 is old sethostname */
 #define	FREEBSD32_SYS_getdtablesize	89
 #define	FREEBSD32_SYS_dup2	90
+#define	FREEBSD32_SYS_cheri_cidcap_alloc	91
 #define	FREEBSD32_SYS_freebsd32_fcntl	92
 #define	FREEBSD32_SYS_freebsd32_select	93
 #define	FREEBSD32_SYS_fsync	95
@@ -229,6 +230,9 @@
 #define	FREEBSD32_SYS_freebsd32_aio_read	255
 #define	FREEBSD32_SYS_freebsd32_aio_write	256
 #define	FREEBSD32_SYS_freebsd32_lio_listio	257
+#define	FREEBSD32_SYS_cheri_revoke_get_shadow	260
+#define	FREEBSD32_SYS_cheri_revoke	261
+#define	FREEBSD32_SYS_msetname	262
 #define	FREEBSD32_SYS_freebsd11_getdents	272
 #define	FREEBSD32_SYS_lchmod	274
 				/* 275 is obsolete netbsd_lchown */

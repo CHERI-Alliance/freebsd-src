@@ -97,6 +97,7 @@
 				/* 88 is old sethostname */
 #define	SYS_getdtablesize	89
 #define	SYS_dup2	90
+#define	SYS_cheri_cidcap_alloc	91
 #define	SYS_fcntl	92
 #define	SYS_select	93
 #define	SYS_fsync	95
@@ -235,6 +236,9 @@
 #define	SYS_aio_read	255
 #define	SYS_aio_write	256
 #define	SYS_lio_listio	257
+#define	SYS_cheri_revoke_get_shadow	260
+#define	SYS_cheri_revoke	261
+#define	SYS_msetname	262
 #define	SYS_freebsd11_getdents	272
 #define	SYS_lchmod	274
 				/* 275 is obsolete netbsd_lchown */

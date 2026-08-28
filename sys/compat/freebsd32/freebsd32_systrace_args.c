@@ -507,6 +507,11 @@ systrace_args(int sysnum, void *params, uintptr_t *uarg, int *n_args)
 		*n_args = 2;
 		break;
 	}
+	/* cheri_cidcap_alloc */
+	case 91: {
+		*n_args = 0;
+		break;
+	}
 	/* freebsd32_fcntl */
 	case 92: {
 		struct freebsd32_fcntl_args *p = params;
@@ -1260,6 +1265,21 @@ systrace_args(int sysnum, void *params, uintptr_t *uarg, int *n_args)
 		iarg[a++] = p->nent; /* int */
 		uarg[a++] = (intptr_t)p->sig; /* struct sigevent32 * */
 		*n_args = 4;
+		break;
+	}
+	/* cheri_revoke_get_shadow */
+	case 260: {
+		*n_args = 0;
+		break;
+	}
+	/* cheri_revoke */
+	case 261: {
+		*n_args = 0;
+		break;
+	}
+	/* msetname */
+	case 262: {
+		*n_args = 0;
 		break;
 	}
 	/* lchmod */
@@ -4245,6 +4265,9 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
+	/* cheri_cidcap_alloc */
+	case 91:
+		break;
 	/* freebsd32_fcntl */
 	case 92:
 		switch (ndx) {
@@ -5462,6 +5485,15 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		default:
 			break;
 		};
+		break;
+	/* cheri_revoke_get_shadow */
+	case 260:
+		break;
+	/* cheri_revoke */
+	case 261:
+		break;
+	/* msetname */
+	case 262:
 		break;
 	/* lchmod */
 	case 274:
@@ -9688,6 +9720,8 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
+	/* cheri_cidcap_alloc */
+	case 91:
 	/* freebsd32_fcntl */
 	case 92:
 		if (ndx == 0 || ndx == 1)
@@ -10119,6 +10153,12 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
+	/* cheri_revoke_get_shadow */
+	case 260:
+	/* cheri_revoke */
+	case 261:
+	/* msetname */
+	case 262:
 	/* lchmod */
 	case 274:
 		if (ndx == 0 || ndx == 1)

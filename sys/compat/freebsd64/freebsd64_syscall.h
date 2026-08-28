@@ -95,6 +95,7 @@
 				/* 88 is obsolete sethostname */
 #define	FREEBSD64_SYS_getdtablesize	89
 #define	FREEBSD64_SYS_dup2	90
+#define	FREEBSD64_SYS_cheri_cidcap_alloc	91
 #define	FREEBSD64_SYS_freebsd64_fcntl	92
 #define	FREEBSD64_SYS_freebsd64_select	93
 #define	FREEBSD64_SYS_fsync	95
@@ -233,6 +234,7 @@
 #define	FREEBSD64_SYS_freebsd64_aio_read	255
 #define	FREEBSD64_SYS_freebsd64_aio_write	256
 #define	FREEBSD64_SYS_freebsd64_lio_listio	257
+#define	FREEBSD64_SYS_msetname	262
 #define	FREEBSD64_SYS_freebsd11_freebsd64_getdents	272
 #define	FREEBSD64_SYS_freebsd64_lchmod	274
 				/* 275 is obsolete netbsd_lchown */
@@ -538,4 +540,6 @@
 #define	FREEBSD64_SYS_freebsd64_pdrfork	600
 #define	FREEBSD64_SYS_freebsd64_pdwait	601
 #define	FREEBSD64_SYS_freebsd64_renameat2	602
-#define	FREEBSD64_SYS_MAXSYSCALL	603
+#define	FREEBSD64_SYS_pdopenpid	603
+#define	FREEBSD64_SYS_pddupfd	604
+#define	FREEBSD64_SYS_MAXSYSCALL	605

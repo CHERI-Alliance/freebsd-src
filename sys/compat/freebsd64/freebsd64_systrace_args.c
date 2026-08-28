@@ -504,6 +504,11 @@ systrace_args(int sysnum, void *params, uintptr_t *uarg, int *n_args)
 		*n_args = 2;
 		break;
 	}
+	/* cheri_cidcap_alloc */
+	case 91: {
+		*n_args = 0;
+		break;
+	}
 	/* freebsd64_fcntl */
 	case 92: {
 		struct freebsd64_fcntl_args *p = params;
@@ -1289,6 +1294,11 @@ systrace_args(int sysnum, void *params, uintptr_t *uarg, int *n_args)
 		iarg[a++] = p->nent; /* int */
 		uarg[a++] = (intptr_t)p->sig; /* struct sigevent64 * */
 		*n_args = 4;
+		break;
+	}
+	/* msetname */
+	case 262: {
+		*n_args = 0;
 		break;
 	}
 	/* freebsd64_lchmod */
@@ -3211,7 +3221,7 @@ systrace_args(int sysnum, void *params, uintptr_t *uarg, int *n_args)
 	case 564: {
 		struct freebsd64_getfhat_args *p = params;
 		iarg[a++] = p->fd; /* int */
-		uarg[a++] = (intptr_t)p->path; /* char * */
+		uarg[a++] = (intptr_t)p->path; /* const char * */
 		uarg[a++] = (intptr_t)p->fhp; /* struct fhandle * */
 		iarg[a++] = p->flags; /* int */
 		*n_args = 4;
@@ -3543,6 +3553,23 @@ systrace_args(int sysnum, void *params, uintptr_t *uarg, int *n_args)
 		uarg[a++] = (intptr_t)p->new; /* const char * */
 		iarg[a++] = p->flags; /* int */
 		*n_args = 5;
+		break;
+	}
+	/* pdopenpid */
+	case 603: {
+		struct pdopenpid_args *p = params;
+		iarg[a++] = p->pid; /* pid_t */
+		iarg[a++] = p->flags; /* int */
+		*n_args = 2;
+		break;
+	}
+	/* pddupfd */
+	case 604: {
+		struct pddupfd_args *p = params;
+		iarg[a++] = p->pd; /* int */
+		iarg[a++] = p->fd; /* int */
+		iarg[a++] = p->flags; /* int */
+		*n_args = 3;
 		break;
 	}
 	default:
@@ -4314,6 +4341,9 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		default:
 			break;
 		};
+		break;
+	/* cheri_cidcap_alloc */
+	case 91:
 		break;
 	/* freebsd64_fcntl */
 	case 92:
@@ -5584,6 +5614,9 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		default:
 			break;
 		};
+		break;
+	/* msetname */
+	case 262:
 		break;
 	/* freebsd64_lchmod */
 	case 274:
@@ -8904,7 +8937,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			p = "int";
 			break;
 		case 1:
-			p = "userland char *";
+			p = "userland const char *";
 			break;
 		case 2:
 			p = "userland struct fhandle *";
@@ -9492,6 +9525,35 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
+	/* pdopenpid */
+	case 603:
+		switch (ndx) {
+		case 0:
+			p = "pid_t";
+			break;
+		case 1:
+			p = "int";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* pddupfd */
+	case 604:
+		switch (ndx) {
+		case 0:
+			p = "int";
+			break;
+		case 1:
+			p = "int";
+			break;
+		case 2:
+			p = "int";
+			break;
+		default:
+			break;
+		};
+		break;
 	default:
 		break;
 	};
@@ -9787,6 +9849,8 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
+	/* cheri_cidcap_alloc */
+	case 91:
 	/* freebsd64_fcntl */
 	case 92:
 		if (ndx == 0 || ndx == 1)
@@ -10238,6 +10302,8 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
+	/* msetname */
+	case 262:
 	/* freebsd64_lchmod */
 	case 274:
 		if (ndx == 0 || ndx == 1)
@@ -11512,6 +11578,16 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		break;
 	/* freebsd64_renameat2 */
 	case 602:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* pdopenpid */
+	case 603:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* pddupfd */
+	case 604:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;

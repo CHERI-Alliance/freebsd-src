@@ -74,6 +74,7 @@ MIASM =  \
 	getitimer.o \
 	getdtablesize.o \
 	dup2.o \
+	cheri_cidcap_alloc.o \
 	fcntl.o \
 	select.o \
 	fsync.o \
@@ -169,6 +170,9 @@ MIASM =  \
 	aio_read.o \
 	aio_write.o \
 	lio_listio.o \
+	cheri_revoke_get_shadow.o \
+	cheri_revoke.o \
+	msetname.o \
 	freebsd11_getdents.o \
 	lchmod.o \
 	lutimes.o \
