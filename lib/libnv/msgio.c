@@ -65,8 +65,15 @@
  * machine-independent limit on the number of FDs per message.  Each control
  * message contains 1 FD and requires 12 bytes for the header, 4 pad bytes,
  * 4 bytes for the descriptor, and another 4 pad bytes.
+ *
+ * For CheriABI, we have 12 bytes of pad for capability alignment after
+ * the descriptor so the message is aligned.
  */
+#ifdef __CHERI__
+#define	PKG_MAX_SIZE	(MCLBYTES / 32)
+#else
 #define	PKG_MAX_SIZE	(MCLBYTES / 24)
+#endif
 #endif
 
 static int
