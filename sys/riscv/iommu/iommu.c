@@ -198,7 +198,7 @@ riscv_iommu_dequeue(struct riscv_iommu_softc *sc, struct riscv_iommu_queue *q,
 	void *entry_addr;
 
 	q->lc.val = RD8(sc, q->head_off);
-	entry_addr = (void *)((uint64_t)q->vaddr + q->lc.head * q->entry_size);
+	entry_addr = (void *)((uintptr_t)q->vaddr + q->lc.head * q->entry_size);
 	memcpy(data, entry_addr, q->entry_size);
 	q->lc.head = riscv_iommu_q_inc_head(q);
 	WR4(sc, q->head_off, q->lc.head);
@@ -220,7 +220,7 @@ riscv_iommu_enqueue(struct riscv_iommu_softc *sc, struct riscv_iommu_queue *q,
 	} while (riscv_iommu_q_has_space(q) == 0);
 
 	/* Write the command to the current tail entry. */
-	entry_addr = (void *)((uint64_t)q->vaddr + q->lc.tail * q->entry_size);
+	entry_addr = (void *)((uintptr_t)q->vaddr + q->lc.tail * q->entry_size);
 	memcpy(entry_addr, data, q->entry_size);
 
 	/* Increment tail index. */
@@ -732,7 +732,7 @@ riscv_iommu_init_l0_directory(struct riscv_iommu_softc *sc, int sid)
 	l1_desc->pa = vtophys(l1_desc->va);
 
 	i = sid >> sc->l0_did_bits;
-	l1e = (void *)((uint64_t)ddt->vaddr + DDT_NON_LEAF_DWORDS * 8 * i);
+	l1e = (void *)((uintptr_t)ddt->vaddr + DDT_NON_LEAF_DWORDS * 8 * i);
 
 	/* Install the L1 entry. */
 	val = PHYS_TO_PPN(l1_desc->pa) << DC_NON_LEAF_ENTRY_PPN_S;
