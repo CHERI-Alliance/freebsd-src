@@ -1114,6 +1114,7 @@ pmap_invalidate_range_sbi(pmap_t pmap, vm_offset_t sva, vm_offset_t eva)
 	sched_unpin();
 }
 
+#ifndef __CHERI__
 #define PMAP_SVINVAL_THRESHOLD (2 * L2_SIZE)
 
 struct svinval_args {
@@ -1164,20 +1165,25 @@ pmap_invalidate_page_svinval(pmap_t pmap, vm_offset_t va)
 {
 	pmap_invalidate_range_svinval(pmap, va, va + PAGE_SIZE);
 }
+#endif
 
 DEFINE_IFUNC(, void, pmap_invalidate_range,
     (pmap_t pmap, vm_offset_t sva, vm_offset_t eva))
 {
+#ifndef __CHERI__
 	if (has_svinval)
 		return (pmap_invalidate_range_svinval);
+#endif
 	return (pmap_invalidate_range_sbi);
 }
 
 DEFINE_IFUNC(, void, pmap_invalidate_page,
     (pmap_t pmap, vm_offset_t va))
 {
+#ifndef __CHERI__
 	if (has_svinval)
 		return (pmap_invalidate_page_svinval);
+#endif
 	return (pmap_invalidate_page_sbi);
 }
 

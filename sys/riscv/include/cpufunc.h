@@ -140,6 +140,7 @@ sfence_w_inval(void)
 	__asm __volatile("sfence.w.inval" ::: "memory");
 }
 
+#ifndef __CHERI__
 static __inline void
 sinval_vma_page(uintptr_t addr)
 {
@@ -153,6 +154,7 @@ sinval_vma_page_asid(uintptr_t addr, uint64_t asid)
 
 	__asm __volatile("sinval.vma %0, %1" :: "r" (addr), "r" (asid) : "memory");
 }
+#endif
 
 #define	rdcycle()			csr_read64(cycle)
 #define	rdtime()			csr_read64(time)
