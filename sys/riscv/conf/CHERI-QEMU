@@ -13,9 +13,32 @@ nooptions	NFSD
 nooptions	VIMAGE
 nooptions	dtrace
 
+# A bunch of things that likely won't work
 makeoptions WITHOUT_MODULES="acpi dtrace ena hyperv ipfilter iscsi iwlwifi linux64 linuxkpi linuxkpi_wlan mfi nfscl mrsas opensolaris ossl p9fs pf proto rtw88 rtw89 smbfs tws sym vmm wlan zfs"
 
 nodevice netmap
 
 nooptions	ROOTDEVNAME
 options 	ROOTDEVNAME=\"ufs:/dev/vtbd0p2\"
+
+makeoptions WITHOUT_CTF=1
+makeoptions WITHOUT_MODULES="acpi dtrace ena hyperv ipfilter iscsi iwlwifi linux64 linuxkpi linuxkpi_wlan mfi nfscl mrsas opensolaris ossl p9fs pf proto rtw89 smbfs sym vmm wlan zfs"
+
+nooptions	NFSCL
+nooptions	NFSD
+nooptions	VIMAGE
+nodevice netmap
+nodevice dpaa2
+nodevice efirtc
+
+# not yet
+nooptions dtrace
+nodevice vchiq
+nodevice hyperv
+
+# linuxkpi
+nodevice mlxfw
+nooptions COMPAT_LINUXKPI
+nodevice mlx
+nodevice mlx5
+nodevice mlx5en
