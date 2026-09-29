@@ -210,6 +210,7 @@ ENTRY(cpu_throw)
 	call	_C_LABEL(pmap_activate_sw)
 	MV_PTR	PTR(a0), PTR(s0)
 
+#ifndef __CHERI__
 	/* Is VS enabled for new thread? */
 	ld	t0, TD_FRAME(a0)
 	ld	t1, (TF_SSTATUS)(t0)
@@ -219,6 +220,7 @@ ENTRY(cpu_throw)
 
 	call	_C_LABEL(vector_state_restore)
 	mv	a0, s0
+#endif
 
 1:
 	/* Store the new curthread */
@@ -316,6 +318,7 @@ ENTRY(cpu_switch)
 	__fpe_state_save PTRN(13)
 1:
 
+#ifndef __CHERI__
 	/*
 	 * Is VS enabled and is it in dirty state
 	 * for the old thread?
@@ -342,6 +345,7 @@ ENTRY(cpu_switch)
 	mv	a1, s1
 	mv	a2, s2
 1:
+#endif
 
 	/* Activate the new thread's pmap */
 	MV_PTR	PTR(s0), PTR(a0)
@@ -362,6 +366,7 @@ ENTRY(cpu_switch)
 	beq	t0, s2, 1b
 #endif
 
+#ifndef __CHERI__
 	/* Is VS enabled for new thread? */
 	L_PTR	PTR(to), TD_FRAME(PTR(a0))
 	ld	t1, (TF_SSTATUS)(PTR(t0))
@@ -375,6 +380,7 @@ ENTRY(cpu_switch)
 	call	_C_LABEL(vector_state_restore)
 	MV_PTR	PTR(a1), PTR(s1)
 1:
+#endif
 
 	/*
 	 * Restore the saved context.
