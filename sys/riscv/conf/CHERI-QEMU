@@ -13,6 +13,9 @@ nooptions	NFSD
 nooptions	VIMAGE
 nooptions	dtrace
 
+# module builds currently fail with clang: error: invalid ABI 'l64pc128', pure capability ABI requires CHERI extension to be specified
+makeoptions MODULES_OVERRIDE=""
+
 # A bunch of things that likely won't work
 makeoptions WITHOUT_MODULES="acpi dtrace ena hyperv ipfilter iscsi iwlwifi linux64 linuxkpi linuxkpi_wlan mfi nfscl mrsas opensolaris ossl p9fs pf proto rtw88 rtw89 smbfs tws sym vmm wlan zfs"
 
