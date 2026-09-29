@@ -583,6 +583,7 @@ do_trap_user(struct trapframe *frame)
 			pcb->pcb_fpflags |= PCB_FP_STARTED;
 			break;
 		}
+#ifndef __CHERI__
 		if (has_vector && (pcb->pcb_vsflags & PCB_VS_STARTED) == 0) {
 			/*
 			 * Could be a vector trap. Enable VS usage
@@ -594,6 +595,7 @@ do_trap_user(struct trapframe *frame)
 			pcb->pcb_vsflags |= PCB_VS_STARTED;
 			break;
 		}
+#endif
 		call_trapsignal(td, SIGILL, ILL_ILLTRP, frame->tf_sepc,
 		    exception);
 		userret(td, frame);

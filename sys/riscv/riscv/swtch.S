@@ -524,5 +524,9 @@ ENTRY(savectx)
 	S_PTR	PTR(s11), (PCB_S + 11 * PTR_WIDTH)(PTR(a0))
 
 	__fpe_state_save PTR(a0)
+#ifndef __CHERI__
 	tail	_C_LABEL(vector_state_store_savectx)
+#else
+	ret
+#endif
 END(savectx)

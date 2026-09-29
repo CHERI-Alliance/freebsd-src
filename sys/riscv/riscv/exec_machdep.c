@@ -324,9 +324,10 @@ get_mcontext(struct thread *td, mcontext_t *mcp, int clear_ret)
 	return (0);
 }
 
+#ifndef __CHERI__
 static int
 restore_vector_state(struct pcb *pcb, struct riscv_reg_context *ctx,
-    vm_offset_t addr)
+    uintptr_t addr)
 {
 	struct vector_context vs_ctx;
 	size_t buf_size;
@@ -363,15 +364,21 @@ restore_vector_state(struct pcb *pcb, struct riscv_reg_context *ctx,
 
 	return (0);
 }
+#endif
 
 int
 set_mcontext(struct thread *td, mcontext_t *mcp)
 {
 	struct trapframe *tf;
 	struct riscv_reg_context ctx;
+#ifndef __CHERI__
 	struct pcb *pcb;
-	vm_offset_t addr;
-	int error, seen_types;
+#endif
+	uintptr_t addr;
+	int error;
+#ifndef __CHERI__
+	int seen_types;
+#endif
 	bool done;
 	register_t new_sstatus;
 
@@ -412,11 +419,13 @@ set_mcontext(struct thread *td, mcontext_t *mcp)
 
 	/* Read any register contexts we find */
 	addr = mcp->mc_ptr;
+#ifndef __CHERI__
 	pcb = td->td_pcb;
 
 #define	CTX_TYPE_VS	(1 << 0)
 
 	seen_types = 0;
+#endif
 	done = false;
 	do {
 		if (!__is_aligned(addr, _Alignof(struct riscv_reg_context)))
@@ -427,6 +436,7 @@ set_mcontext(struct thread *td, mcontext_t *mcp)
 			return (error);
 
 		switch (ctx.ctx_id) {
+#ifndef __CHERI__
 		case RISCV_CTX_MAGIC_VS:
 			if ((seen_types & CTX_TYPE_VS) != 0)
 				return (EINVAL);
@@ -435,6 +445,7 @@ set_mcontext(struct thread *td, mcontext_t *mcp)
 			if (error)
 				return (EINVAL);
 			break;
+#endif
 		case RISCV_CTX_MAGIC_END:
 			done = true;
 			break;
@@ -522,10 +533,10 @@ sys_sigreturn(struct thread *td, struct sigreturn_args *uap)
 }
 
 static bool
-sendsig_ctx_end(struct thread *td, vm_offset_t *addrp)
+sendsig_ctx_end(struct thread *td, uintptr_t *addrp)
 {
 	struct riscv_reg_context end_ctx;
-	vm_offset_t ctx_addr;
+	uintptr_t ctx_addr;
 
 	*addrp -= sizeof(end_ctx);
 	ctx_addr = *addrp;
@@ -539,13 +550,14 @@ sendsig_ctx_end(struct thread *td, vm_offset_t *addrp)
 	return (true);
 }
 
+#ifndef __CHERI__
 static bool
-sendsig_ctx_vector(struct thread *td, vm_offset_t *addrp)
+sendsig_ctx_vector(struct thread *td, uintptr_t *addrp)
 {
 	struct vector_context vs_ctx;
 	struct pcb *pcb;
 	size_t buf_size, ctx_size;
-	vm_offset_t vs_ctx_addr;
+	uintptr_t vs_ctx_addr;
 
 	pcb = td->td_pcb;
 	/* Do nothing if vector hasn't started */
@@ -578,11 +590,14 @@ sendsig_ctx_vector(struct thread *td, vm_offset_t *addrp)
 
 	return (true);
 }
+#endif
 
-typedef bool(*ctx_func)(struct thread *, vm_offset_t *);
+typedef bool(*ctx_func)(struct thread *, uintptr_t *);
 static const ctx_func ctx_funcs[] = {
 	sendsig_ctx_end,	/* Must go first. */
+#ifndef __CHERI__
 	sendsig_ctx_vector,
+#endif
 	NULL,
 };
 
@@ -597,7 +612,7 @@ sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 	struct sigacts *psp;
 	struct thread *td;
 	struct proc *p;
-	vm_offset_t addr;
+	uintptr_t addr;
 	int onstack;
 	int sig;
 	int i;
