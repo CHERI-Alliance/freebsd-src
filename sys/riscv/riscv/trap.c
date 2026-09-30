@@ -244,9 +244,6 @@ dump_regs(struct trapframe *frame)
 #endif
 	printf("sstatus: 0x%016lx\n", frame->tf_sstatus);
 	printf("stval  : 0x%016lx\n", frame->tf_stval);
-#ifdef __CHERI__
-        printf("stval2  : 0x%016lx\n", frame->tf_stval2);
-#endif
 }
 
 #ifdef __CHERI__
@@ -261,10 +258,11 @@ dump_cheri_exception(struct trapframe *frame)
 	printf("pid %d tid %d (%s), uid %d: ", p->p_pid, td->td_tid,
 	    p->p_comm, td->td_ucred->cr_uid);
 	switch (frame->tf_scause & SCAUSE_CODE) {
-	case SCAUSE_CHERI:
-		printf("CHERI fault (type %#lx), cause %lx",
-		    TVAL_CAP_TYPE(frame->tf_stval2),
-		    TVAL_CAP_CAUSE(frame->tf_stval2));
+	case SCAUSE_CHERI_LOAD_PAGE_FAULT:
+		printf("LOAD CAP page fault");
+		break;
+	case SCAUSE_CHERI_STORE_AMO_PAGE_FAULT:
+		printf("STORE/AMO CAP page fault");
 		break;
 	default:
 		printf("fault %ld", frame->tf_scause & SCAUSE_CODE);
@@ -354,9 +352,9 @@ page_fault_handler(struct trapframe *frame, int usermode)
 	va = trunc_page(stval);
 
 #ifdef __CHERI__
-	if (is_cheri_store_amo_cap_fault(frame)) {
+	if (frame->tf_scause == SCAUSE_CHERI_STORE_AMO_PAGE_FAULT) {
 		ftype = VM_PROT_WRITE | VM_PROT_CAP;
-	} else if (is_cheri_load_cap_fault(frame)) {
+	} else if (frame->tf_scause == SCAUSE_CHERI_LOAD_PAGE_FAULT) {
 		ftype = VM_PROT_READ | VM_PROT_CAP;
 	} else
 #endif
@@ -456,6 +454,9 @@ do_trap_supervisor(struct trapframe *frame)
 	case SCAUSE_STORE_PAGE_FAULT:
 	case SCAUSE_LOAD_PAGE_FAULT:
 	case SCAUSE_INST_PAGE_FAULT:
+#ifdef __CHERI__
+	case SCAUSE_CHERI_STORE_AMO_PAGE_FAULT:
+#endif
 		page_fault_handler(frame, 0);
 		break;
 	case SCAUSE_BREAKPOINT:
@@ -478,7 +479,9 @@ do_trap_supervisor(struct trapframe *frame)
 		    frame->tf_stval, (unsigned long)frame->tf_sepc);
 		break;
 #ifdef __CHERI__
-	case SCAUSE_CHERI:
+	case SCAUSE_CHERI_INST_ACCESS_FAULT:
+	case SCAUSE_CHERI_LOAD_ACCESS_FAULT:
+	case SCAUSE_CHERI_STORE_AMO_ACCESS_FAULT:
 		if (curthread->td_pcb->pcb_onfault != 0) {
 			frame->tf_a[0] = EPROT;
 			frame->tf_sepc = curthread->td_pcb->pcb_onfault;
@@ -486,21 +489,23 @@ do_trap_supervisor(struct trapframe *frame)
 		}
 		dump_regs(frame);
 		switch (exception) {
+		case SCAUSE_CHERI_INST_ACCESS_FAULT:
+			panic("CHERI inst access fault at %#016lx\n",
+			    (unsigned long)frame->tf_sepc);
+			break;
+		case SCAUSE_CHERI_LOAD_ACCESS_FAULT:
+			panic("CHERI load access fault at %#016lx\n",
+			    (unsigned long)frame->tf_sepc);
+			break;
+		case SCAUSE_CHERI_STORE_AMO_ACCESS_FAULT:
+			panic("CHERI store/AMO access fault at %#016lx\n",
+			    (unsigned long)frame->tf_sepc);
+			break;
 		default:
 			panic("Fatal capability page fault %#016lx: %#016lx",
 			    (unsigned long)frame->tf_sepc,
 			    frame->tf_stval);
 			break;
-		case SCAUSE_CHERI:
-		{
-			u_int cap_cause = TVAL_CAP_CAUSE(frame->tf_stval2);
-			u_int cap_fault_type = TVAL_CAP_TYPE(frame->tf_stval2);
-
-			panic("CHERI %s at %#016lx\n",
-                            cheri_exccode_string(cap_fault_type, cap_cause),
-			    (unsigned long)frame->tf_sepc);
-			break;
-		}
 		}
 #endif
 	default:
@@ -565,6 +570,10 @@ do_trap_user(struct trapframe *frame)
 	case SCAUSE_STORE_PAGE_FAULT:
 	case SCAUSE_LOAD_PAGE_FAULT:
 	case SCAUSE_INST_PAGE_FAULT:
+#ifdef __CHERI__
+	case SCAUSE_CHERI_STORE_AMO_PAGE_FAULT:
+	case SCAUSE_CHERI_LOAD_PAGE_FAULT:
+#endif
 		page_fault_handler(frame, 1);
 		break;
 	case SCAUSE_ECALL_USER:
@@ -606,7 +615,9 @@ do_trap_user(struct trapframe *frame)
 		userret(td, frame);
 		break;
 #ifdef __CHERI__
-	case SCAUSE_CHERI:
+	case SCAUSE_CHERI_INST_ACCESS_FAULT:
+	case SCAUSE_CHERI_LOAD_ACCESS_FAULT:
+	case SCAUSE_CHERI_STORE_AMO_ACCESS_FAULT:
 		if (log_user_cheri_exceptions)
 			dump_cheri_exception(frame);
 
@@ -617,10 +628,14 @@ do_trap_user(struct trapframe *frame)
 		 * accesses can raise a capability abort if they are
 		 * outside the bounds of the user DDC.  Map those
 		 * accesses to SIGSEGV instead of SIGPROT.
+		 *
+		 * XXX-AM: Cheri exception codes are not enough to distinguish
+		 * the exact type of violation, so we are forced to approximate.
 		 */
-		if (!SV_PROC_FLAG(td->td_proc, SV_CHERI) &&
-		    cheri_is_length_violation(frame)) {
-			if (cheri_is_pcc_violation(frame) &&
+		if (!SV_PROC_FLAG(td->td_proc, SV_CHERI)) {
+			/* Handle PCC fault */
+			if (frame->tf_scause ==
+			    SCAUSE_CHERI_INST_ACCESS_FAULT &&
 			    cheri_base_get(frame->tf_sepc) ==
 			    CHERI_CAP_USER_DATA_BASE &&
 			    cheri_length_get(frame->tf_sepc) ==
@@ -639,7 +654,10 @@ do_trap_user(struct trapframe *frame)
 			 * (R/W) to determine the non-CHERI exception
 			 * that would have been raised.
 			 */
-			if (cheri_is_ddc_violation(frame) &&
+			if ((frame->tf_scause ==
+				SCAUSE_CHERI_LOAD_ACCESS_FAULT ||
+				frame->tf_scause ==
+				SCAUSE_CHERI_STORE_AMO_ACCESS_FAULT) &&
 			    cheri_base_get(frame->tf_ddc) ==
 			    CHERI_CAP_USER_DATA_BASE &&
 			    cheri_length_get(frame->tf_ddc) ==
@@ -651,9 +669,12 @@ do_trap_user(struct trapframe *frame)
 				break;
 			}
 		}
-
-		call_trapsignal(td, SIGPROT,
-		    cheri_stval_to_sicode(frame->tf_stval2), frame->tf_sepc,
+		/*
+		 * XXX-AM: Temporarily use PROT_CHERI_BOUNDS here but we can't
+		 * really differentiate between them at this stage.
+		 * We could return only INST vs LOAD vs STORE fault distinction.
+		 */
+		call_trapsignal(td, SIGPROT, PROT_CHERI_BOUNDS, frame->tf_sepc,
 		    exception);
 		userret(td, frame);
 		break;

@@ -205,25 +205,6 @@
 #endif
 
 /*
- * List of CHERI capability cause code constants.
- */
-#define	CHERI_EXCTYPE_FETCH_FAULT	0x00
-#define	CHERI_EXCTYPE_DATA_FAULT	0x01
-#define	CHERI_EXCTYPE_BRANCH_FAULT	0x02
-#define	CHERI_EXCCODE_TAG		0x00
-#define	CHERI_EXCCODE_SEAL		0x01
-#define	CHERI_EXCCODE_PERMS		0x02
-#define	CHERI_EXCCODE_ADDRESS		0x03
-#define	CHERI_EXCCODE_BOUNDS		0x04
-
-#define	is_cheri_load_cap_fault(frame)				\
-	(frame->tf_scause == SCAUSE_LOAD_PAGE_FAULT &&		\
-	frame->tf_stval2 == 1)
-#define	is_cheri_store_amo_cap_fault(frame)			\
-	(frame->tf_scause == SCAUSE_STORE_PAGE_FAULT &&		\
-	frame->tf_stval2 == 1)
-
-/*
  * Derive an unbounded pointer before initial relocation.  For
  * purecap, derive the pointer from PCC.
  */

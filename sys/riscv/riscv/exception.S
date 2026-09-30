@@ -110,11 +110,6 @@
 	csrr	t0, sstatus
 	sd	t0, (TF_SSTATUS)(sp)
 
-#ifdef __CHERI__
-	csrr	t0, stval2
-	sd	t0, (TF_STVAL2)(sp)
-#endif
-
 .if \mode == 1
 	/* Disable user address access for supervisor mode exceptions. */
 	li	t0, SSTATUS_SUM
@@ -122,10 +117,6 @@
 .endif
 	csrr	t0, stval
 	sd	t0, (TF_STVAL)(sp)
-#ifdef __CHERI__
-	csrr	t0, stval2
-	sd	t0, (TF_STVAL2)(sp)
-#endif
 	csrr	t0, scause
 	sd	t0, (TF_SCAUSE)(sp)
 .endm
