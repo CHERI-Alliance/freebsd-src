@@ -1,5 +1,5 @@
 machine		riscv	riscv64c
-makeoptions	CPUTYPE=cheri
+makeoptions	CPUTYPE=rvy
 options		CPU_CHERI
 
 # DTrace doesn't work with CHERI RISC-V yet

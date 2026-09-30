@@ -325,10 +325,19 @@ MACHINE_CPU += vsx3
 .  endif
 ########## riscv
 . elif ${MACHINE_CPUARCH} == "riscv"
-.  if ${CPUTYPE} == "cheri"
+.  if ${CPUTYPE} == "rvy"
 MACHINE_CPU = cheri
 .  endif
 MACHINE_CPU += riscv
+. endif
+.endif
+
+
+.if ${MACHINE_CPUARCH} == "riscv"
+. if ${MACHINE_CPU:Mcheri}
+CFLAGS+=	-Xclang -target-feature -Xclang +cheri-bounded-vararg
+CFLAGS+=	-Xclang -target-feature -Xclang +cheri-bounded-memarg-caller
+CFLAGS+=	-Xclang -target-feature -Xclang +cheri-bounded-memarg-callee
 . endif
 .endif
 
@@ -384,7 +393,7 @@ LDFLAGS.bfd+= -Wl,--secure-plt
 .if ${MACHINE_CPUARCH} == "riscv"
 RISCV_MARCH=	rv64imafdc
 .if ${MACHINE_CPU:Mcheri}
-RISCV_MARCH:=	${RISCV_MARCH}_zcherihybrid_zcherilevels
+RISCV_MARCH:=	${RISCV_MARCH:S/i/y/}_zyhybrid_zylevels1b
 .endif
 
 .if ${MACHINE_ARCH:Mriscv*c*}
