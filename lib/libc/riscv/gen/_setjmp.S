@@ -37,26 +37,33 @@
 
 ENTRY(_setjmp)
 	/* Store the magic value and stack pointer */
-	ld	t0, .Lmagic
-	sd	t0, (0 * 8)(a0)
-	sd	sp, (1 * 8)(a0)
-	addi	a0, a0, (2 * 8)
+	LLA_PTR	t0, .Lmagic
+	ld	t0, (t0)
+	S_PTR	t0, (0 * PTR_WIDTH)(a0)
+	S_PTR	sp, (1 * PTR_WIDTH)(a0)
+	ADDI_PTR	a0, a0, (2 * PTR_WIDTH)
 
 	/* Store the general purpose registers and ra */
-	sd	s0, (0 * 8)(a0)
-	sd	s1, (1 * 8)(a0)
-	sd	s2, (2 * 8)(a0)
-	sd	s3, (3 * 8)(a0)
-	sd	s4, (4 * 8)(a0)
-	sd	s5, (5 * 8)(a0)
-	sd	s6, (6 * 8)(a0)
-	sd	s7, (7 * 8)(a0)
-	sd	s8, (8 * 8)(a0)
-	sd	s9, (9 * 8)(a0)
-	sd	s10, (10 * 8)(a0)
-	sd	s11, (11 * 8)(a0)
-	sd	ra, (12 * 8)(a0)
-	addi	a0, a0, (13 * 8)
+	S_PTR	s0, (0 * PTR_WIDTH)(a0)
+	S_PTR	s1, (1 * PTR_WIDTH)(a0)
+	S_PTR	s2, (2 * PTR_WIDTH)(a0)
+	S_PTR	s3, (3 * PTR_WIDTH)(a0)
+	S_PTR	s4, (4 * PTR_WIDTH)(a0)
+	S_PTR	s5, (5 * PTR_WIDTH)(a0)
+	S_PTR	s6, (6 * PTR_WIDTH)(a0)
+	S_PTR	s7, (7 * PTR_WIDTH)(a0)
+	S_PTR	s8, (8 * PTR_WIDTH)(a0)
+	S_PTR	s9, (9 * PTR_WIDTH)(a0)
+	S_PTR	s10, (10 * PTR_WIDTH)(a0)
+	S_PTR	s11, (11 * PTR_WIDTH)(a0)
+	S_PTR	ra, (12 * PTR_WIDTH)(a0)
+#ifdef __CHERI__
+	csrr	t0, ddc
+	S_PTR	t0, (13 * 16)(a0)
+	ADDI_PTR	a0, a0, (14 * PTR_WIDTH)
+#else
+	ADDI_PTR	a0, a0, (13 * PTR_WIDTH)
+#endif
 
 #if !defined(_STANDALONE) && defined(__riscv_float_abi_double)
 	/* Store the fpe registers */
@@ -72,7 +79,7 @@ ENTRY(_setjmp)
 	fsd	fs9, (9 * 8)(a0)
 	fsd	fs10, (10 * 8)(a0)
 	fsd	fs11, (11 * 8)(a0)
-	addi	a0, a0, (12 * 8)
+	ADDI_PTR	a0, a0, (12 * 8)
 #endif
 
 	/* Return value */
@@ -86,29 +93,35 @@ END(_setjmp)
 ENTRY(_longjmp)
 	/* Check the magic value */
 	ld	t0, 0(a0)
-	ld	t1, .Lmagic
+	LLA_PTR	t1, .Lmagic
+	ld	t1, (t1)
 	bne	t0, t1, botch
 
 	/* Restore the stack pointer */
-	ld	t0, 8(a0)
-	mv	sp, t0
-	addi	a0, a0, (2 * 8)
+	L_PTR	sp, PTR_WIDTH(a0)
+	ADDI_PTR	a0, a0, (2 * PTR_WIDTH)
 
 	/* Restore the general purpose registers and ra */
-	ld	s0, (0 * 8)(a0)
-	ld	s1, (1 * 8)(a0)
-	ld	s2, (2 * 8)(a0)
-	ld	s3, (3 * 8)(a0)
-	ld	s4, (4 * 8)(a0)
-	ld	s5, (5 * 8)(a0)
-	ld	s6, (6 * 8)(a0)
-	ld	s7, (7 * 8)(a0)
-	ld	s8, (8 * 8)(a0)
-	ld	s9, (9 * 8)(a0)
-	ld	s10, (10 * 8)(a0)
-	ld	s11, (11 * 8)(a0)
-	ld	ra, (12 * 8)(a0)
-	addi	a0, a0, (13 * 8)
+	L_PTR	s0, (0 * PTR_WIDTH)(a0)
+	L_PTR	s1, (1 * PTR_WIDTH)(a0)
+	L_PTR	s2, (2 * PTR_WIDTH)(a0)
+	L_PTR	s3, (3 * PTR_WIDTH)(a0)
+	L_PTR	s4, (4 * PTR_WIDTH)(a0)
+	L_PTR	s5, (5 * PTR_WIDTH)(a0)
+	L_PTR	s6, (6 * PTR_WIDTH)(a0)
+	L_PTR	s7, (7 * PTR_WIDTH)(a0)
+	L_PTR	s8, (8 * PTR_WIDTH)(a0)
+	L_PTR	s9, (9 * PTR_WIDTH)(a0)
+	L_PTR	s10, (10 * PTR_WIDTH)(a0)
+	L_PTR	s11, (11 * PTR_WIDTH)(a0)
+	L_PTR	ra, (12 * PTR_WIDTH)(a0)
+#ifdef __CHERI__
+	L_PTR	t0, (13 * PTR_WIDTH)(a0)
+	csrw	ddc, t0
+	ADDI_PTR	a0, a0, (14 * PTR_WIDTH)
+#else
+	ADDI_PTR	a0, a0, (13 * PTR_WIDTH)
+#endif
 
 #if !defined(_STANDALONE) && defined(__riscv_float_abi_double)
 	/* Restore the fpe registers */
@@ -124,7 +137,7 @@ ENTRY(_longjmp)
 	fld	fs9, (9 * 8)(a0)
 	fld	fs10, (10 * 8)(a0)
 	fld	fs11, (11 * 8)(a0)
-	addi	a0, a0, (12 * 8)
+	ADDI_PTR	a0, a0, (12 * 8)
 #endif
 
 	/* Load the return value */
