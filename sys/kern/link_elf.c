@@ -2207,7 +2207,7 @@ link_elf_reloc_local(linker_file_t lf)
 		if (init_linker_file_cap_relocs(ef->caprelocs,
 		    (char *)ef->caprelocs + ef->caprelocssize, data_cap,
 		    (ptraddr_t)ef->address, resolve_cap_reloc, ef) != 0)
-		return (ENOEXEC);
+			return (ENOEXEC);
 	}
 #endif
 
