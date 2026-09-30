@@ -57,7 +57,11 @@
 #define	SCAUSE_VIRTUAL_INSTRUCTION	22
 #define	SCAUSE_STORE_GUEST_PAGE_FAULT	23
 #ifdef __CHERI__
-#define	SCAUSE_CHERI			28
+#define	SCAUSE_CHERI_INST_ACCESS_FAULT	32
+#define	SCAUSE_CHERI_LOAD_ACCESS_FAULT	33
+#define	SCAUSE_CHERI_STORE_AMO_ACCESS_FAULT	34
+#define	SCAUSE_CHERI_LOAD_PAGE_FAULT	35
+#define	SCAUSE_CHERI_STORE_AMO_PAGE_FAULT	36
 #endif
 
 #define	SSTATUS_UIE			(1 << 0)
@@ -205,25 +209,6 @@
 
 #ifdef __CHERI__
 #define	SENVCFG_Y	(0x01 << 9)
-
-#define	TVAL_CAP_CAUSE_SHIFT	0
-#define	TVAL_CAP_CAUSE_MASK	(0x0f << TVAL_CAP_CAUSE_SHIFT)
-#define	TVAL_CAP_TYPE_SHIFT	16
-#define	TVAL_CAP_TYPE_MASK	(0x0f << TVAL_CAP_TYPE_SHIFT)
-#define	TVAL_CAP_TYPE(tval)						\
-	(((tval) & TVAL_CAP_TYPE_MASK) >> TVAL_CAP_TYPE_SHIFT)
-#define	TVAL_CAP_CAUSE(tval)						\
-	(((tval) & TVAL_CAP_CAUSE_MASK) >> TVAL_CAP_CAUSE_SHIFT)
-
-#define	cheri_is_length_violation(frame)				\
-	(TVAL_CAP_CAUSE((frame)->tf_stval2) == CHERI_EXCCODE_BOUNDS)
-#define	cheri_is_pcc_violation(frame)					\
-	(TVAL_CAP_TYPE((frame)->tf_stval2) == CHERI_EXCTYPE_FETCH_FAULT || \
-	TVAL_CAP_TYPE((frame)->tf_stval2) == CHERI_EXCTYPE_BRANCH_FAULT)
-#define	cheri_is_ddc_violation(frame)					\
-	(TVAL_CAP_TYPE((frame)->tf_stval2) == CHERI_EXCTYPE_DATA_FAULT && \
-	(cheri_flags_get((frame)->tf_sepc) & CHERI_FLAGS_CAP_MODE_MASK) == \
-	    CHERI_FLAGS_LEGACY_MODE)
 #endif
 
 #define	XLEN		__riscv_xlen
