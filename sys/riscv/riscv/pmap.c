@@ -1351,9 +1351,9 @@ pmap_can_extract_and_hold(pt_entry_t pte, vm_prot_t prot)
 	if ((prot & VM_PROT_WRITE) != 0 && (pte & PTE_W) == 0)
 		return false;
 #ifdef __CHERI__
-	if (VM_PROT_HAS_READ_CAP(prot) && (pte & PTE_CW) == 0)
+	if (VM_PROT_HAS_READ_CAP(prot) && (pte & PTE_YR) == 0)
 		return false;
-	if (VM_PROT_HAS_WRITE_CAP(prot) && (pte & PTE_CW) == 0)
+	if (VM_PROT_HAS_WRITE_CAP(prot) && (pte & PTE_YW) == 0)
 		return false;
 #endif
 	return true;
@@ -3126,7 +3126,7 @@ pmap_fault(pmap_t pmap, vm_offset_t va, vm_prot_t ftype)
 	if ((pmap != kernel_pmap && (oldpte & PTE_U) == 0) ||
 	    ((ftype & VM_PROT_WRITE) != 0 && (oldpte & PTE_W) == 0) ||
 #ifdef __CHERI__
-	    (VM_PROT_HAS_WRITE_CAP(ftype) && (oldpte & PTE_CW) == 0) ||
+	    (VM_PROT_HAS_WRITE_CAP(ftype) && (oldpte & PTE_YW) == 0) ||
 #endif
 	    (ftype == VM_PROT_EXECUTE && (oldpte & PTE_X) == 0) ||
 	    (ftype == VM_PROT_READ && (oldpte & PTE_R) == 0))
@@ -3493,14 +3493,14 @@ pmap_enter(pmap_t pmap, vm_offset_t va, vm_page_t m, vm_prot_t prot,
 		new_l3 |= PTE_W;
 #ifdef __CHERI__
 		if (prot & VM_PROT_CAP)
-			new_l3 |= PTE_CW;
+			new_l3 |= PTE_YW;
 #endif
 	}
 	if (va < VM_MAX_USER_ADDRESS)
 		new_l3 |= PTE_U;
 #ifdef __CHERI__
 	if (VM_PROT_HAS_READ_CAP(prot))
-		new_l3 |= PTE_CW;
+		new_l3 |= PTE_YW;
 	new_l3 |= cheri_pte_cr(pmap, va, m, prot);
 #endif
 

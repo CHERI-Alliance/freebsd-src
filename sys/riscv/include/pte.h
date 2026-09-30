@@ -67,15 +67,15 @@ typedef	uint64_t	pn_t;			/* page number */
 #define	Ln_ADDR_MASK	(Ln_ENTRIES - 1)
 
 #ifdef __CHERI__
-#define	PTE_CW		(1UL << 60) /* Capability Read/Write */
-#define	PTE_CRG		(1UL << 59) /* Cap Read Generation */
-#define	PTE_CHERI_MASK	(PTE_CW | PTE_CRG)
-
+/* No Svyrg support yet. */
+#define	PTE_Y		(1UL << 58) /* Capability RW when sstatus.YRGE == 0 */
+#define	PTE_YR		PTE_Y
+#define	PTE_YW		PTE_Y
 #define	PTE_CR_CLEAR    0
-#define	PTE_CR_OK       PTE_CW
+#define	PTE_CR_OK       PTE_Y
 
-#define	PTE_KERN_CHERI	PTE_CW
-#define	PTE_PROMOTE_CHERI (PTE_CW | PTE_CRG)
+#define	PTE_KERN_CHERI  PTE_Y
+#define	PTE_PROMOTE_CHERI PTE_Y
 #else
 #define	PTE_KERN_CHERI	0
 #define	PTE_PROMOTE_CHERI 0
