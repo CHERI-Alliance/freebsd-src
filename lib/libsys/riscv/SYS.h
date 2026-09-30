@@ -45,8 +45,7 @@
 	_SYSCALL(name);						\
 	bnez	t0, 1f; 					\
 	ret;							\
-1:	la	t1, cerror;					\
-	jr	t1
+1:	tail	cerror@plt
 #endif
 
 #define	PSEUDO(name)						\
