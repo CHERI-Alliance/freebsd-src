@@ -38,15 +38,14 @@
 ENTRY(__sys_vfork)
 	WEAK_REFERENCE(__sys_vfork, vfork)
 	WEAK_REFERENCE(__sys_vfork, _vfork)
-	mv	a2, ra
+	MV_PTR	a2, ra
 
 	_SYSCALL(vfork)
 	bnez	t0, 1f
 	addi	a1, a1, -1
 	and	a0, a0, a1
-	mv	ra, a2
+	MV_PTR	ra, a2
 
 	ret
-1:	la	t1, cerror
-	jr	t1
+1:	tail	cerror@plt
 END(__sys_vfork)
