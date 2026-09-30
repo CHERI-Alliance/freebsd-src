@@ -191,7 +191,7 @@ print_utrace_malloc(FILE *fp, void *p)
 int
 sysdecode_utrace(FILE *fp, void *p, size_t len)
 {
-#if defined(HAS_FREEBSD32) || defined(HAS_FREEBSD32)
+#if defined(HAS_FREEBSD32) || defined(HAS_FREEBSD64)
 	struct utrace_rtld ur;
 	struct utrace_malloc um;
 #ifdef HAS_FREEBSD32
