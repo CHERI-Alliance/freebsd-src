@@ -40,6 +40,18 @@
 #include "rtld.h"
 #include "rtld_printf.h"
 
+#ifdef __CHERI__
+#include "cheri_reloc.h"
+#endif
+
+/*
+ * It is possible for the compiler to emit relocations for unaligned data.
+ * We handle this situation with these inlines.
+ */
+#define	RELOC_ALIGNED_P(x) \
+	(((uintptr_t)(x) & (sizeof(void *) - 1)) == 0)
+
+#ifndef __CHERI__
 uint64_t
 set_gp(Obj_Entry *obj)
 {
@@ -62,16 +74,88 @@ set_gp(Obj_Entry *obj)
 
 	return (old);
 }
+#endif
 
 void
 init_pltgot(Plt_Entry *plt)
 {
 
 	if (plt->pltgot != NULL) {
-		plt->pltgot[0] = (Elf_Addr)&_rtld_bind_start;
-		plt->pltgot[1] = (Elf_Addr)plt;
+		plt->pltgot[0] = (uintptr_t)&_rtld_bind_start;
+		plt->pltgot[1] = (uintptr_t)plt;
 	}
 }
+
+#ifdef __CHERI__
+/*
+ * Plain RISC-V can rely on PC-relative addressing early in rtld startup.
+ * However, pure capability code requires capabilities from the captable for
+ * function calls, and so we must perform early self-relocation before calling
+ * the general _rtld C entry point.
+ *
+ * TODO: For now we use __cap_relocs. Instead we should use normal ELF
+ *       relocations that are all assumed to be relative capability
+ *       relocations, ditching the ad-hoc __cap_relocs format and using
+ *       CBuildCap.
+ */
+void _rtld_relocate_nonplt_self(Elf_Dyn *dynp, Elf_Auxinfo *aux);
+
+void
+_rtld_relocate_nonplt_self(Elf_Dyn *dynp, Elf_Auxinfo *aux)
+{
+	caddr_t relocbase = NULL;
+	const Elf_Phdr *phdr = NULL;
+	const struct capreloc *caprelocs = NULL, *caprelocslim;
+	Elf_Addr caprelocssz = 0;
+	size_t phnum = 0;
+	void *pcc;
+	bool use_code_bounds = false;
+
+	for (; aux->a_type != AT_NULL; aux++) {
+		switch (aux->a_type) {
+		case AT_BASE:
+			relocbase = aux->a_un.a_ptr;
+			break;
+		case AT_PHDR:
+			phdr = aux->a_un.a_ptr;
+			break;
+		case AT_PHNUM:
+			phnum = aux->a_un.a_val;
+			break;
+		case AT_PHENT:
+			/* NB: Can't use assert() here. */
+			if (aux->a_un.a_val != sizeof(*phdr))
+				__builtin_trap();
+			break;
+		}
+	}
+
+	for (; phnum > 0; phdr++, phnum--) {
+		if (phdr->p_type == PT_CHERI_PCC) {
+			use_code_bounds = true;
+			break;
+		}
+	}
+
+	for (; dynp->d_tag != DT_NULL; dynp++) {
+		switch (dynp->d_tag) {
+		case DT_RISCV_CHERI___CAPRELOCS:
+			caprelocs = (const struct capreloc *)(relocbase + dynp->d_un.d_ptr);
+			break;
+		case DT_RISCV_CHERI___CAPRELOCSSZ:
+			caprelocssz = dynp->d_un.d_val;
+			break;
+		}
+	}
+	caprelocs = cheri_bounds_set(caprelocs, caprelocssz);
+	caprelocslim = (const struct capreloc *)((const char *)caprelocs + caprelocssz);
+	pcc = __builtin_cheri_program_counter_get();
+	/* TODO: allow using tight bounds for RTLD */
+	cheri_init_globals_impl(caprelocs, caprelocslim,
+	    /*data_cap=*/relocbase, /*code_cap=*/pcc, /*rodata_cap=*/pcc,
+	    /*tight_code_bounds=*/use_code_bounds, (Elf_Addr)relocbase);
+}
+#endif /* __CHERI__ */
 
 #ifndef __CHERI__
 int
@@ -143,15 +227,21 @@ reloc_plt(Plt_Entry *plt, int flags __unused, RtldLockState *lockstate __unused)
 	const Elf_Rela *relalim;
 	const Elf_Rela *rela;
 
-	relalim = (const Elf_Rela *)((const char *)plt->rela + plt->relasize);
+	relalim = (const Elf_Rela *)((const char *)plt->rela +
+	    plt->relasize);
 	for (rela = plt->rela; rela < relalim; rela++) {
-		Elf_Addr *where;
+		uintptr_t *where;
 
-		where = (Elf_Addr *)(obj->relocbase + rela->r_offset);
+		where = (uintptr_t *)(obj->relocbase + rela->r_offset);
 
 		switch (ELF_R_TYPE(rela->r_info)) {
 		case R_RISCV_JUMP_SLOT:
+#ifdef __CHERI__
+			/* Relocated by __cap_relocs for CHERI */
+			(void)where;
+#else
 			*where += (Elf_Addr)obj->relocbase;
+#endif
 			break;
 		case R_RISCV_IRELATIVE:
 			obj->irelative = true;
@@ -178,11 +268,12 @@ reloc_jmpslots(Plt_Entry *plt, int flags, RtldLockState *lockstate)
 	const Elf_Rela *rela;
 	const Elf_Sym *def;
 
-	relalim = (const Elf_Rela *)((const char *)plt->rela + plt->relasize);
+	relalim = (const Elf_Rela *)((const char *)plt->rela +
+	    plt->relasize);
 	for (rela = plt->rela; rela < relalim; rela++) {
-		Elf_Addr *where;
+		uintptr_t *where;
 
-		where = (Elf_Addr *)(obj->relocbase + rela->r_offset);
+		where = (uintptr_t *)(obj->relocbase + rela->r_offset);
 		switch(ELF_R_TYPE(rela->r_info)) {
 		case R_RISCV_JUMP_SLOT:
 			def = find_symdef(ELF_R_SYM(rela->r_info), obj,
@@ -197,7 +288,7 @@ reloc_jmpslots(Plt_Entry *plt, int flags, RtldLockState *lockstate)
 				continue;
 			}
 
-			*where = (Elf_Addr)(defobj->relocbase + def->st_value);
+			*where = (uintptr_t)make_function_pointer(def, defobj);
 			break;
 		default:
 			_rtld_error("Unknown relocation type %x in jmpslot",
@@ -274,14 +365,14 @@ reloc_gnu_ifunc_plt(Plt_Entry *plt, int flags, RtldLockState *lockstate)
 	Obj_Entry *obj = plt->obj;
 	const Elf_Rela *relalim;
 	const Elf_Rela *rela;
-	Elf_Addr *where, target;
+	uintptr_t *where, target;
 	const Elf_Sym *def;
 	const Obj_Entry *defobj;
 
 	relalim = (const Elf_Rela *)((const char *)plt->rela + plt->relasize);
 	for (rela = plt->rela; rela < relalim; rela++) {
 		if (ELF_R_TYPE(rela->r_info) == R_RISCV_JUMP_SLOT) {
-			where = (Elf_Addr *)(obj->relocbase + rela->r_offset);
+			where = (uintptr_t *)(obj->relocbase + rela->r_offset);
 			def = find_symdef(ELF_R_SYM(rela->r_info), obj, &defobj,
 			    SYMLOOK_IN_PLT | flags, NULL, lockstate);
 			if (def == NULL)
@@ -290,7 +381,7 @@ reloc_gnu_ifunc_plt(Plt_Entry *plt, int flags, RtldLockState *lockstate)
 				continue;
 
 			lock_release(rtld_bind_lock, lockstate);
-			target = (Elf_Addr)rtld_resolve_ifunc(defobj, def);
+			target = (uintptr_t)rtld_resolve_ifunc(defobj, def);
 			wlock_acquire(rtld_bind_lock, lockstate);
 			reloc_jmpslot(where, target, defobj, obj,
 			    (const Elf_Rel *)rela);
@@ -314,8 +405,8 @@ reloc_gnu_ifunc(Obj_Entry *obj, int flags,
 	return (0);
 }
 
-Elf_Addr
-reloc_jmpslot(Elf_Addr *where, Elf_Addr target,
+uintptr_t
+reloc_jmpslot(uintptr_t *where, uintptr_t target,
     const Obj_Entry *defobj __unused, const Obj_Entry *obj __unused,
     const Elf_Rel *rel)
 {
@@ -342,6 +433,17 @@ reloc_non_plt(Obj_Entry *obj, Obj_Entry *obj_rtld, int flags,
 	SymCache *cache;
 	Elf_Addr *where, symval;
 	unsigned long symnum;
+
+#ifdef __CHERI__
+	/*
+	 * The __cap_relocs for the dynamic loader have already been done, and
+	 * there should be no normal ELF relocations.
+	 */
+	if (obj == obj_rtld) {
+		assert(obj->relasize == 0);
+		return (0);
+	}
+#endif
 
 	/*
 	 * The dynamic loader may be called from a thread, we have
@@ -393,6 +495,13 @@ reloc_non_plt(Obj_Entry *obj, Obj_Entry *obj_rtld, int flags,
 			*where = symval + rela->r_addend;
 			break;
 		case R_RISCV_TLS_DTPMOD64:
+#ifdef TLS_TGOT
+			if (symnum != 0) {
+				_rtld_error("%s: Traditional TLS not supported",
+				    obj->path);
+				return (-1);
+			}
+#endif
 			def = find_symdef(symnum, obj, &defobj, flags, cache,
 			    lockstate);
 			if (def == NULL)
@@ -414,6 +523,7 @@ reloc_non_plt(Obj_Entry *obj, Obj_Entry *obj_rtld, int flags,
 			}
 			break;
 		case R_RISCV_TLS_DTPREL64:
+#ifndef TLS_TGOT
 			def = find_symdef(symnum, obj, &defobj, flags, cache,
 			    lockstate);
 			if (def == NULL)
@@ -422,7 +532,13 @@ reloc_non_plt(Obj_Entry *obj, Obj_Entry *obj_rtld, int flags,
 			*where += (Elf_Addr)(def->st_value + rela->r_addend
 			    - TLS_DTV_OFFSET);
 			break;
+#else
+			_rtld_error("%s: Traditional TLS not supported",
+			    obj->path);
+			return (-1);
+#endif
 		case R_RISCV_TLS_TPREL64:
+#ifndef TLS_TGOT
 			def = find_symdef(symnum, obj, &defobj, flags, cache,
 			    lockstate);
 			if (def == NULL)
@@ -449,12 +565,46 @@ reloc_non_plt(Obj_Entry *obj, Obj_Entry *obj_rtld, int flags,
 			*where = (def->st_value + rela->r_addend +
 			    defobj->tlsoffset - TLS_TP_OFFSET - TLS_TCB_SIZE);
 			break;
+#else
+			_rtld_error("%s: Traditional TLS not supported",
+			    obj->path);
+			return (-1);
+#endif
 		case R_RISCV_RELATIVE:
+			*where = (Elf_Addr)(obj->relocbase + rela->r_addend);
+			break;
+		case R_RISCV_FUNC_RELATIVE:
 			*where = (Elf_Addr)(obj->relocbase + rela->r_addend);
 			break;
 		case R_RISCV_IRELATIVE:
 			obj->irelative_nonplt = true;
 			break;
+#ifdef __CHERI__
+		case R_RISCV_CHERI_CAPABILITY:
+			if (process_r_cheri_capability(obj, symnum, lockstate,
+			    flags, where, rela->r_addend) != 0)
+				return (-1);
+			break;
+		case R_RISCV_CHERI_TLS_TGOTREL:
+#ifdef TLS_TGOT
+			if (!obj->tgot_static) {
+				if (!allocate_tgot_offset(
+				    __DECONST(Obj_Entry *, obj))) {
+					_rtld_error(
+					    "%s: No space available for static "
+					    "Thread Local Storage", obj->path);
+					return (-1);
+				}
+			}
+
+			*where = obj->tgotoffset + rela->r_addend -
+			    TLS_TP_OFFSET - TLS_TCB_SIZE;
+			break;
+#else
+			_rtld_error("%s: TGOT not supported", obj->path);
+			return (-1);
+#endif
+#endif /* __CHERI__ */
 		default:
 			rtld_printf("%s: Unhandled relocation %lu\n",
 			    obj->path, ELF_R_TYPE(rela->r_info));
@@ -474,6 +624,74 @@ ifunc_init(Elf_Auxinfo *aux_info[__min_size(AT_COUNT)])
 		elf_hwcap = aux_info[AT_HWCAP]->a_un.a_val;
 }
 
+#ifdef TLS_TGOT
+/*
+ * Process the TGOT relocations.
+ */
+int
+reloc_tgot(Obj_Entry *obj, struct tcb *tcb, void *tgot, int flags,
+    tls_get_block_cb get_block, RtldLockState *lockstate)
+{
+	const struct capreloc *capreloclim;
+	const struct capreloc *capreloc;
+	const Obj_Entry *defobj;
+	const Elf_Rela *relalim;
+	const Elf_Rela *rela;
+	const Elf_Sym *def;
+	Elf_Addr tgotinit;
+	uintptr_t *where;
+	uintptr_t val;
+	void *tls;
+
+	tls = NULL;
+	relalim = (const Elf_Rela *)((const char *)obj->tgotrela +
+	    obj->tgotrelasize);
+	tgotinit = (const char *)obj->tgotinit - obj->relocbase;
+	for (rela = obj->tgotrela; rela < relalim; rela++) {
+		where = (uintptr_t *)((uintptr_t)tgot +
+		    (rela->r_offset - tgotinit));
+
+		assert(ELF_R_TYPE(rela->r_info) == R_RISCV_CHERI_TLS_TGOT_SLOT);
+
+		def = find_symdef(ELF_R_SYM(rela->r_info), obj,
+		    &defobj, flags, NULL, lockstate);
+		if (def == NULL)
+			return (-1);
+		if (def->st_shndx == SHN_UNDEF)
+			val = 0;
+		else {
+			val = (uintptr_t)get_block(tcb, defobj->tlsindex) +
+			    def->st_value;
+			val = cheri_bounds_set(val, def->st_size);
+		}
+		*where = val;
+	}
+
+	capreloclim = (const struct capreloc *)
+	    ((const char *)obj->tgot_cap_relocs + obj->tgot_cap_relocs_size);
+	for (capreloc = (const struct capreloc *)obj->tgot_cap_relocs;
+	    capreloc < capreloclim; capreloc++) {
+		where = (uintptr_t *)((uintptr_t)tgot +
+		    (capreloc->capability_location - tgotinit));
+		if (tls == NULL)
+			tls = get_block(tcb, obj->tlsindex);
+		val = (uintptr_t)tls;
+		if (capreloc->permissions == constant_reloc_flag) {
+			val = cheri_perms_clear(val, FUNC_PTR_REMOVE_PERMS);
+			val = cheri_perms_clear(val, DATA_PTR_REMOVE_PERMS);
+		} else {
+			assert(capreloc->permissions == 0);
+			val = cheri_perms_clear(val, DATA_PTR_REMOVE_PERMS);
+		}
+		val += capreloc->object;
+		val = cheri_bounds_set(val, capreloc->size);
+		val += capreloc->offset;
+		*where = val;
+	}
+	return (0);
+}
+#endif
+
 void
 allocate_initial_tls(Obj_Entry *objs)
 {
@@ -483,8 +701,13 @@ allocate_initial_tls(Obj_Entry *objs)
 	 * offset allocated so far and adding a bit for dynamic modules to
 	 * use.
 	 */
+#ifdef TLS_TGOT
+	tgot_static_space = tgot_last_offset + tgot_last_size +
+	    ld_static_tgot_extra;
+#else
 	tls_static_space = tls_last_offset + tls_last_size +
 	    ld_static_tls_extra;
+#endif
 
 	_tcb_set(allocate_tls(objs, NULL, TLS_TCB_SIZE, TLS_TCB_ALIGN, NULL));
 }
