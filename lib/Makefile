@@ -226,7 +226,9 @@ SUBDIR.${MK_BHYVE}+=	libvmmapi
 .endif
 
 .if ${MACHINE_ARCH} != "powerpc" && ${MACHINE_CPUARCH} != "arm"
+.if !${MACHINE_ABI:Mpurecap}
 SUBDIR.${MK_OPENMP}+=	libomp
+.endif
 .endif
 .if ${MK_USB} != "no"
 SUBDIR.${MK_OPENSSH}+=	libcbor libfido2
