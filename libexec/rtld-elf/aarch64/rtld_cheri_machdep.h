@@ -48,8 +48,6 @@
 #define	CAP_RELOC_REMOVE_PERMS						\
 	(CHERI_PERM_SW_VMEM)
 
-#define can_use_tight_pcc_bounds(obj) ((obj)->npcc_caps != 0)
-
 /*
  * Create a pointer to a function.
  */

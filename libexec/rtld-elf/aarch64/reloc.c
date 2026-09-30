@@ -142,8 +142,7 @@ init_pltgot(Plt_Entry *plt)
  */
 static uintptr_t
 init_cap_from_fragment(const Elf_Addr *fragment, void *data_cap,
-    const void *pcc_cap, Elf_Addr base_addr, Elf_Size addend,
-    bool use_code_bounds)
+    const void *pcc_cap, Elf_Addr base_addr, Elf_Size addend)
 {
 	uintptr_t cap;
 	Elf_Addr address, len;
@@ -156,8 +155,7 @@ init_cap_from_fragment(const Elf_Addr *fragment, void *data_cap,
 	cap = perms == MORELLO_FRAG_EXECUTABLE ?
 	    (uintptr_t)pcc_cap : (uintptr_t)data_cap;
 	cap = cheri_address_set(cap, base_addr + address);
-	if (perms != MORELLO_FRAG_EXECUTABLE || use_code_bounds)
-		cap = cheri_bounds_set(cap, len);
+	cap = cheri_bounds_set(cap, len);
 	cap = cheri_perms_clear(cap, CAP_RELOC_REMOVE_PERMS);
 
 	if (perms == MORELLO_FRAG_EXECUTABLE || perms == MORELLO_FRAG_RODATA) {
@@ -188,13 +186,11 @@ void
 _rtld_relocate_nonplt_self(Elf_Dyn *dynp, Elf_Auxinfo *aux)
 {
 	caddr_t relocbase = NULL;
-	const Elf_Phdr *phdr = NULL;
+	Elf_Phdr *phdr = NULL;
 	const Elf_Rela *rela = NULL, *relalim;
-	size_t phnum = 0;
 	unsigned long relasz;
 	Elf_Addr *where;
 	void *pcc;
-	bool use_code_bounds = false;
 
 	for (; aux->a_type != AT_NULL; aux++) {
 		switch (aux->a_type) {
@@ -204,23 +200,13 @@ _rtld_relocate_nonplt_self(Elf_Dyn *dynp, Elf_Auxinfo *aux)
 		case AT_PHDR:
 			phdr = aux->a_un.a_ptr;
 			break;
-		case AT_PHNUM:
-			phnum = aux->a_un.a_val;
-			break;
-		case AT_PHENT:
-			/* NB: Can't use assert() here. */
-			if (aux->a_un.a_val != sizeof(*phdr))
-				__builtin_trap();
-			break;
 		}
 	}
 
-	for (; phnum > 0; phdr++, phnum--) {
-		if (phdr->p_type == PT_CHERI_PCC) {
-			use_code_bounds = true;
-			break;
-		}
-	}
+	/* Derive from AT_PHDR instead of AT_BASE in the direct-exec case. */
+	if ((ptraddr_t)relocbase + CHERI_RODATA_PTR(&__ehdr_start)->e_phoff ==
+	    (ptraddr_t)phdr)
+		relocbase = cheri_address_copy(phdr, relocbase);
 
 	for (; dynp->d_tag != DT_NULL; dynp++) {
 		switch (dynp->d_tag) {
@@ -249,7 +235,7 @@ _rtld_relocate_nonplt_self(Elf_Dyn *dynp, Elf_Auxinfo *aux)
 			where = (Elf_Addr *)(relocbase + rela->r_offset);
 			*(uintptr_t *)where = init_cap_from_fragment(where,
 			    relocbase, pcc, (Elf_Addr)(uintptr_t)relocbase,
-			    rela->r_addend, use_code_bounds);
+			    rela->r_addend);
 			break;
 		default:
 			__builtin_trap();
@@ -470,10 +456,6 @@ reloc_plt(Plt_Entry *plt, int flags, RtldLockState *lockstate)
 	const Elf_Rela *relalim;
 	const Elf_Rela *rela;
 	const Elf_Sym *def, *sym;
-#ifdef __CHERI__
-	const char *pcc;
-	bool use_code_bounds = obj->npcc_caps != 0;
-#endif
 	bool lazy;
 
 	relalim = (const Elf_Rela *)((const char *)plt->rela + plt->relasize);
@@ -509,31 +491,10 @@ reloc_plt(Plt_Entry *plt, int flags, RtldLockState *lockstate)
 			}
 			if (lazy) {
 #ifdef __CHERI__
-				/*
-				 * Old ABI:
-				 *   - Treat as R_AARCH64_JUMP_SLOT
-				 *
-				 * New ABI:
-				 *   - Same representation as
-				 *     R_MORELLO_RELATIVE
-				 *
-				 * Determine which this is based on
-				 * whether there's non-zero metadata
-				 * next to the address. Remove once
-				 * the new ABI is old enough that we
-				 * can assume it is in use.
-				 */
-				pcc = pcc_cap(obj, fragment[0]);
-				pcc = cheri_perms_clear(pcc,
-				    FUNC_PTR_REMOVE_PERMS);
-				if (fragment[1] == 0)
-					*where = cheri_sentry_create(
-					    (uintptr_t)pcc);
-				else
-					*where = init_cap_from_fragment(
-					    fragment, obj->relocbase, pcc,
-					    (Elf_Addr)(uintptr_t)obj->relocbase,
-					    rela->r_addend, use_code_bounds);
+				*where = init_cap_from_fragment(fragment,
+				    obj->relocbase, get_codesegment_cap(obj),
+				    (Elf_Addr)(uintptr_t)obj->relocbase,
+				    rela->r_addend);
 #else
 				*where += (Elf_Addr)obj->relocbase;
 #endif
@@ -652,39 +613,14 @@ reloc_iresolve_one(Obj_Entry *obj, const Elf_Rela *rela,
 	uintptr_t *where, target, ptr;
 #ifdef __CHERI__
 	Elf_Addr *fragment;
-	bool use_code_bounds = obj->npcc_caps != 0;
 #endif
 
 	where = (uintptr_t *)(obj->relocbase + rela->r_offset);
 #ifdef __CHERI__
 	fragment = (Elf_Addr *)where;
-	/*
-	 * XXX: Morello LLVM commit 94e1dbac broke R_MORELLO_IRELATIVE ABI.
-	 * This horrible hack exists to support both old and new ABIs.
-	 *
-	 * Old ABI:
-	 *   - Treat as R_AARCH64_IRELATIVE (addend is symbol value)
-	 *   - Fragment contents either all zero (for ET_DYN) or base set to
-	 *     the addend and length set to the symbol size (which we don't
-	 *     have to hand).
-	 *
-	 * New ABI:
-	 *   - Same representation as R_MORELLO_RELATIVE
-	 *
-	 * Thus, probe for something that looks like the old ABI and hope
-	 * that's reliable enough until the commit is old enough that we can
-	 * assume the new ABI and ditch this.
-	 *
-	 * See also: lib/csu/aarch64c/reloc.c and sys/arm64/arm64/elf_machdep.c
-	 */
-	if ((fragment[0] == 0 && fragment[1] == 0) ||
-	    (Elf_Ssize)fragment[0] == rela->r_addend)
-		ptr = (uintptr_t)pcc_cap(obj, rela->r_addend);
-	else
-		ptr = init_cap_from_fragment(fragment, obj->relocbase,
-		    pcc_cap(obj, fragment[0]),
-		    (Elf_Addr)(uintptr_t)obj->relocbase,
-		    rela->r_addend, use_code_bounds);
+	ptr = init_cap_from_fragment(fragment, obj->relocbase,
+	    get_codesegment_cap(obj), (Elf_Addr)(uintptr_t)obj->relocbase,
+	    rela->r_addend);
 #else
 	ptr = (uintptr_t)(obj->relocbase + rela->r_addend);
 #endif
@@ -852,7 +788,6 @@ reloc_non_plt(Obj_Entry *obj, Obj_Entry *obj_rtld, int flags,
 	Elf_Addr *where, symval;
 #ifdef __CHERI__
 	void *data_cap;
-	bool use_code_bounds = false;
 
 	/*
 	 * The dynamic linker should only have R_MORELLO_RELATIVE (local)
@@ -860,7 +795,6 @@ reloc_non_plt(Obj_Entry *obj, Obj_Entry *obj_rtld, int flags,
 	 */
 	if (obj == obj_rtld)
 		return (0);
-	use_code_bounds = obj->npcc_caps != 0;
 
 	data_cap = get_datasegment_cap(obj);
 #endif
@@ -962,16 +896,16 @@ reloc_non_plt(Obj_Entry *obj, Obj_Entry *obj_rtld, int flags,
 		case R_MORELLO_RELATIVE:
 			*(uintptr_t *)(void *)where =
 			    init_cap_from_fragment(where, data_cap,
-				pcc_cap(obj, where[0]),
+				get_codesegment_cap(obj),
 				(Elf_Addr)(uintptr_t)obj->relocbase,
-				rela->r_addend, use_code_bounds);
+				rela->r_addend);
 			break;
 		case R_MORELLO_FUNC_RELATIVE:
 			*(uintptr_t *)(void *)where =
 			    init_cap_from_fragment(where, data_cap,
-				pcc_cap(obj, where[0]),
+				get_codesegment_cap(obj),
 				(Elf_Addr)(uintptr_t)obj->relocbase,
-				rela->r_addend, use_code_bounds);
+				rela->r_addend);
 			break;
 #endif /* __CHERI__ */
 		case R_AARCH64_ABS64:
@@ -1159,7 +1093,7 @@ reloc_tgot(Obj_Entry *obj, struct tcb *tcb, void *tgot, int flags,
 			if (tls == NULL)
 				tls = get_block(tcb, obj->tlsindex);
 			val = init_cap_from_fragment(fragment, tls, NULL,
-			    (Elf_Addr)tls, 0, true);
+			    (Elf_Addr)tls, 0);
 		}
 		*where = val;
 	}
