@@ -32,6 +32,7 @@
 #include <sys/types.h>
 #include <sys/queue.h>
 
+#include <dlfcn.h>
 #include <elf-hints.h>
 #include <link.h>
 #include <stdarg.h>
