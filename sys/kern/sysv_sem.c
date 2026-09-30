@@ -182,7 +182,7 @@ struct sem_undo {
  * SEMUSZ is properly aligned.
  */
 
-#define	SEM_ALIGN(bytes) roundup2(bytes, sizeof(long))
+#define	SEM_ALIGN(bytes) roundup2(bytes, sizeof(intptr_t))
 
 /* actual size of an undo structure */
 #define SEMUSZ(x)	SEM_ALIGN(offsetof(struct sem_undo, un_ent[(x)]))
@@ -647,7 +647,7 @@ sys___semctl(struct thread *td, struct __semctl_args *uap)
 	case GETALL:
 	case SETVAL:
 	case SETALL:
-		error = copyin(uap->arg, &arg, sizeof(arg));
+		error = copyinptr(uap->arg, &arg, sizeof(arg));
 		if (error)
 			return (error);
 		break;
