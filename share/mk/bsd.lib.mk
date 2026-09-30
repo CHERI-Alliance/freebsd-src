@@ -262,6 +262,10 @@ CLEANFILES+=	${SOBJS}
 _LIBS+=		${SHLIB_NAME}
 
 SOLINKOPTS+=	-shared -Wl,-x
+.if ${MACHINE_ABI:Mpurecap}
+# ld.lld: error: could not determine size of cap reloc against local object prof_dump_open_maps_impl
+LD_FATAL_WARNINGS=no
+.endif
 .if defined(LD_FATAL_WARNINGS) && ${LD_FATAL_WARNINGS} == "no"
 SOLINKOPTS+=	-Wl,--no-fatal-warnings
 .else
