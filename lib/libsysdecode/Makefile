@@ -114,6 +114,10 @@ CLEANFILES= ioctl.c ioctl.c.tmp tables.h tables_linux.h
 
 # Workaround under-aligned anonymous unions in ufshci and video
 CFLAGS.ioctl.c+= -Wno-error=unaligned-access
+.if ${MACHINE_ABI:Mpurecap}
+# Work around packed struct in cissio.h
+CFLAGS.ioctl.c+= -Wno-error=cheri-capability-misuse
+.endif
 
 # XXX: The flags should come from bsd.compat.mk / Makefile.libcompat
 .if ${COMPAT_LIBCOMPAT:U} == "32"
