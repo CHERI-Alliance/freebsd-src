@@ -516,16 +516,10 @@ freebsd64_jail_set(struct thread *td, struct freebsd64_jail_set_args *uap)
 }
 
 static int
-freebsd64_updateiov(const struct uio *uiop, struct iovec *cb_arg)
+freebsd64_updateiov(const struct uio *uiop, void *cb_arg)
 {
 	int i, error;
-	/*
-	 * The second argument is not actually a struct iovec *, but C's type
-	 * system does not allow for overloaded callbacks.
-	 */
-	struct iovec64 *iovp =
-	    (struct iovec64 *)cb_arg;
-
+	struct iovec64 *iovp = cb_arg;
 
 	for (i = 0; i < uiop->uio_iovcnt; i++) {
 		error = suword(&iovp[i].iov_len, uiop->uio_iov[i].iov_len);
