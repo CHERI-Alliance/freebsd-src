@@ -190,7 +190,7 @@ CFLAGS+=	-cheri-tgot-tls
 .if ${MACHINE_CPUARCH} == "riscv"
 RISCV_MARCH=	rv64imafdch_svinval
 .if ${MACHINE_CPU:Mcheri}
-RISCV_MARCH:=	${RISCV_MARCH}_zcherihybrid_zcherilevels
+RISCV_MARCH:=	${RISCV_MARCH:S/i/y/}_zyhybrid_zylevels1b
 .else
 RISCV_MARCH:=	${RISCV_MARCH}_zifencei
 .endif
