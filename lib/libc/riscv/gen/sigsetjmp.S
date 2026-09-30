@@ -44,7 +44,8 @@ END(sigsetjmp)
 
 ENTRY(siglongjmp)
 	/* Load the _setjmp magic */
-	ld	a2, .Lmagic
+	LLA_PTR	a2, .Lmagic
+	ld	a2, (a2)
 	ld	a3, 0(a0)
 
 	/* Check the magic */
