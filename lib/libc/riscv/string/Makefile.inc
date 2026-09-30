@@ -1,3 +1,4 @@
+.if !${MACHINE_ABI:Mpurecap}
 MDSRCS+= \
 	bcopy.c \
 	bzero.c \
@@ -6,3 +7,4 @@ MDSRCS+= \
 	memset.S \
 	strlen.S \
 	strchrnul.S
+.endif
