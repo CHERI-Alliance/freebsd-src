@@ -609,7 +609,7 @@ initriscv(struct riscv_bootparams *rvbp)
 
 	/* Set the pcpu pointer */
 #ifdef __CHERI__
-	__asm __volatile("cmv ctp, %0" :: "C"(pcpup));
+	__asm __volatile("ymv tp, %0" :: "C"(pcpup));
 #else
 	__asm __volatile("mv tp, %0" :: "r"(pcpup));
 #endif

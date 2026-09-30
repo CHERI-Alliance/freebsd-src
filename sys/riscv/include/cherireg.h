@@ -106,7 +106,7 @@
 #endif
 #endif /* !_KERNEL */
 
-#ifdef __riscv_zcheripurecap
+#ifdef __riscv_y
 /*
  * Re-define these because RVY cheriintrin.h uses different names.
  * XXX-AM: Ideally we unify on a single naming convention.
@@ -364,7 +364,7 @@
 	__typeof__((0, x)) _p;						\
 									\
 	__asm__ (							\
-	    "cllc %0, %c1\n\t"						\
+	    "lly %0, %c1\n\t"						\
 	    : "=C" (_p) : "i" (x));					\
 	_p; })
 #else
