@@ -204,7 +204,7 @@
 #define	SATP_MODE_SV48	(9ULL << SATP_MODE_S)
 
 #ifdef __CHERI__
-#define	SENVCFG_CRE	(0x01 << 28)
+#define	SENVCFG_Y	(0x01 << 9)
 
 #define	TVAL_CAP_CAUSE_SHIFT	0
 #define	TVAL_CAP_CAUSE_MASK	(0x0f << TVAL_CAP_CAUSE_SHIFT)

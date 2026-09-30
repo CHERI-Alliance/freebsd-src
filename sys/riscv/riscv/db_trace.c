@@ -140,7 +140,7 @@ db_trace_self(void)
 	uintptr_t sp;
 
 #ifdef __CHERI__
-	__asm __volatile("cmv %0, csp" : "=&C" (sp));
+	__asm __volatile("ymv %0, csp" : "=&C" (sp));
 #else
 	__asm __volatile("mv %0, sp" : "=&r" (sp));
 #endif

@@ -57,7 +57,7 @@
 .option push
 SIGCODE(sigcode)
 #ifdef __CHERI__
-	ADDI_PTR	PTR(a0), PTR(sp), SF_UC
+	ADDI_PTR	a0, sp, SF_UC
 #else
 	mv	a0, sp
 	addi	a0, a0, SF_UC
