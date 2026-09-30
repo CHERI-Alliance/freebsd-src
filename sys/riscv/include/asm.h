@@ -57,7 +57,7 @@
 	.set alias,sym
 
 #define	SET_FAULT_HANDLER(handler, tmp)					\
-	L_PTR	tmp, PC_CURTHREAD(PTR(tp));				\
+	L_PTR	tmp, PC_CURTHREAD(tp);					\
 	L_PTR	tmp, TD_PCB(tmp);		/* Load the pcb */	\
 	S_PTR	handler, PCB_ONFAULT(tmp)	/* Set the handler */
 
@@ -77,31 +77,22 @@
 /*
  * Instruction and register aliases for assembly that
  * operates on pointers.
- * Alias mnemonics follow the Zcheri draft specification naming convention.
  */
 #ifdef __CHERI__
-#define	PTR(x)	c ## x
-#define	PTRN(n)	c ## n
-#define	PTR_CSR(x)	x ## c
-#define	PTR_NULL	PTR(null)
 #define	PTR_WIDTH	16
 #else
-#define	PTR(x)	x
-#define	PTRN(n)	x ## n
-#define	PTR_CSR(x)	x
-#define	PTR_NULL	x0
 #define	PTR_WIDTH	8
 #endif
 
 /* Pointer instruction aliases */
 #ifdef __CHERI__
-#define	L_PTR	lc
-#define	S_PTR	sc
-#define	LLA_PTR	llc
-#define	LA_PTR	lgc
-#define	MV_PTR	cmv
-#define	ADD_PTR	cadd
-#define	ADDI_PTR	caddi
+#define	L_PTR	ly
+#define	S_PTR	sy
+#define	LLA_PTR	lly
+#define	LA_PTR	lgy
+#define	MV_PTR	ymv
+#define	ADD_PTR	yadd
+#define	ADDI_PTR	yaddi
 #else
 #define	L_PTR	ld
 #define	S_PTR	sd

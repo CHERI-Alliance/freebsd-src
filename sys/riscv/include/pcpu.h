@@ -66,11 +66,7 @@ get_pcpu(void)
 	struct pcpu *pcpu;
 
 #ifdef __CHERI__
-#ifdef __riscv_xcheri
-	__asm __volatile("cmove %0, ctp" : "=&C"(pcpu));
-#else
-	__asm __volatile("cmv %0, ctp" : "=&C"(pcpu));
-#endif
+	__asm __volatile("ymv %0, tp" : "=&C"(pcpu));
 #else
 	__asm __volatile("mv %0, tp" : "=&r"(pcpu));
 #endif
@@ -84,11 +80,7 @@ get_curthread(void)
 	struct thread *td;
 
 #ifdef __CHERI__
-#ifdef __riscv_xcheri
-	__asm __volatile("clc %0, 0(ctp)" : "=&C"(td));
-#else
-	__asm __volatile("lc %0, 0(ctp)" : "=&C"(td));
-#endif
+	__asm __volatile("ly %0, 0(tp)" : "=&C"(td));
 #else
 	__asm __volatile("ld %0, 0(tp)" : "=&r"(td));
 #endif
