@@ -1,6 +1,8 @@
 /*-
  * Copyright (c) 1999, 2000 John D. Polstra.
  * Copyright (c) 2015 Ruslan Bukin <br@bsdpad.com>
+ * Copyright 2018-2020 Alex Richardson <arichardson@FreeBSD.org>
+ * Copyright 2020 Jessica Clarke <jrtc27@FreeBSD.org>
  * All rights reserved.
  *
  * Portions of this software were developed by SRI International and the
@@ -49,15 +51,21 @@ struct Struct_Obj_Entry;
 #define	MD_OBJ_ENTRY_INIT(obj)
 #define	MD_OBJ_ENTRY_FINI(obj)
 
+#ifndef __CHERI__
 uint64_t set_gp(struct Struct_Obj_Entry *obj);
+#endif
 
 /* Return the address of the .dynamic section in the dynamic linker. */
+#ifdef __CHERI__
+#define	rtld_dynamic(obj) (&_DYNAMIC)
+#else
 #define rtld_dynamic(obj)                                               \
 ({                                                                      \
 	Elf_Addr _dynamic_addr;                                         \
 	__asm __volatile("lla       %0, _DYNAMIC" : "=r"(_dynamic_addr));   \
 	(const Elf_Dyn *)_dynamic_addr;                                 \
 })
+#endif
 
 /* No arch-specific dynamic tags */
 #define	arch_digest_dynamic(obj, dynp)	false
@@ -67,9 +75,22 @@ uint64_t set_gp(struct Struct_Obj_Entry *obj);
 
 #define	arch_fix_auxv(a, ai)		do {} while (0)
 
-Elf_Addr reloc_jmpslot(Elf_Addr *where, Elf_Addr target,
+uintptr_t reloc_jmpslot(uintptr_t *where, uintptr_t target,
     const struct Struct_Obj_Entry *defobj, const struct Struct_Obj_Entry *obj,
     const Elf_Rel *rel);
+
+#ifdef __CHERI__
+
+#define	make_function_pointer(def, defobj)			\
+	make_function_cap(def, defobj)
+
+#define	call_initfini_pointer(obj, target)			\
+	(((InitFunc)(target))())
+
+#define	call_init_pointer(obj, target)				\
+	(((InitArrFunc)(target))(main_argc, main_argv, environ))
+
+#else /* !defined(__CHERI__) */
 
 #define make_function_pointer(def, defobj) \
 	((defobj)->relocbase + (def)->st_value)
@@ -89,10 +110,11 @@ Elf_Addr reloc_jmpslot(Elf_Addr *where, Elf_Addr target,
 	(((InitArrFunc)(target))(main_argc, main_argv, environ));	\
 	__asm __volatile("mv    gp, %0" :: "r"(old1));			\
 })
+#endif /* !defined(__CHERI__) */
 
 extern unsigned long elf_hwcap;
 #define	call_ifunc_resolver(ptr) \
-	(((Elf_Addr (*)(unsigned long, unsigned long, unsigned long,	\
+	(((uintptr_t (*)(unsigned long, unsigned long, unsigned long,	\
 	    unsigned long, unsigned long, unsigned long, unsigned long,	\
 	    unsigned long))ptr)(elf_hwcap, 0, 0, 0, 0, 0, 0, 0))
 
@@ -102,11 +124,18 @@ extern unsigned long elf_hwcap;
 
 #define round(size, align) \
     (((size) + (align) - 1) & ~((align) - 1))
+#ifdef TLS_TGOT
+#define	calculate_first_tgot_offset(size, align, offset)	\
+	TLS_TCB_SIZE
+#define	calculate_tgot_offset(prev_offset, prev_size, size, align, offset) \
+	round(prev_offset + prev_size, align)
+#else
 #define calculate_first_tls_offset(size, align, offset)	\
-    TLS_TCB_SIZE
+	TLS_TCB_SIZE
 #define calculate_tls_offset(prev_offset, prev_size, size, align, offset) \
-    round(prev_offset + prev_size, align)
+	round(prev_offset + prev_size, align)
 #define calculate_tls_post_size(align)  0
+#endif
 
 typedef struct {
 	unsigned long ti_module;
