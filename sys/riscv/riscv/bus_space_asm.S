@@ -35,49 +35,49 @@
 #include <machine/asm.h>
 
 ENTRY(generic_bs_r_1)
-	ADD_PTR	PTR(a3), PTR(a1), a2
-	lbu	a0, 0(PTR(a3))
+	ADD_PTR	a3, a1, a2
+	lbu	a0, 0(a3)
 	ret
 END(generic_bs_r_1)
 
 ENTRY(generic_bs_r_2)
-	ADD_PTR	PTR(a3), PTR(a1), a2
-	lhu	a0, 0(PTR(a3))
+	ADD_PTR	a3, a1, a2
+	lhu	a0, 0(a3)
 	ret
 END(generic_bs_r_2)
 
 ENTRY(generic_bs_r_4)
-	ADD_PTR	PTR(a3), PTR(a1), a2
-	lw	a0, 0(PTR(a3))
+	ADD_PTR	a3, a1, a2
+	lw	a0, 0(a3)
 	ret
 END(generic_bs_r_4)
 
 ENTRY(generic_bs_r_8)
-	ADD_PTR	PTR(a3), PTR(a1), a2
-	ld	a0, 0(PTR(a3))
+	ADD_PTR	a3, a1, a2
+	ld	a0, 0(a3)
 	ret
 END(generic_bs_r_8)
 
 ENTRY(generic_bs_w_1)
-	ADD_PTR	PTR(a4), PTR(a1), a2
-	sb	a3, 0(PTR(a4))
+	ADD_PTR	a4, a1, a2
+	sb	a3, 0(a4)
 	ret
 END(generic_bs_w_1)
 
 ENTRY(generic_bs_w_2)
-	ADD_PTR	PTR(a4), PTR(a1), a2
-	sh	a3, 0(PTR(a4))
+	ADD_PTR	a4, a1, a2
+	sh	a3, 0(a4)
 	ret
 END(generic_bs_w_2)
 
 ENTRY(generic_bs_w_4)
-	ADD_PTR	PTR(a4), PTR(a1), a2
-	sw	a3, 0(PTR(a4))
+	ADD_PTR	a4, a1, a2
+	sw	a3, 0(a4)
 	ret
 END(generic_bs_w_4)
 
 ENTRY(generic_bs_w_8)
-	ADD_PTR	PTR(a4), PTR(a1), a2
-	sd	a3, 0(PTR(a4))
+	ADD_PTR	a4, a1, a2
+	sd	a3, 0(a4)
 	ret
 END(generic_bs_w_8)

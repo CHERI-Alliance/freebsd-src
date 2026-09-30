@@ -43,7 +43,7 @@
  * Fault handler for the copy{in,out} functions below.
  */
 ENTRY(copyio_fault)
-	SET_FAULT_HANDLER(PTR_NULL, PTR(a1)) /* Clear the handler */
+	SET_FAULT_HANDLER(zero, a1) /* Clear the handler */
 	EXIT_USER_ACCESS(a1)
 copyio_fault_nopcb:
 	li	a0, EFAULT
@@ -58,8 +58,8 @@ END(copyio_fault)
  * a2 - Size of copy
  */
 	.macro copycommon
-	LA_PTR	PTR(a6), copyio_fault	/* Get the handler address */
-	SET_FAULT_HANDLER(PTR(a6), PTR(a7))	/* Set the handler */
+	LA_PTR	a6, copyio_fault	/* Get the handler address */
+	SET_FAULT_HANDLER(a6, a7)	/* Set the handler */
 	ENTER_USER_ACCESS(a7)
 
 	li	t2, XLEN_BYTES
@@ -76,10 +76,10 @@ END(copyio_fault)
 
 	/* Byte copy until the first word-aligned address */
 1:
-	lb	a4, 0(PTR(a0))		/* Load byte from src */
-	ADDI_PTR	PTR(a0), PTR(a0), 1
-	sb	a4, 0(PTR(a1))		/* Store byte in dest */
-	ADDI_PTR	PTR(a1), PTR(a1), 1
+	lb	a4, 0(a0)		/* Load byte from src */
+	ADDI_PTR	a0, a0, 1
+	sb	a4, 0(a1)		/* Store byte in dest */
+	ADDI_PTR	a1, a1, 1
 	addi	a2, a2, -1		/* len-- */
 	andi	t0, a0, (XLEN_BYTES-1)
 	bnez	t0, 1b
@@ -87,10 +87,10 @@ END(copyio_fault)
 
 	/* Copy words */
 2:
-	ld	a4, 0(PTR(a0))		/* Load word from src */
-	ADDI_PTR	PTR(a0), PTR(a0), XLEN_BYTES
-	sd	a4, 0(PTR(a1))		/* Store word in dest */
-	ADDI_PTR	PTR(a1), PTR(a1), XLEN_BYTES
+	ld	a4, 0(a0)		/* Load word from src */
+	ADDI_PTR	a0, a0, XLEN_BYTES
+	sd	a4, 0(a1)		/* Store word in dest */
+	ADDI_PTR	a1, a1, XLEN_BYTES
 	addi	a2, a2, -XLEN_BYTES	/* len -= XLEN_BYTES */
 3:	bgeu	a2, t2, 2b		/* Again if len >= XLEN_BYTES */
 
@@ -99,22 +99,22 @@ END(copyio_fault)
 
 	/* Copy any remaining bytes */
 4:
-	lb	a4, 0(PTR(a0))		/* Load byte from src */
-	ADDI_PTR	PTR(a0), PTR(a0), 1
-	sb	a4, 0(PTR(a1))		/* Store byte in dest */
-	ADDI_PTR	PTR(a1), PTR(a1), 1
+	lb	a4, 0(a0)		/* Load byte from src */
+	ADDI_PTR	a0, a0, 1
+	sb	a4, 0(a1)		/* Store byte in dest */
+	ADDI_PTR	a1, a1, 1
 	addi	a2, a2, -1		/* len-- */
 	bnez	a2, 4b
 
 5:
 	EXIT_USER_ACCESS(a7)
-	SET_FAULT_HANDLER(PTR_NULL, PTR(a7))	/* Clear the handler */
+	SET_FAULT_HANDLER(zero, a7)	/* Clear the handler */
 	.endm
 
 /*
  * Copies from a kernel to user address
  *
- * int copyout(const void *kaddr, void *udaddr, size_t len)
+ * int copyout(const void *kaddr, void * __capability udaddr, size_t len)
  */
 ENTRY(copyout)
 	beqz	a2, copyout_end	/* If len == 0 then skip loop */
@@ -132,7 +132,7 @@ END(copyout)
 /*
  * Copies from a user to kernel address
  *
- * int copyin(const void *uaddr, void *kaddr, size_t len)
+ * int copyin(const void * __capability uaddr, void *kaddr, size_t len)
  */
 ENTRY(copyin)
 	beqz	a2, copyin_end	/* If len == 0 then skip loop */
@@ -150,22 +150,23 @@ END(copyin)
 /*
  * Copies a string from a user to kernel address
  *
- * int copyinstr(const void *udaddr, void *kaddr, size_t len, size_t *done)
+ * int copyinstr(const void * __capability udaddr, void *kaddr, size_t len,
+ *	size_t *done)
  */
 ENTRY(copyinstr)
 	mv	a5, x0		/* count = 0 */
 	beqz	a2, 3f		/* If len == 0 then skip loop */
 
-	LA_PTR	PTR(a6), copyio_fault /* Get the handler address */
-	SET_FAULT_HANDLER(PTR(a6), PTR(a7)) /* Set the handler */
+	LA_PTR	a6, copyio_fault /* Get the handler address */
+	SET_FAULT_HANDLER(a6, a7) /* Set the handler */
 	ENTER_USER_ACCESS(a7)
 
 	li	a7, VM_MAXUSER_ADDRESS
 1:	bgeu	a0, a7, copyio_fault
-	lb	a4, 0(PTR(a0))	/* Load from uaddr */
-	ADDI_PTR	PTR(a0), PTR(a0), 1
-	sb	a4, 0(PTR(a1))	/* Store in kaddr */
-	ADDI_PTR	PTR(a1), PTR(a1), 1
+	lb	a4, 0(a0)	/* Load from uaddr */
+	ADDI_PTR	a0, a0, 1
+	sb	a4, 0(a1)	/* Store in kaddr */
+	ADDI_PTR	a1, a1, 1
 	beqz	a4, 2f
 	addi	a2, a2, -1	/* len-- */
 	addi	a5, a5, 1	/* count++ */
@@ -173,11 +174,11 @@ ENTRY(copyinstr)
 
 2:
 	EXIT_USER_ACCESS(a7)
-	SET_FAULT_HANDLER(PTR_NULL, PTR(a7)) /* Clear the handler */
+	SET_FAULT_HANDLER(zero, a7) /* Clear the handler */
 
 3:	beqz	a3, 4f		/* Check if done != NULL */
 	addi	a5, a5, 1	/* count++ */
-	sd	a5, 0(PTR(a3))	/* done = count */
+	sd	a5, 0(a3)	/* done = count */
 
 4:	mv	a0, x0		/* return 0 */
 	beqz	a4, 5f
@@ -195,8 +196,8 @@ END(copyinstr)
  * a2 - Size of copy
  */
 	.macro copycapcommon
-	LA_PTR	PTR(a6), copyio_fault	/* Get the handler address */
-	SET_FAULT_HANDLER(PTR(a6), PTR(a7))	/* Set the handler */
+	LA_PTR	a6, copyio_fault	/* Get the handler address */
+	SET_FAULT_HANDLER(a6, a7)	/* Set the handler */
 	ENTER_USER_ACCESS(a7)
 
 	li	t2, CLEN_BYTES
@@ -213,10 +214,10 @@ END(copyinstr)
 
 	/* Byte copy until the first capability-aligned address */
 1:
-	lb	a4, 0(PTR(a0))		/* Load byte from src */
-	caddi	PTR(a0), PTR(a0), 1
-	sb	a4, 0(PTR(a1))		/* Store byte in dest */
-	caddi	PTR(a1), PTR(a1), 1
+	lb	a4, 0(a0)		/* Load byte from src */
+	ADDI_PTR	a0, a0, 1
+	sb	a4, 0(a1)		/* Store byte in dest */
+	ADDI_PTR	a1, a1, 1
 	addi	a2, a2, -1		/* len-- */
 	andi	t0, a0, (CLEN_BYTES-1)
 	bnez	t0, 1b
@@ -224,10 +225,10 @@ END(copyinstr)
 
 	/* Copy capabilities */
 2:
-	lc	PTR(a4), 0(PTR(a0))	/* Load capability from src */
-	caddi	PTR(a0), PTR(a0), CLEN_BYTES
-	sc	PTR(a4), 0(PTR(a1))	/* Store capability in dest */
-	caddi	PTR(a1), PTR(a1), CLEN_BYTES
+	L_PTR	a4, 0(a0)	/* Load capability from src */
+	ADDI_PTR	a0, a0, CLEN_BYTES
+	S_PTR	a4, 0(a1)	/* Store capability in dest */
+	ADDI_PTR	a1, a1, CLEN_BYTES
 	addi	a2, a2, -CLEN_BYTES	/* len -= CLEN_BYTES */
 3:	bgeu	a2, t2, 2b		/* Again if len >= CLEN_BYTES */
 
@@ -236,16 +237,16 @@ END(copyinstr)
 
 	/* Copy any remaining bytes */
 4:
-	lb	a4, 0(PTR(a0))		/* Load byte from src */
-	caddi	PTR(a0), PTR(a0), 1
-	sb	a4, 0(ca1)		/* Store byte in dest */
-	caddi	PTR(a1), PTR(a1), 1
+	lb	a4, 0(a0)	/* Load byte from src */
+	ADDI_PTR	a0, a0, 1
+	sb	a4, 0(a1)	/* Store byte in dest */
+	ADDI_PTR	a1, a1, 1
 	addi	a2, a2, -1		/* len-- */
 	bnez	a2, 4b
 
 5:
 	EXIT_USER_ACCESS(a7)
-	SET_FAULT_HANDLER(PTR_NULL, PTR(a7)) /* Clear the handler */
+	SET_FAULT_HANDLER(zero, a7) /* Clear the handler */
 	.endm
 
 /*
@@ -284,3 +285,15 @@ copyinptr_end:
 	ret
 END(copyinptr)
 #endif
+
+/*
+ * CHERI CHANGES START
+ * {
+ *   "updated": 20230509,
+ *   "target_type": "kernel",
+ *   "changes_purecap": [
+ *     "support"
+ *   ]
+ * }
+ * CHERI CHANGES END
+ */

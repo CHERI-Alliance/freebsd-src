@@ -39,80 +39,80 @@
 #include <machine/riscvreg.h>
 
 .macro save_registers mode
-	ADDI_PTR	PTR(sp), PTR(sp), -(TF_SIZE)
+	ADDI_PTR	sp, sp, -(TF_SIZE)
 
-	S_PTR	PTR(ra), (TF_RA)(PTR(sp))
-	S_PTR	PTR(tp), (TF_TP)(PTR(sp))
-	S_PTR	PTR(gp), (TF_GP)(PTR(sp))
+	S_PTR	ra, (TF_RA)(sp)
+	S_PTR	tp, (TF_TP)(sp)
+	S_PTR	gp, (TF_GP)(sp)
 
 .if \mode == 0	/* We came from userspace. */
 	/* Load our pcpu */
-	L_PTR	PTR(tp), (TF_SIZE + KF_TP)(PTR(sp))
+	L_PTR	tp, (TF_SIZE + KF_TP)(sp)
 .endif
 
-	S_PTR	PTR(t0), (TF_T + 0 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(t1), (TF_T + 1 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(t2), (TF_T + 2 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(t3), (TF_T + 3 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(t4), (TF_T + 4 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(t5), (TF_T + 5 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(t6), (TF_T + 6 * PTR_WIDTH)(PTR(sp))
+	S_PTR	t0, (TF_T + 0 * PTR_WIDTH)(sp)
+	S_PTR	t1, (TF_T + 1 * PTR_WIDTH)(sp)
+	S_PTR	t2, (TF_T + 2 * PTR_WIDTH)(sp)
+	S_PTR	t3, (TF_T + 3 * PTR_WIDTH)(sp)
+	S_PTR	t4, (TF_T + 4 * PTR_WIDTH)(sp)
+	S_PTR	t5, (TF_T + 5 * PTR_WIDTH)(sp)
+	S_PTR	t6, (TF_T + 6 * PTR_WIDTH)(sp)
 
-	S_PTR	PTR(s0), (TF_S + 0 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(s1), (TF_S + 1 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(s2), (TF_S + 2 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(s3), (TF_S + 3 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(s4), (TF_S + 4 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(s5), (TF_S + 5 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(s6), (TF_S + 6 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(s7), (TF_S + 7 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(s8), (TF_S + 8 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(s9), (TF_S + 9 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(s10), (TF_S + 10 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(s11), (TF_S + 11 * PTR_WIDTH)(PTR(sp))
+	S_PTR	s0, (TF_S + 0 * PTR_WIDTH)(sp)
+	S_PTR	s1, (TF_S + 1 * PTR_WIDTH)(sp)
+	S_PTR	s2, (TF_S + 2 * PTR_WIDTH)(sp)
+	S_PTR	s3, (TF_S + 3 * PTR_WIDTH)(sp)
+	S_PTR	s4, (TF_S + 4 * PTR_WIDTH)(sp)
+	S_PTR	s5, (TF_S + 5 * PTR_WIDTH)(sp)
+	S_PTR	s6, (TF_S + 6 * PTR_WIDTH)(sp)
+	S_PTR	s7, (TF_S + 7 * PTR_WIDTH)(sp)
+	S_PTR	s8, (TF_S + 8 * PTR_WIDTH)(sp)
+	S_PTR	s9, (TF_S + 9 * PTR_WIDTH)(sp)
+	S_PTR	s10, (TF_S + 10 * PTR_WIDTH)(sp)
+	S_PTR	s11, (TF_S + 11 * PTR_WIDTH)(sp)
 
-	S_PTR	PTR(a0), (TF_A + 0 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(a1), (TF_A + 1 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(a2), (TF_A + 2 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(a3), (TF_A + 3 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(a4), (TF_A + 4 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(a5), (TF_A + 5 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(a6), (TF_A + 6 * PTR_WIDTH)(PTR(sp))
-	S_PTR	PTR(a7), (TF_A + 7 * PTR_WIDTH)(PTR(sp))
+	S_PTR	a0, (TF_A + 0 * PTR_WIDTH)(sp)
+	S_PTR	a1, (TF_A + 1 * PTR_WIDTH)(sp)
+	S_PTR	a2, (TF_A + 2 * PTR_WIDTH)(sp)
+	S_PTR	a3, (TF_A + 3 * PTR_WIDTH)(sp)
+	S_PTR	a4, (TF_A + 4 * PTR_WIDTH)(sp)
+	S_PTR	a5, (TF_A + 5 * PTR_WIDTH)(sp)
+	S_PTR	a6, (TF_A + 6 * PTR_WIDTH)(sp)
+	S_PTR	a7, (TF_A + 7 * PTR_WIDTH)(sp)
 
 .if \mode == 1
 	/* Store kernel sp */
 	li	t1, TF_SIZE
-	ADD_PTR	PTR(t0), PTR(sp), t1
-	S_PTR	PTR(t0), (TF_SP)(PTR(sp))
+	ADD_PTR	t0, sp, t1
+	S_PTR	t0, (TF_SP)(sp)
 .else
 	/* Store user sp */
-	csrr	PTR(t0), PTR_CSR(sscratch)
-	S_PTR	PTR(t0), (TF_SP)(PTR(sp))
+	csrr	t0, sscratch
+	S_PTR	t0, (TF_SP)(sp)
 .endif
-	MV_PTR	PTR(t0), PTR_NULL
-	csrw	PTR_CSR(sscratch), PTR(t0)
-	csrr	PTR(t0), PTR_CSR(sepc)
-	S_PTR	PTR(t0), (TF_SEPC)(PTR(sp))
+	MV_PTR	t0, zero
+	csrw	sscratch, t0
+	csrr	t0, sepc
+	S_PTR	t0, (TF_SEPC)(sp)
 #ifdef __CHERI__
-	csrr	PTR(t0), ddc
-	csc	PTR(t0), (TF_DDC)(PTR(sp))
+	csrr	t0, ddc
+	S_PTR	t0, (TF_DDC)(sp)
 #endif
 
 #ifdef __CHERI__
 .if \mode == 0
 	/* Load our DDC */
-	MV_PTR	PTR(t0), PTR_NULL
-	csrw	ddc, PTR(t0)
+	MV_PTR	t0, zero
+	csrw	ddc, t0
 .endif
 #endif
 
 	csrr	t0, sstatus
-	sd	t0, (TF_SSTATUS)(PTR(sp))
+	sd	t0, (TF_SSTATUS)(sp)
 
 #ifdef __CHERI__
 	csrr	t0, stval2
-	sd	t0, (TF_STVAL2)(PTR(sp))
+	sd	t0, (TF_STVAL2)(sp)
 #endif
 
 .if \mode == 1
@@ -121,17 +121,17 @@
 	csrc	sstatus, t0
 .endif
 	csrr	t0, stval
-	sd	t0, (TF_STVAL)(PTR(sp))
+	sd	t0, (TF_STVAL)(sp)
 #ifdef __CHERI__
 	csrr	t0, stval2
-	sd	t0, (TF_STVAL2)(PTR(sp))
+	sd	t0, (TF_STVAL2)(sp)
 #endif
 	csrr	t0, scause
-	sd	t0, (TF_SCAUSE)(PTR(sp))
+	sd	t0, (TF_SCAUSE)(sp)
 .endm
 
 .macro load_registers mode
-	ld	t0, (TF_SSTATUS)(PTR(sp))
+	ld	t0, (TF_SSTATUS)(sp)
 .if \mode == 0
 	/* Ensure user interrupts will be enabled on eret */
 	li	t1, SSTATUS_SPIE
@@ -153,59 +153,59 @@
 	 * Switch to user DDC.  After this point, all stack accesses
 	 * must use 'csp' instead of 'sp'.
 	 */
-	L_PTR	PTR(t0), (TF_DDC)(PTR(sp))
-	csrw	ddc, PTR(t0)
+	L_PTR	t0, (TF_DDC)(sp)
+	csrw	ddc, t0
 #endif
 
-	L_PTR	PTR(t0), (TF_SEPC)(PTR(sp))
-	csrw	PTR_CSR(sepc), PTR(t0)
+	L_PTR	t0, (TF_SEPC)(sp)
+	csrw	sepc, t0
 
 .if \mode == 0
 	/* We go to userspace. Load user csp */
-	L_PTR	PTR(t0), (TF_SP)(PTR(sp))
-	csrw	PTR_CSR(sscratch), PTR(t0)
+	L_PTR	t0, (TF_SP)(sp)
+	csrw	sscratch, t0
 
 	/* Store our pcpu */
-	S_PTR	PTR(tp), (TF_SIZE + KF_TP)(PTR(sp))
-	L_PTR	PTR(tp), (TF_TP)(PTR(sp))
+	S_PTR	tp, (TF_SIZE + KF_TP)(sp)
+	L_PTR	tp, (TF_TP)(sp)
 
 	/* And restore the user's global pointer */
-	L_PTR	PTR(gp), (TF_GP)(PTR(sp))
+	L_PTR	gp, (TF_GP)(sp)
 .endif
 
-	L_PTR	PTR(ra), (TF_RA)(PTR(sp))
+	L_PTR	ra, (TF_RA)(sp)
 
-	L_PTR	PTR(t0), (TF_T + 0 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(t1), (TF_T + 1 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(t2), (TF_T + 2 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(t3), (TF_T + 3 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(t4), (TF_T + 4 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(t5), (TF_T + 5 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(t6), (TF_T + 6 * PTR_WIDTH)(PTR(sp))
+	L_PTR	t0, (TF_T + 0 * PTR_WIDTH)(sp)
+	L_PTR	t1, (TF_T + 1 * PTR_WIDTH)(sp)
+	L_PTR	t2, (TF_T + 2 * PTR_WIDTH)(sp)
+	L_PTR	t3, (TF_T + 3 * PTR_WIDTH)(sp)
+	L_PTR	t4, (TF_T + 4 * PTR_WIDTH)(sp)
+	L_PTR	t5, (TF_T + 5 * PTR_WIDTH)(sp)
+	L_PTR	t6, (TF_T + 6 * PTR_WIDTH)(sp)
 
-	L_PTR	PTR(s0), (TF_S + 0 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(s1), (TF_S + 1 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(s2), (TF_S + 2 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(s3), (TF_S + 3 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(s4), (TF_S + 4 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(s5), (TF_S + 5 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(s6), (TF_S + 6 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(s7), (TF_S + 7 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(s8), (TF_S + 8 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(s9), (TF_S + 9 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(s10), (TF_S + 10 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(s11), (TF_S + 11 * PTR_WIDTH)(PTR(sp))
+	L_PTR	s0, (TF_S + 0 * PTR_WIDTH)(sp)
+	L_PTR	s1, (TF_S + 1 * PTR_WIDTH)(sp)
+	L_PTR	s2, (TF_S + 2 * PTR_WIDTH)(sp)
+	L_PTR	s3, (TF_S + 3 * PTR_WIDTH)(sp)
+	L_PTR	s4, (TF_S + 4 * PTR_WIDTH)(sp)
+	L_PTR	s5, (TF_S + 5 * PTR_WIDTH)(sp)
+	L_PTR	s6, (TF_S + 6 * PTR_WIDTH)(sp)
+	L_PTR	s7, (TF_S + 7 * PTR_WIDTH)(sp)
+	L_PTR	s8, (TF_S + 8 * PTR_WIDTH)(sp)
+	L_PTR	s9, (TF_S + 9 * PTR_WIDTH)(sp)
+	L_PTR	s10, (TF_S + 10 * PTR_WIDTH)(sp)
+	L_PTR	s11, (TF_S + 11 * PTR_WIDTH)(sp)
 
-	L_PTR	PTR(a0), (TF_A + 0 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(a1), (TF_A + 1 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(a2), (TF_A + 2 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(a3), (TF_A + 3 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(a4), (TF_A + 4 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(a5), (TF_A + 5 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(a6), (TF_A + 6 * PTR_WIDTH)(PTR(sp))
-	L_PTR	PTR(a7), (TF_A + 7 * PTR_WIDTH)(PTR(sp))
+	L_PTR	a0, (TF_A + 0 * PTR_WIDTH)(sp)
+	L_PTR	a1, (TF_A + 1 * PTR_WIDTH)(sp)
+	L_PTR	a2, (TF_A + 2 * PTR_WIDTH)(sp)
+	L_PTR	a3, (TF_A + 3 * PTR_WIDTH)(sp)
+	L_PTR	a4, (TF_A + 4 * PTR_WIDTH)(sp)
+	L_PTR	a5, (TF_A + 5 * PTR_WIDTH)(sp)
+	L_PTR	a6, (TF_A + 6 * PTR_WIDTH)(sp)
+	L_PTR	a7, (TF_A + 7 * PTR_WIDTH)(sp)
 
-	ADDI_PTR	PTR(sp), PTR(sp), (TF_SIZE)
+	ADDI_PTR	sp, sp, (TF_SIZE)
 .endm
 
 .macro	do_ast
@@ -214,8 +214,8 @@
 1:
 	csrci	sstatus, (SSTATUS_SIE)
 
-	L_PTR	PTR(a1), PC_CURTHREAD(PTR(tp))
-	lw	a2, TD_AST(PTR(a1))
+	L_PTR	a1, PC_CURTHREAD(tp)
+	lw	a2, TD_AST(a1)
 
 	beqz	a2, 2f
 
@@ -224,7 +224,7 @@
 	csrs	sstatus, a4
 
 	/* Handle the ast */
-	MV_PTR	PTR(a0), PTR(sp)
+	MV_PTR	a0, sp
 	call	_C_LABEL(ast)
 
 	/* Re-check for new ast scheduled */
@@ -233,19 +233,19 @@
 .endm
 
 ENTRY(cpu_exception_handler)
-	csrrw	PTR(sp), PTR_CSR(sscratch), PTR(sp)
+	csrrw	sp, sscratch, sp
 	beqz	sp, 1f
 	/* User mode detected */
 	j	cpu_exception_handler_user
 1:
 	/* Supervisor mode detected */
-	csrrw	PTR(sp), PTR_CSR(sscratch), PTR(sp)
+	csrrw	sp, sscratch, sp
 	j	cpu_exception_handler_supervisor
 END(cpu_exception_handler)
 
 ENTRY(cpu_exception_handler_supervisor)
 	save_registers 1
-	MV_PTR	PTR(a0), PTR(sp)
+	MV_PTR	a0, sp
 	call	_C_LABEL(do_trap_supervisor)
 	load_registers 1
 	sret
@@ -253,10 +253,10 @@ END(cpu_exception_handler_supervisor)
 
 ENTRY(cpu_exception_handler_user)
 	save_registers 0
-	MV_PTR	PTR(a0), PTR(sp)
+	MV_PTR	a0, sp
 	call	_C_LABEL(do_trap_user)
 	do_ast
 	load_registers 0
-	csrrw	PTR(sp), PTR_CSR(sscratch), PTR(sp)
+	csrrw	sp, sscratch, sp
 	sret
 END(cpu_exception_handler_user)
