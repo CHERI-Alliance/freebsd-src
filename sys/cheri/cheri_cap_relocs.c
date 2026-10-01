@@ -141,12 +141,10 @@ init_linker_file_cap_irelocs(const void *start_relocs, const void *stop_relocs,
 			return (-1);
 		}
 
-		if (reloc->offset != 0) {
-			printf("kldload: unexpected ifunc capreloc offset\n");
-			return (-1);
-		}
-
 		resolver = __builtin_cheri_address_set(root_cap, reloc->object);
+		resolver = __builtin_cheri_bounds_set(resolver, reloc->size);
+		resolver = __builtin_cheri_offset_increment(resolver,
+		    reloc->offset);
 		resolver = __builtin_cheri_perms_and(resolver,
 		    CHERI_PERMS_KERNEL_CODE);
 #ifdef CHERI_FLAGS_CAP_MODE
