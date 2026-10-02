@@ -89,6 +89,9 @@
 #define	PT_GET_CHILDREN	46	/* Report children */
 #define	PT_GET_ABI_NAME	47	/* Report ABI name */
 
+#define	PT_GETCAPREGS	50	/* get capability registers */
+#define	PT_SETCAPREGS	51	/* set capability registers */
+
 #define PT_FIRSTMACH    64	/* for machine-specific requests */
 #define	PT_LASTMACH     127
 #include <machine/ptrace.h>	/* machine-specific requests, if any */
