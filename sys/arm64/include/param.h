@@ -105,6 +105,10 @@
 
 #define	MAXPAGESIZES	4		/* maximum number of supported page sizes */
 
+#ifdef __CHERI__
+#define	TAG_BYTES_PER_PAGE	(PAGE_SIZE / (sizeof(__uintcap_t) * NBBY))
+#endif
+
 #ifndef KSTACK_PAGES
 #if defined(KASAN) || defined(KMSAN)
 #define	KSTACK_PAGES	6
