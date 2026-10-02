@@ -240,6 +240,7 @@ struct ptrace_child {
 #ifdef _KERNEL
 
 #include <sys/proc.h>
+#include <vm/vm.h>
 
 struct thr_coredump_req {
 	struct vnode	*tc_vp;		/* vnode to write coredump to. */
@@ -297,6 +298,10 @@ ssize_t	proc_readmem(struct thread *_td, struct proc *_p, vm_offset_t _va,
 	    void *_buf, size_t _len);
 ssize_t	proc_writemem(struct thread *_td, struct proc *_p, vm_offset_t _va,
 	    void *_buf, size_t _len);
+#ifdef __CHERI__
+int	proc_read_cheri_tags_page(vm_map_t _map, vm_offset_t _va,
+	    void *_tagbuf, bool *_hastags);
+#endif
 #ifdef COMPAT_FREEBSD32
 struct reg32;
 struct fpreg32;

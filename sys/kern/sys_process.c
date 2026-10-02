@@ -612,6 +612,39 @@ proc_writemem(struct thread *td, struct proc *p, vm_offset_t va, void *buf,
 	return (vmspace_iop(td, p->p_vmspace, va, buf, len, UIO_WRITE));
 }
 
+#ifdef __CHERI__
+int
+proc_read_cheri_tags_page(vm_map_t map, vm_offset_t va, void *tagbuf,
+    bool *hastagsp)
+{
+	vm_page_t m;
+	void *page;
+	int error;
+
+	KASSERT(__is_aligned(va, PAGE_SIZE),
+	    ("%s: user address %lx is not page-aligned", __func__, va));
+
+	/*
+	 * Fault in the next page, but only if it already exists.  If
+	 * the page doesn't exist, fill the tag buffer with zeroes.
+	 */
+	error = vm_fault(map, va, VM_PROT_READ,
+	    VM_FAULT_NOFILL, &m);
+	if (error == KERN_PAGE_NOT_FILLED) {
+		memset(tagbuf, 0, TAG_BYTES_PER_PAGE);
+		*hastagsp = false;
+		return (0);
+	}
+	if (error != 0)
+		return (EFAULT);
+
+	page = (void *)PHYS_TO_DMAP_PAGE(VM_PAGE_TO_PHYS(m));
+	cheri_read_tags_page(page, tagbuf, hastagsp);
+	vm_page_unwire(m, PQ_ACTIVE);
+	return (0);
+}
+#endif
+
 static int
 ptrace_vm_entry(struct thread *td, struct proc *p, struct ptrace_vm_entry *pve)
 {
