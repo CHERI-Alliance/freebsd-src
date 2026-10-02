@@ -250,13 +250,13 @@ int
 fill_capregs(struct thread *td, struct capreg *regs)
 {
 	struct trapframe *frame;
-	uintcap_t *fcap, *rcap;
+	uintptr_t *fcap, *rcap;
 	u_int i;
 
 	frame = td->td_frame;
 	memset(regs, 0, sizeof(*regs));
-	fcap = (uintcap_t *)frame;
-	rcap = (uintcap_t *)regs;
+	fcap = (uintptr_t *)frame;
+	rcap = (uintptr_t *)regs;
 	for (i = 0; i < NCAPREGS; i++) {
 		rcap[i] = cheri_tag_clear(fcap[i]);
 		if (cheri_tag_get(fcap[i]))
@@ -272,16 +272,16 @@ fill_capregs(struct thread *td, struct capreg *regs)
  * the new capability matches an existing cap register.
  */
 bool
-ptrace_derive_capreg_td(struct thread *td, uintcap_t in, uintcap_t *out)
+ptrace_derive_capreg_td(struct thread *td, uintptr_t in, uintptr_t *out)
 {
 	struct trapframe *frame;
-	void * __capability cap;
-	uintcap_t *fcap;
+	void *cap;
+	uintptr_t *fcap;
 	int otype;
 	u_int i;
 
 	frame = td->td_frame;
-	fcap = (uintcap_t *)frame;
+	fcap = (uintptr_t *)frame;
 	for (i = 0; i < NCAPREGS; i++) {
 		if (!cheri_tag_get(fcap[i]))
 			continue;
@@ -301,9 +301,9 @@ ptrace_derive_capreg_td(struct thread *td, uintcap_t in, uintcap_t *out)
 			continue;
 		}
 
-		cap = cheri_cap_build((void * __capability)fcap[i], in);
+		cap = cheri_cap_build((void *)fcap[i], in);
 		if (cheri_tag_get(cap)) {
-			*out = (uintcap_t)cap;
+			*out = (uintptr_t)cap;
 			return (true);
 		}
 	}
@@ -313,10 +313,10 @@ ptrace_derive_capreg_td(struct thread *td, uintcap_t in, uintcap_t *out)
 int
 set_capregs(struct thread *td, struct capreg *regs)
 {
-	uintcap_t tempregs[NCAPREGS];
+	uintptr_t tempregs[NCAPREGS];
 	struct proc *p = td->td_proc;
 	struct trapframe *frame;
-	uintcap_t *fcap, *rcap;
+	uintptr_t *fcap, *rcap;
 	u_int i;
 
 	/*
@@ -327,8 +327,8 @@ set_capregs(struct thread *td, struct capreg *regs)
 	 */
 	PROC_UNLOCK(p);
 	frame = td->td_frame;
-	fcap = (uintcap_t *)frame;
-	rcap = (uintcap_t *)regs;
+	fcap = (uintptr_t *)frame;
+	rcap = (uintptr_t *)regs;
 	for (i = 0; i < NCAPREGS; i++) {
 		if ((regs->tagmask & ((uint64_t)1 << i)) == 0) {
 			/* Always ok to set untagged values. */
