@@ -166,6 +166,22 @@ proc_write_fpregs(struct thread *td, struct fpreg *fpregs)
 	return (set_fpregs(td, fpregs));
 }
 
+#ifdef __CHERI__
+static int
+proc_read_capregs(struct thread *td, struct capreg *capregs)
+{
+	PROC_LOCK_ASSERT(td->td_proc, MA_OWNED);
+	return (fill_capregs(td, capregs));
+}
+
+static int
+proc_write_capregs(struct thread *td, struct capreg *capregs)
+{
+	PROC_LOCK_ASSERT(td->td_proc, MA_OWNED);
+	return (set_capregs(td, capregs));
+}
+#endif
+
 static struct regset *
 proc_find_regset(struct thread *td, int note)
 {
@@ -755,6 +771,9 @@ ptrace_useraction(struct thread *td, int req, bool pd_mode, pid_t pid, int pfd,
 		struct ptrace_vm_entry pve;
 		struct ptrace_coredump pc;
 		struct ptrace_sc_remote sr;
+#ifdef __CHERI__
+		struct capreg capreg;
+#endif
 		struct dbreg dbreg;
 		struct fpreg fpreg;
 		struct reg reg;
@@ -790,6 +809,11 @@ ptrace_useraction(struct thread *td, int req, bool pd_mode, pid_t pid, int pfd,
 	case PT_GETFPREGS:
 		bzero(&r.fpreg, sizeof(r.fpreg));
 		break;
+#ifdef __CHERI__
+	case PT_GETCAPREGS:
+		bzero(&r.capreg, sizeof(r.capreg));
+		break;
+#endif
 	case PT_GETDBREGS:
 		bzero(&r.dbreg, sizeof(r.dbreg));
 		break;
@@ -806,6 +830,11 @@ ptrace_useraction(struct thread *td, int req, bool pd_mode, pid_t pid, int pfd,
 	case PT_SETDBREGS:
 		error = copyin(uaddr, &r.dbreg, sizeof(r.dbreg));
 		break;
+#ifdef __CHERI__
+	case PT_SETCAPREGS:
+		error = copyin(uaddr, &r.capreg, sizeof(r.capreg));
+		break;
+#endif
 	case PT_SET_EVENT_MASK:
 		error = udata != sizeof(r.ptevents) ? EINVAL :
 		    copyin(uaddr, &r.ptevents, udata);
@@ -881,6 +910,11 @@ ptrace_useraction(struct thread *td, int req, bool pd_mode, pid_t pid, int pfd,
 	case PT_GETDBREGS:
 		error = copyout(&r.dbreg, uaddr, sizeof(r.dbreg));
 		break;
+#if __CHERI__
+	case PT_GETCAPREGS:
+		error = copyout(&r.capreg, uaddr, sizeof(r.capreg));
+		break;
+#endif
 	case PT_GETREGSET:
 		error = copyout(&r.vec, uaddr, sizeof(r.vec));
 		break;
@@ -1788,6 +1822,21 @@ ptrace_action(struct thread *td, int req, bool pd_mode, pid_t pid, int pfd,
 		    p->p_pid);
 		error = PROC_READ(dbregs, td2, addr);
 		break;
+
+#ifdef __CHERI__
+	case PT_SETCAPREGS:
+		CTR2(KTR_PTRACE, "PT_SETCAPREGS: tid %d (pid %d)", td2->td_tid,
+		    p->p_pid);
+		td2->td_dbgflags |= TDB_USERWR;
+		error = PROC_WRITE(capregs, td2, addr);
+		break;
+
+	case PT_GETCAPREGS:
+		CTR2(KTR_PTRACE, "PT_GETCAPREGS: tid %d (pid %d)", td2->td_tid,
+		    p->p_pid);
+		error = PROC_READ(capregs, td2, addr);
+		break;
+#endif
 
 	case PT_SETREGSET:
 		CTR2(KTR_PTRACE, "PT_SETREGSET: tid %d (pid %d)", td2->td_tid,
