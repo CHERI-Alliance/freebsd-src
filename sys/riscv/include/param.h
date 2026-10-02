@@ -91,6 +91,10 @@
 
 #define	MAXPAGESIZES	3	/* maximum number of supported page sizes */
 
+#ifdef __CHERI__
+#define	TAG_BYTES_PER_PAGE	(PAGE_SIZE / (sizeof(__uintcap_t) * NBBY))
+#endif
+
 #ifndef KSTACK_PAGES
 #ifdef __CHERI__
 #define	KSTACK_PAGES	6	/* pages of kernel stack (with pcb) */
