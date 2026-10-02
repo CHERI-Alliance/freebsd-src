@@ -104,6 +104,15 @@ struct sysentvec;
 void cheri_sysvec_init(struct sysentvec *sv);
 
 /*
+ * Functions to derive capabilities for ptrace.
+ */
+struct proc;
+bool	ptrace_derive_cap(struct proc *p, uintptr_t in, uintptr_t *out);
+bool	ptrace_derive_capreg_td(struct thread *td, uintptr_t in,
+    uintptr_t *out);
+bool	vm_derive_capreg(struct proc *p, uintptr_t in, uintptr_t *out);
+
+/*
  * Global sysctl definitions.
  */
 SYSCTL_DECL(_security_cheri);
