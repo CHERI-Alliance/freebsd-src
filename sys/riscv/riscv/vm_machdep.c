@@ -92,6 +92,7 @@ cpu_fork(struct thread *td1, struct proc *p2, struct thread *td2, int flags)
 	if ((flags & RFPROC) == 0)
 		return;
 
+
 	/* Ensure the floating-point state is saved before copying the pcb. */
 	if ((td1->td_pcb->pcb_fpflags & PCB_FP_STARTED) != 0) {
 		MPASS(td1 == curthread);
@@ -108,6 +109,8 @@ cpu_fork(struct thread *td1, struct proc *p2, struct thread *td2, int flags)
 		vector_state_store(td1);
 		critical_exit();
 	}
+#else
+	p2->p_md.md_sigcode = td1->td_proc->p_md.md_sigcode;
 #endif
 
 	pcb2 = td2->td_pcb;
