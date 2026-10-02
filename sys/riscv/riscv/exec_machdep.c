@@ -245,6 +245,26 @@ _Static_assert(offsetof(struct trapframe, tf_sepc) ==
     offsetof(struct capreg, sepcc), "sepcc mismatch");
 _Static_assert(offsetof(struct trapframe, tf_ddc) ==
     offsetof(struct capreg, ddc), "ddc mismatch");
+
+int
+fill_capregs(struct thread *td, struct capreg *regs)
+{
+	struct trapframe *frame;
+	uintcap_t *fcap, *rcap;
+	u_int i;
+
+	frame = td->td_frame;
+	memset(regs, 0, sizeof(*regs));
+	fcap = (uintcap_t *)frame;
+	rcap = (uintcap_t *)regs;
+	for (i = 0; i < NCAPREGS; i++) {
+		rcap[i] = cheri_tag_clear(fcap[i]);
+		if (cheri_tag_get(fcap[i]))
+			regs->tagmask |= (uint64_t)1 << i;
+	}
+	return (0);
+}
+
 /*
  * If a tagged in can be derived from the user registers of td,
  * store the derived cap in *out and return true.  Otherwise, return
@@ -288,6 +308,46 @@ ptrace_derive_capreg_td(struct thread *td, uintcap_t in, uintcap_t *out)
 		}
 	}
 	return (false);
+}
+
+int
+set_capregs(struct thread *td, struct capreg *regs)
+{
+	uintcap_t tempregs[NCAPREGS];
+	struct proc *p = td->td_proc;
+	struct trapframe *frame;
+	uintcap_t *fcap, *rcap;
+	u_int i;
+
+	/*
+	 * To support more exotic cases like swapping the value of two
+	 * registers as well as error handling, construct a copy of
+	 * the new register set in tempregs[] that is copied to the
+	 * frame at the end.
+	 */
+	PROC_UNLOCK(p);
+	frame = td->td_frame;
+	fcap = (uintcap_t *)frame;
+	rcap = (uintcap_t *)regs;
+	for (i = 0; i < NCAPREGS; i++) {
+		if ((regs->tagmask & ((uint64_t)1 << i)) == 0) {
+			/* Always ok to set untagged values. */
+			tempregs[i] = rcap[i];
+		} else if (cheri_tag_get(fcap[i]) &&
+		    cheri_is_equal_exact(cheri_tag_clear(fcap[i]), rcap[i])) {
+			/* Preserve unchanged registers. */
+			tempregs[i] = fcap[i];
+		} else {
+			if (!ptrace_derive_cap(p, rcap[i], &tempregs[i])) {
+				PROC_LOCK(p);
+				return (EPROT);
+			}
+		}
+	}
+	PROC_LOCK(p);
+	memcpy(frame, tempregs, sizeof(tempregs));
+
+	return (0);
 }
 #endif
 
