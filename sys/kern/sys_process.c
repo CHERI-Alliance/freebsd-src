@@ -1808,7 +1808,7 @@ ptrace_action(struct thread *td, int req, bool pd_mode, pid_t pid, int pfd,
 		case PT_TO_SCE:
 		case PT_TO_SCX:
 		case PT_SYSCALL:
-			if (addr != (void *)1) {
+			if ((ptraddr_t)addr != 1) {
 				error = ptrace_set_pc(td2,
 				    (u_long)(uintfptr_t)addr);
 				if (error != 0)
