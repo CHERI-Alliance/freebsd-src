@@ -1060,7 +1060,7 @@ ptrace_useraction(struct thread *td, int req, bool pd_mode, pid_t pid, int pfd,
 		break;
 	case PT_GETREGSET:
 	case PT_SETREGSET:
-		error = copyin(uaddr, &r.vec, sizeof(r.vec));
+		error = copyinptr(uaddr, &r.vec, sizeof(r.vec));
 		break;
 	case PT_SETREGS:
 		error = copyin(uaddr, &r.reg, sizeof(r.reg));
@@ -1081,10 +1081,10 @@ ptrace_useraction(struct thread *td, int req, bool pd_mode, pid_t pid, int pfd,
 		    copyin(uaddr, &r.ptevents, udata);
 		break;
 	case PT_IO:
-		error = copyin(uaddr, &r.piod, sizeof(r.piod));
+		error = copyinptr(uaddr, &r.piod, sizeof(r.piod));
 		break;
 	case PT_VM_ENTRY:
-		error = copyin(uaddr, &r.pve, sizeof(r.pve));
+		error = copyinptr(uaddr, &r.pve, sizeof(r.pve));
 		break;
 	case PT_COREDUMP:
 		error = udata != sizeof(r.pc) ? EINVAL :
@@ -1137,10 +1137,15 @@ ptrace_useraction(struct thread *td, int req, bool pd_mode, pid_t pid, int pfd,
 
 	switch (req) {
 	case PT_VM_ENTRY:
-		error = copyout(&r.pve, uaddr, sizeof(r.pve));
+		/* Copyout up to, but not including the path pointer */
+		error = copyout(&r.pve, uaddr,
+		    offsetof(struct ptrace_vm_entry, pve_path));
 		break;
 	case PT_IO:
-		error = copyout(&r.piod, uaddr, sizeof(r.piod));
+		/* Update the length */
+		if (suword(&((struct ptrace_io_desc *)uaddr)->piod_len,
+		    r.piod.piod_len) != 0)
+			error = EFAULT;
 		break;
 	case PT_GETREGS:
 		error = copyout(&r.reg, uaddr, sizeof(r.reg));
@@ -1157,7 +1162,9 @@ ptrace_useraction(struct thread *td, int req, bool pd_mode, pid_t pid, int pfd,
 		break;
 #endif
 	case PT_GETREGSET:
-		error = copyout(&r.vec, uaddr, sizeof(r.vec));
+		if (suword(&((struct iovec *)uaddr)->iov_len,
+		    r.vec.iov_len) != 0)
+			error = EFAULT;
 		break;
 	case PT_GET_EVENT_MASK:
 		/* NB: The size in uap->data is validated in ptraceimpl(). */
