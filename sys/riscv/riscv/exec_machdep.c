@@ -245,6 +245,50 @@ _Static_assert(offsetof(struct trapframe, tf_sepc) ==
     offsetof(struct capreg, sepcc), "sepcc mismatch");
 _Static_assert(offsetof(struct trapframe, tf_ddc) ==
     offsetof(struct capreg, ddc), "ddc mismatch");
+/*
+ * If a tagged in can be derived from the user registers of td,
+ * store the derived cap in *out and return true.  Otherwise, return
+ * false.  NB: This does not support deriving sealed caps except if
+ * the new capability matches an existing cap register.
+ */
+bool
+ptrace_derive_capreg_td(struct thread *td, uintcap_t in, uintcap_t *out)
+{
+	struct trapframe *frame;
+	void * __capability cap;
+	uintcap_t *fcap;
+	int otype;
+	u_int i;
+
+	frame = td->td_frame;
+	fcap = (uintcap_t *)frame;
+	for (i = 0; i < NCAPREGS; i++) {
+		if (!cheri_tag_get(fcap[i]))
+			continue;
+
+		if (cheri_is_equal_exact(cheri_tag_clear(fcap[i]), in)) {
+			*out = fcap[i];
+			return (true);
+		}
+
+		/* The only sealed caps that can be derived are sentries. */
+		otype = cheri_type_get(in);
+		switch (otype) {
+		case CHERI_OTYPE_UNSEALED:
+		case CHERI_OTYPE_SENTRY:
+			break;
+		default:
+			continue;
+		}
+
+		cap = cheri_cap_build((void * __capability)fcap[i], in);
+		if (cheri_tag_get(cap)) {
+			*out = (uintcap_t)cap;
+			return (true);
+		}
+	}
+	return (false);
+}
 #endif
 
 void
