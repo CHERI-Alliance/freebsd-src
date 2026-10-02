@@ -149,7 +149,7 @@ freebsd64_ptrace(struct thread *td, struct freebsd64_ptrace_args *uap)
 		struct ptrace_vm_entry pve;
 		struct ptrace_coredump pc;
 		struct ptrace_sc_remote sr;
-#if 0
+#ifdef __CHERI__
 		struct capreg capreg;
 #endif
 		struct dbreg dbreg;
@@ -214,7 +214,7 @@ freebsd64_ptrace(struct thread *td, struct freebsd64_ptrace_args *uap)
 	case PT_GETFPREGS:
 		bzero(&r.fpreg, sizeof r.fpreg);
 		break;
-#if 0
+#ifdef __CHERI__
 	case PT_GETCAPREGS:
 		bzero(&r.capreg, sizeof r.capreg);
 		break;
@@ -234,7 +234,7 @@ freebsd64_ptrace(struct thread *td, struct freebsd64_ptrace_args *uap)
 		error = copyin(USER_PTR(uap->addr, sizeof(r.dbreg)), &r.dbreg,
 		    sizeof r.dbreg);
 		break;
-#if 0
+#ifdef __CHERI__
 	case PT_SETCAPREGS:
 		error = copyin(USER_PTR(uap->addr, sizeof(r.capreg)),
 		    &r.capreg, sizeof r.capreg);
@@ -359,7 +359,7 @@ freebsd64_ptrace(struct thread *td, struct freebsd64_ptrace_args *uap)
 		error = copyout(&r.dbreg, USER_PTR(uap->addr, sizeof(r.dbreg)),
 		    sizeof r.dbreg);
 		break;
-#if 0
+#ifdef __CHERI__
 	case PT_GETCAPREGS:
 		error = copyout(&r.capreg, USER_PTR(uap->addr,
 		    sizeof(r.capreg)), sizeof r.capreg);
