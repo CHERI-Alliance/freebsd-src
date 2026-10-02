@@ -643,6 +643,214 @@ proc_read_cheri_tags_page(vm_map_t map, vm_offset_t va, void *tagbuf,
 	vm_page_unwire(m, PQ_ACTIVE);
 	return (0);
 }
+
+static int
+proc_read_cheri_tags(struct proc *p, struct uio *uio)
+{
+	char tagbuf[TAG_BYTES_PER_PAGE];
+	vm_map_t map = &p->p_vmspace->vm_map;
+	vm_offset_t va;
+	int error;
+	bool hastags;
+
+	/*
+	 * Can't reuse uio_offset directly as uiomove increments it
+	 * based on the tag bitmask size.
+	 *
+	 * Require that the offset be aligned to the granularity of a
+	 * single bytes-worth of tags to simplify the implementation.
+	 * In theory any capability-aligned address would be ok, but
+	 * the returned bitmask bytes would have to be constructed by
+	 * selecting bits from adjacent bytes in the per-page bitmasks
+	 * returned by proc_read_cheri_tags_page.
+	 */
+	va = uio->uio_offset;
+	if (!__is_aligned(va, sizeof(uintptr_t) * CHAR_BIT))
+		return (EINVAL);
+
+	/* Handle partial first page. */
+	if (va % PAGE_SIZE != 0) {
+		u_int pageoff, tagoff;
+
+		pageoff = va % PAGE_SIZE;
+		va = trunc_page(va);
+		error = proc_read_cheri_tags_page(map, va, tagbuf, &hastags);
+		if (error != 0)
+			return (error);
+
+		tagoff = pageoff / (sizeof(uintptr_t) * CHAR_BIT);
+		error = uiomove(tagbuf + tagoff, sizeof(tagbuf) - tagoff, uio);
+		if (error != 0)
+			return (error);
+
+		va += PAGE_SIZE;
+	}
+
+	while (uio->uio_resid > 0) {
+		error = proc_read_cheri_tags_page(map, va, tagbuf, &hastags);
+		if (error != 0)
+			return (error);
+
+		error = uiomove(tagbuf, sizeof(tagbuf), uio);
+		if (error != 0)
+			return (error);
+
+		va += PAGE_SIZE;
+	}
+
+	return (0);
+}
+
+static int
+proc_read_cheri_cap_page(vm_map_t map, vm_offset_t va, struct uio *uio)
+{
+	char capbuf[sizeof(uintptr_t) + 1];
+	uintptr_t *src;
+	vm_page_t m;
+	u_int pageoff, todo;
+	int error;
+
+	KASSERT(__is_aligned(va, sizeof(uintptr_t)),
+	    ("%s: user address %lx is not capability-aligned", __func__, va));
+	pageoff = va & PAGE_MASK;
+	todo = (PAGE_SIZE - pageoff) / sizeof(uintptr_t) *
+	    (sizeof(uintptr_t) + 1);
+	todo = MIN(todo, uio->uio_resid);
+	va = trunc_page(va);
+
+	error = vm_fault(map, va, VM_PROT_READ,
+	    VM_FAULT_NOFILL, &m);
+	if (error == KERN_PAGE_NOT_FILLED) {
+		memset(capbuf, 0, sizeof(capbuf));
+		while (todo > 0) {
+			error = uiomove(capbuf, sizeof(capbuf), uio);
+			if (error != 0)
+				return (error);
+			todo -= sizeof(capbuf);
+		}
+		return (0);
+	}
+	if (error != KERN_SUCCESS)
+		return (EFAULT);
+
+	src = (uintptr_t *)PHYS_TO_DMAP_PAGE(VM_PAGE_TO_PHYS(m)) + pageoff /
+	    sizeof(uintptr_t);
+	while (todo > 0) {
+		capbuf[0] = cheri_tag_get(*src);
+		memcpy(capbuf + 1, src, sizeof(*src));
+
+		error = uiomove(capbuf, sizeof(capbuf), uio);
+		if (error != 0)
+			break;
+		todo -= sizeof(capbuf);
+		src++;
+	}
+
+	vm_page_unwire(m, PQ_ACTIVE);
+	return (error);
+}
+
+static int
+proc_read_cheri_cap(struct proc *p, struct uio *uio)
+{
+	vm_map_t map = &p->p_vmspace->vm_map;
+	vm_offset_t va;
+	int error;
+
+	/*
+	 * Can't reuse uio_offset directly as uiomove increments it
+	 * based on the expanded capability size.
+	 */
+	va = uio->uio_offset;
+	if (!__is_aligned(va, sizeof(uintptr_t)))
+		return (EINVAL);
+
+	if (uio->uio_resid % (sizeof(uintptr_t) + 1) != 0)
+		return (EINVAL);
+
+	error = 0;
+	while (uio->uio_resid > 0) {
+		error = proc_read_cheri_cap_page(map, va, uio);
+		if (error != 0)
+			break;
+		va = trunc_page(va) + PAGE_SIZE;
+	}
+	return (error);
+}
+
+static int
+proc_write_cheri_cap_page(struct proc *p, vm_map_t map, vm_offset_t va,
+    struct uio *uio)
+{
+	char capbuf[sizeof(uintptr_t) + 1];
+	uintptr_t *dst, cap;
+	vm_page_t m;
+	u_int pageoff, todo;
+	int error;
+
+	KASSERT(__is_aligned(va, sizeof(uintptr_t)),
+	    ("%s: user address %lx is not capability-aligned", __func__, va));
+	pageoff = va & PAGE_MASK;
+	todo = (PAGE_SIZE - pageoff) / sizeof(uintptr_t) *
+	    (sizeof(uintptr_t) + 1);
+	todo = MIN(todo, uio->uio_resid);
+	va = trunc_page(va);
+
+	error = vm_fault(map, va, VM_PROT_WRITE | VM_PROT_CAP, 0, &m);
+	if (error != KERN_SUCCESS)
+		return (EFAULT);
+
+	dst = (uintptr_t *)PHYS_TO_DMAP_PAGE(VM_PAGE_TO_PHYS(m)) + pageoff /
+	    sizeof(uintptr_t);
+	while (todo > 0) {
+		error = uiomove(capbuf, sizeof(capbuf), uio);
+		if (error != 0)
+			break;
+
+		memcpy(&cap, capbuf + 1, sizeof(cap));
+		if (capbuf[0] != 0) {
+			if (!ptrace_derive_cap(p, cap, dst)) {
+				error = EPROT;
+				break;
+			}
+		} else
+			*dst = cap;
+
+		todo -= sizeof(capbuf);
+		dst++;
+	}
+
+	vm_page_unwire(m, PQ_ACTIVE);
+	return (error);
+}
+
+static int
+proc_write_cheri_cap(struct proc *p, struct uio *uio)
+{
+	vm_map_t map = &p->p_vmspace->vm_map;
+	vm_offset_t va;
+	int error;
+
+	/*
+	 * Can't reuse uio_offset directly as uiomove increments it
+	 * based on the expanded capability size.
+	 */
+	va = uio->uio_offset;
+	if (!__is_aligned(va, sizeof(uintptr_t)))
+		return (EINVAL);
+
+	if (uio->uio_resid % (sizeof(uintptr_t) + 1) != 0)
+		return (EINVAL);
+
+	error = 0;
+	while (uio->uio_resid > 0) {
+		error = proc_write_cheri_cap_page(p, map, va, uio);
+		if (error != 0)
+			break;
+		va = trunc_page(va) + PAGE_SIZE;
+	}
+	return (error);
+}
 #endif
 
 static int
@@ -1802,6 +2010,39 @@ ptrace_action(struct thread *td, int req, bool pd_mode, pid_t pid, int pfd,
 			td2->td_dbgflags |= TDB_USERWR;
 			uio.uio_rw = UIO_WRITE;
 			break;
+#ifdef __CHERI__
+		case PIOD_READ_CHERI_TAGS:
+			CTR3(KTR_PTRACE,
+			    "PT_IO: pid %d: READ_CHERI_TAGS (%p, %#x)",
+			    p->p_pid, (uintptr_t)uio.uio_offset, uio.uio_resid);
+			uio.uio_rw = UIO_READ;
+			PROC_UNLOCK(p);
+			error = proc_read_cheri_tags(p, &uio);
+			piod->piod_len -= uio.uio_resid;
+			PROC_LOCK(p);
+			goto out;
+		case PIOD_READ_CHERI_CAP:
+			CTR3(KTR_PTRACE,
+			    "PT_IO: pid %d: READ_CHERI_CAP (%p, %#x)",
+			    p->p_pid, (uintptr_t)uio.uio_offset, uio.uio_resid);
+			uio.uio_rw = UIO_READ;
+			PROC_UNLOCK(p);
+			error = proc_read_cheri_cap(p, &uio);
+			piod->piod_len -= uio.uio_resid;
+			PROC_LOCK(p);
+			goto out;
+		case PIOD_WRITE_CHERI_CAP:
+			CTR3(KTR_PTRACE,
+			    "PT_IO: pid %d: WRITE_CHERI_CAP (%p, %#x)",
+			    p->p_pid, (uintptr_t)uio.uio_offset, uio.uio_resid);
+			td2->td_dbgflags |= TDB_USERWR;
+			uio.uio_rw = UIO_WRITE;
+			PROC_UNLOCK(p);
+			error = proc_write_cheri_cap(p, &uio);
+			piod->piod_len -= uio.uio_resid;
+			PROC_LOCK(p);
+			goto out;
+#endif
 		default:
 			error = EINVAL;
 			goto out;
