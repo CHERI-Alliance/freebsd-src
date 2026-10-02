@@ -67,6 +67,10 @@
 #include <vm/vm_page.h>
 #include <vm/vm_param.h>
 
+#ifdef __CHERI__
+#include <cheri/cheri.h>
+#endif
+
 #ifdef COMPAT_FREEBSD32
 #include <sys/procfs.h>
 #endif
