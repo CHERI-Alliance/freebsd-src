@@ -94,7 +94,14 @@
 
 #endif /* defined(_KERNEL) || defined(_STANDALONE) */
 
-#define	cheri_loadtags(m)	__builtin_cheri_cap_load_tags((m))
+#if defined(__riscv_y)
+/* CLoadTags not available, just use tag_get(load) instead. */
+#define	cheri_loadtags(m)			\
+	cheri_tag_get(*(const uintptr_t *)(m))
+#else
+#define	cheri_loadtags(m)			\
+	__builtin_cheri_cap_load_tags((m))
+#endif
 
 /*
  * Soft implementation of cheri_subset_test().
