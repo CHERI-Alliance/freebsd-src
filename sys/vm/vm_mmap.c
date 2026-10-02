@@ -2164,3 +2164,38 @@ vm_mmap_to_errno(int rv)
 		EXTERROR(error, "mach error %jd", rv);
 	return (error);
 }
+
+#ifdef __CHERI__
+bool
+vm_derive_capreg(struct proc *p, uintptr_t in, uintptr_t *out)
+{
+	void *cap;
+	vm_map_t map;
+	int otype;
+
+	/* The only sealed caps supported for this are sentries. */
+	otype = cheri_type_get(in);
+	switch (otype) {
+	case CHERI_OTYPE_UNSEALED:
+	case CHERI_OTYPE_SENTRY:
+		break;
+	default:
+		return (0);
+	}
+
+	map = &p->p_vmspace->vm_map;
+	cap = vm_map_reservation_cap(map, (vm_offset_t)in);
+
+	cap = cheri_cap_build(cap, in);
+#ifdef __aarch64__
+	/* Morello requires explicit sealing for entry. */
+	if (otype == CHERI_OTYPE_SENTRY)
+		cap = cheri_sentry_create(cap);
+#endif
+	if (cheri_tag_get(cap)) {
+		*out = (uintptr_t)cap;
+		return (true);
+	}
+	return (false);
+}
+#endif
