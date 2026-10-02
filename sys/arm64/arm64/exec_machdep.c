@@ -437,6 +437,72 @@ set_dbregs32(struct thread *td, struct dbreg32 *regs)
 }
 #endif
 
+#ifdef __CHERI__
+/* Try to derive tagged version of in from reg. */
+static bool
+derive_capreg(uintptr_t reg, uintptr_t in, uintptr_t *out)
+{
+	void *cap;
+	int otype;
+
+	if (!cheri_tag_get(reg))
+		return (false);
+
+	if (cheri_is_equal_exact(cheri_tag_clear(reg), in)) {
+		*out = reg;
+		return (true);
+	}
+
+	/* The only sealed caps that can be derived are sentries. */
+	otype = cheri_type_get(in);
+	switch (otype) {
+	case CHERI_OTYPE_UNSEALED:
+	case CHERI_OTYPE_SENTRY:
+		break;
+	default:
+		return (false);
+	}
+
+	cap = cheri_cap_build((void *)reg, in);
+	if (otype == CHERI_OTYPE_SENTRY)
+		cap = cheri_sentry_create(cap);
+	if (cheri_tag_get(cap)) {
+		*out = (uintptr_t)cap;
+		return (true);
+	}
+
+	return (false);
+}
+
+/*
+ * If a tagged in can be derived from the user registers of td,
+ * store the derived cap in *out and return true.  Otherwise, return
+ * false.  NB: This does not support deriving sealed caps except if
+ * the new capability matches an existing cap register.
+ */
+bool
+ptrace_derive_capreg_td(struct thread *td, uintptr_t in, uintptr_t *out)
+{
+	struct trapframe *frame;
+	u_int i;
+
+	frame = td->td_frame;
+	if (derive_capreg(frame->tf_sp, in, out))
+		return (true);
+	if (derive_capreg(frame->tf_lr, in, out))
+		return (true);
+	if (derive_capreg(frame->tf_elr, in, out))
+		return (true);
+	if (derive_capreg(frame->tf_ddc, in, out))
+		return (true);
+	for (i = 0; i < nitems(frame->tf_x); i++) {
+		if (derive_capreg(frame->tf_x[i], in, out))
+			return (true);
+	}
+	return (false);
+}
+#endif
+
 void
 exec_setregs(struct thread *td, struct image_params *imgp, uintptr_t stack)
 {
