@@ -104,6 +104,11 @@ struct sysentvec;
 void cheri_sysvec_init(struct sysentvec *sv);
 
 /*
+ * Functions involving tagged memory.
+ */
+void	cheri_read_tags_page(const void *page, void *tagbuf, bool *hastagsp);
+
+/*
  * Functions to derive capabilities for ptrace.
  */
 struct proc;
