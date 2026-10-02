@@ -438,6 +438,71 @@ set_dbregs32(struct thread *td, struct dbreg32 *regs)
 #endif
 
 #ifdef __CHERI__
+int
+fill_capregs(struct thread *td, struct capreg *regs)
+{
+	struct trapframe *frame;
+	int i;
+
+	if (td == curthread) {
+		td->td_pcb->pcb_tpidr_el0 = READ_SPECIALREG_CAP(ctpidr_el0);
+		td->td_pcb->pcb_tpidrro_el0 = READ_SPECIALREG_CAP(ctpidrro_el0);
+		td->td_pcb->pcb_cid_el0 = READ_SPECIALREG_CAP(cid_el0);
+		td->td_pcb->pcb_rcsp_el0 = READ_SPECIALREG_CAP(rcsp_el0);
+		td->td_pcb->pcb_rddc_el0 = READ_SPECIALREG_CAP(rddc_el0);
+		td->td_pcb->pcb_rctpidr_el0 = READ_SPECIALREG_CAP(rctpidr_el0);
+	}
+
+	frame = td->td_frame;
+	regs->csp = frame->tf_sp;
+	regs->clr = frame->tf_lr;
+	regs->celr = frame->tf_elr;
+	regs->ddc = frame->tf_ddc;
+	regs->ctpidr = td->td_pcb->pcb_tpidr_el0;
+	regs->ctpidrro = td->td_pcb->pcb_tpidrro_el0;
+	regs->cid = td->td_pcb->pcb_cid_el0;
+	regs->rcsp = td->td_pcb->pcb_rcsp_el0;
+	regs->rddc = td->td_pcb->pcb_rddc_el0;
+	regs->rctpidr = td->td_pcb->pcb_rctpidr_el0;
+
+	for (i = 0; i < nitems(frame->tf_x); i++) {
+		regs->c[i] = frame->tf_x[i];
+		if (cheri_tag_get((void *)frame->tf_x[i]))
+			regs->tagmask |= (uint64_t)1 << i;
+	}
+	if (cheri_tag_get((void *)frame->tf_lr))
+		regs->tagmask |= (uint64_t)1 << i;
+	i++;
+	if (cheri_tag_get((void *)frame->tf_sp))
+		regs->tagmask |= (uint64_t)1 << i;
+	i++;
+	if (cheri_tag_get((void *)frame->tf_elr))
+		regs->tagmask |= (uint64_t)1 << i;
+	i++;
+	if (cheri_tag_get((void *)frame->tf_ddc))
+		regs->tagmask |= (uint64_t)1 << i;
+	i++;
+	if (cheri_tag_get((void *)regs->ctpidr))
+		regs->tagmask |= (uint64_t)1 << i;
+	i++;
+	if (cheri_tag_get((void *)regs->ctpidrro))
+		regs->tagmask |= (uint64_t)1 << i;
+	i++;
+	if (cheri_tag_get((void *)regs->cid))
+		regs->tagmask |= (uint64_t)1 << i;
+	i++;
+	if (cheri_tag_get((void *)regs->rcsp))
+		regs->tagmask |= (uint64_t)1 << i;
+	i++;
+	if (cheri_tag_get((void *)regs->rddc))
+		regs->tagmask |= (uint64_t)1 << i;
+	i++;
+	if (cheri_tag_get((void *)regs->rctpidr))
+		regs->tagmask |= (uint64_t)1 << i;
+
+	return (0);
+}
+
 /* Try to derive tagged version of in from reg. */
 static bool
 derive_capreg(uintptr_t reg, uintptr_t in, uintptr_t *out)
@@ -500,6 +565,107 @@ ptrace_derive_capreg_td(struct thread *td, uintptr_t in, uintptr_t *out)
 			return (true);
 	}
 	return (false);
+}
+
+static bool
+set_capreg(struct thread *td, u_int idx, uint64_t tagmask, uintptr_t old,
+    uintptr_t new, uintptr_t *out)
+{
+	if ((tagmask & ((uint64_t)1 << idx)) == 0) {
+		/* Always ok to set untagged values. */
+		*out = new;
+		return (true);
+	}
+
+	if (cheri_tag_get(old) && cheri_is_equal_exact(cheri_tag_clear(old), new)) {
+		/* Preserve unchanged registers. */
+		*out = old;
+		return (true);
+	}
+
+	return (ptrace_derive_cap(td->td_proc, new, out));
+}
+
+int
+set_capregs(struct thread *td, struct capreg *regs)
+{
+	struct capreg tempregs;
+	struct proc *p = td->td_proc;
+	struct trapframe *frame;
+	u_int i;
+
+	/*
+	 * To support more exotic cases like swapping the value of two
+	 * registers as well as error handling, construct a copy of
+	 * the new register set in tempregs that is copied to the
+	 * frame at the end.
+	 */
+	PROC_UNLOCK(p);
+	frame = td->td_frame;
+
+	for (i = 0; i < nitems(frame->tf_x); i++) {
+		if (!set_capreg(td, i, regs->tagmask, frame->tf_x[i],
+		    regs->c[i], &tempregs.c[i]))
+			goto fail;
+	}
+	if (!set_capreg(td, i, regs->tagmask, frame->tf_lr, regs->clr,
+	    &tempregs.clr))
+		goto fail;
+	i++;
+	if (!set_capreg(td, i, regs->tagmask, frame->tf_sp, regs->csp,
+	    &tempregs.csp))
+		goto fail;
+	i++;
+	if (!set_capreg(td, i, regs->tagmask, frame->tf_elr, regs->celr,
+	    &tempregs.celr))
+		goto fail;
+	i++;
+	if (!set_capreg(td, i, regs->tagmask, frame->tf_ddc, regs->ddc,
+	    &tempregs.ddc))
+		goto fail;
+	i++;
+	if (!set_capreg(td, i, regs->tagmask, td->td_pcb->pcb_tpidr_el0,
+	    regs->ctpidr, &tempregs.ctpidr))
+		goto fail;
+	i++;
+	if (!set_capreg(td, i, regs->tagmask, td->td_pcb->pcb_tpidrro_el0,
+	    regs->ctpidrro, &tempregs.ctpidrro))
+		goto fail;
+	i++;
+	if (!set_capreg(td, i, regs->tagmask, td->td_pcb->pcb_cid_el0,
+	    regs->cid, &tempregs.cid))
+		goto fail;
+	i++;
+	if (!set_capreg(td, i, regs->tagmask, td->td_pcb->pcb_rcsp_el0,
+	    regs->rcsp, &tempregs.rcsp))
+		goto fail;
+	i++;
+	if (!set_capreg(td, i, regs->tagmask, td->td_pcb->pcb_rddc_el0,
+	    regs->rddc, &tempregs.rddc))
+		goto fail;
+	i++;
+	if (!set_capreg(td, i, regs->tagmask, td->td_pcb->pcb_rctpidr_el0,
+	    regs->rctpidr, &tempregs.rctpidr))
+		goto fail;
+
+	PROC_LOCK(p);
+	memcpy(frame->tf_x, tempregs.c, sizeof(frame->tf_x));
+	frame->tf_lr = tempregs.clr;
+	frame->tf_sp = tempregs.csp;
+	frame->tf_elr = tempregs.celr;
+	frame->tf_ddc = tempregs.ddc;
+	td->td_pcb->pcb_tpidr_el0 = tempregs.ctpidr;
+	td->td_pcb->pcb_tpidrro_el0 = tempregs.ctpidrro;
+	td->td_pcb->pcb_cid_el0 = tempregs.cid;
+	td->td_pcb->pcb_rcsp_el0 = tempregs.rcsp;
+	td->td_pcb->pcb_rddc_el0 = tempregs.rddc;
+	td->td_pcb->pcb_rctpidr_el0 = tempregs.rctpidr;
+
+	return (0);
+
+fail:
+	PROC_LOCK(p);
+	return (EPROT);
 }
 #endif
 
