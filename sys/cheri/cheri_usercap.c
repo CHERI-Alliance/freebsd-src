@@ -47,6 +47,21 @@
 /* Set to -1 to prevent it from being zeroed with the rest of BSS */
 static void *userspace_root_cap = (void *)(intptr_t)-1;
 
+static u_int cheri_ptrace_caps;
+SYSCTL_UINT(_security_cheri, OID_AUTO, ptrace_caps, CTLFLAG_RWTUN,
+    &cheri_ptrace_caps, 0,
+    "Control derivation of caps for ptrace: 0 = registers only; 1 = any valid userspace mapping; 2 = any userspace cap");
+
+static u_long cheri_forged_ptrace_caps;
+SYSCTL_ULONG(_security_cheri_stats, OID_AUTO, forged_ptrace_caps, CTLFLAG_RD,
+    &cheri_forged_ptrace_caps, 0,
+    "Number of forged capabilities injected via ptrace");
+
+static u_long cheri_untagged_ptrace_caps;
+SYSCTL_ULONG(_security_cheri_stats, OID_AUTO, untagged_ptrace_caps, CTLFLAG_RD,
+    &cheri_untagged_ptrace_caps, 0,
+    "Number of capabilities injected via ptrace that failed to tag");
+
 void
 userspace_root_cap_init(void *cap)
 {
@@ -209,4 +224,51 @@ cheri_sysvec_init(struct sysentvec *sv)
 	    CHERI_PERMS_SWALL, padded_minuser, user_length, minuser);
 	KASSERT(cheri_tag_get(sv->sv_vmspace_cap),
 	    ("sv_vmspace_cap untagged %#p", (void *)sv->sv_vmspace_cap));
+}
+
+/*
+ * Try to store a tagged capability in *out, derived from an untagged
+ * "bag of bits" in in.  If a tagged capability cannot be derived,
+ * return false and leave *out unchanged.
+ */
+bool
+ptrace_derive_cap(struct proc *p, uintptr_t in, uintptr_t *out)
+{
+	struct thread *td;
+	void *cap;
+#ifdef HAS_CHERI_PERM_SEAL
+	void *sealcap;
+#endif
+
+	/*
+	 * Try to derive from existing user registers in this
+	 * process.
+	 */
+	FOREACH_THREAD_IN_PROC(p, td) {
+		if (ptrace_derive_capreg_td(td, in, out))
+			return (true);
+	}
+
+	if (cheri_ptrace_caps >= 1) {
+		/* Try to derive from valid memory mappings. */
+		if (vm_derive_capreg(p, in, out))
+			return (true);
+	}
+
+	if (cheri_ptrace_caps >= 2) {
+		/* If forging is allowed, derive from the userspace root. */
+		cap = cheri_cap_build(userspace_root_cap, in);
+#ifdef HAS_CHERI_PERM_SEAL
+		sealcap = cheri_type_copy(userspace_root_sealcap, in);
+		cap = cheri_seal_conditionally(cap, sealcap);
+#endif
+		if (cheri_tag_get(cap)) {
+			atomic_add_long(&cheri_forged_ptrace_caps, 1);
+			*out = (uintptr_t)cap;
+			return (true);
+		}
+	}
+
+	atomic_add_long(&cheri_untagged_ptrace_caps, 1);
+	return (false);
 }
