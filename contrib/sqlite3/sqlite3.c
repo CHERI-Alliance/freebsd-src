@@ -28032,8 +28032,9 @@ static void *sqlite3MemMalloc(int nByte){
   sqlite3_int64 *p;
   assert( nByte>0 );
   testcase( ROUND8(nByte)!=nByte );
-  p = SQLITE_MALLOC( nByte+8 );
+  p = SQLITE_MALLOC( nByte + MAX(sizeof(uptr), 8) );
   if( p ){
+    p += (MAX(sizeof(uptr), 8)/sizeof(sqlite3_int64))-1;
     p[0] = nByte;
     p++;
   }else{
@@ -28058,7 +28059,7 @@ static void sqlite3MemFree(void *pPrior){
 #else
   sqlite3_int64 *p = (sqlite3_int64*)pPrior;
   assert( pPrior!=0 );
-  p--;
+  p -= (MAX(sizeof(uptr), 8)/sizeof(sqlite3_int64));
   SQLITE_FREE(p);
 #endif
 }
@@ -28075,7 +28076,7 @@ static int sqlite3MemSize(void *pPrior){
   sqlite3_int64 *p;
   assert( pPrior!=0 );
   p = (sqlite3_int64*)pPrior;
-  p--;
+  p -= (MAX(sizeof(uptr), 8)/sizeof(sqlite3_int64));
   return (int)p[0];
 #endif
 }
@@ -28104,9 +28105,10 @@ static void *sqlite3MemRealloc(void *pPrior, int nByte){
   sqlite3_int64 *p = (sqlite3_int64*)pPrior;
   assert( pPrior!=0 && nByte>0 );
   assert( nByte==ROUND8(nByte) ); /* EV: R-46199-30249 */
-  p--;
-  p = SQLITE_REALLOC(p, nByte+8 );
+  p -= (MAX(sizeof(uptr), 8)/sizeof(sqlite3_int64));
+  p = SQLITE_REALLOC(p, nByte+MAX(sizeof(uptr), 8));
   if( p ){
+    p += (MAX(sizeof(uptr), 8)/sizeof(sqlite3_int64))-1;
     p[0] = nByte;
     p++;
   }else{
