@@ -70,6 +70,10 @@ int	fill_fpregs(struct thread *, struct fpreg *);
 int	set_fpregs(struct thread *, struct fpreg *);
 int	fill_dbregs(struct thread *, struct dbreg *);
 int	set_dbregs(struct thread *, struct dbreg *);
+#ifdef __CHERI__
+int	fill_capregs(struct thread *, struct capreg *);
+int	set_capregs(struct thread *, struct capreg *);
+#endif
 #ifdef COMPAT_FREEBSD32
 int	fill_regs32(struct thread *, struct reg32 *);
 int	set_regs32(struct thread *, struct reg32 *);
