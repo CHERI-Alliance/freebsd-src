@@ -109,6 +109,7 @@ static struct regset regset_arm_vfp = {
 ELF32_REGSET(regset_arm_vfp);
 #endif
 
+#ifndef __CHERI__
 static bool
 get_arm64_tls(struct regset *rs, struct thread *td, void *buf,
     size_t *sizep)
@@ -130,6 +131,7 @@ static struct regset regset_arm64_tls = {
 	.get = get_arm64_tls,
 };
 ELF_REGSET(regset_arm64_tls);
+#endif
 
 #ifdef COMPAT_FREEBSD32
 static bool
