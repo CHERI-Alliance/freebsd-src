@@ -194,7 +194,7 @@ __libc_free_tls(void *tcb, size_t tcbsize, size_t tcbalign __unused)
 	struct dtv *dtv;
 
 	dtv = ((struct tcb *)tcb)->tcb_dtv;
-	__je_bootstrap_free(dtv->dtv_slots[0].dtvs_tls);
+	libc_free_aligned(dtv->dtv_slots[0].dtvs_tls);
 	__je_bootstrap_free(dtv);
 	libc_free_aligned(get_tls_block_ptr(tcb, tcbsize));
 }
