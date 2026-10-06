@@ -477,23 +477,40 @@ ef_symbol_address(elf_file_t ef, const Elf_Sym *sym)
 
 #ifdef __CHERI__
 /*
- * Check for a valid ELF executable header at ef->mapbase.
+ * Find a copy of the module's program headers, either from module metadata or
+ * by probing for a valid ELF executable header at ef->mapbase that we can then
+ * follow.
  *
  * NB: RISC-V kernels do not map phdrs into memory.
  */
-static bool
-have_phdrs(elf_file_t ef)
+static const Elf_Phdr *
+preload_search_phdrs(elf_file_t ef, size_t *phnum, caddr_t modptr)
 {
 	const Elf_Ehdr *hdr;
+	uint32_t *modinfo;
+
+	modinfo = (uint32_t *)preload_search_info(modptr,
+	    MODINFO_METADATA | MODINFOMD_PHDR);
+	if (modinfo != NULL) {
+		/* Size of metadata; see preload_search_info */
+		*phnum = modinfo[-1] / sizeof(Elf_Phdr);
+		return ((const Elf_Phdr *)modinfo);
+	}
+
 	hdr = (const Elf_Ehdr *)ef->mapbase;
-	return (IS_ELF(*hdr) &&
+	if (IS_ELF(*hdr) &&
 	    hdr->e_ident[EI_CLASS] == ELF_TARG_CLASS &&
 	    hdr->e_ident[EI_DATA] == ELF_TARG_DATA &&
 	    hdr->e_ident[EI_VERSION] == EV_CURRENT &&
 	    hdr->e_machine == ELF_TARG_MACH &&
 	    hdr->e_version == ELF_TARG_VER &&
 	    hdr->e_phentsize == sizeof(Elf_Phdr) &&
-	    ELF_IS_CHERI(hdr));
+	    ELF_IS_CHERI(hdr)) {
+		*phnum = hdr->e_phnum;
+		return ((const Elf_Phdr *)((const char *)hdr + hdr->e_phoff));
+	}
+
+	return (NULL);
 }
 
 static bool
@@ -528,7 +545,6 @@ ef_create_pcc_caps(elf_file_t ef, const Elf_Phdr *phstart,
 	}
 
 	valid = true;
-	ef->lf.flags |= LINKER_FILE_PCC_BOUNDS;
 	i = 0;
 	ef->pcc_caps = mallocarray(ef->npcc_caps, sizeof(*ef->pcc_caps),
 	    M_LINKER, M_WAITOK | M_ZERO);
@@ -567,16 +583,12 @@ ef_create_pcc_caps(elf_file_t ef, const Elf_Phdr *phstart,
 }
 
 static bool
-preload_init_pcc_caps(elf_file_t ef)
+preload_init_pcc_caps(elf_file_t ef, caddr_t modptr)
 {
-	const Elf_Ehdr *hdr;
 	const Elf_Phdr *phdr;
+	size_t phnum;
 
-	if (!have_phdrs(ef))
-		return (true);
-
-	hdr = (const Elf_Ehdr *)ef->mapbase;
-	phdr = (const Elf_Phdr *)((const char *)hdr + hdr->e_phoff);
+	phdr = preload_search_phdrs(ef, &phnum, modptr);
 	if (phdr == NULL) {
 		/* Create a single PCC cap entry as a fallback. */
 		ef->npcc_caps = 1;
@@ -585,7 +597,8 @@ preload_init_pcc_caps(elf_file_t ef)
 		ef->pcc_caps[0] = ef->mapbase;
 		return (true);
 	}
-	return (ef_create_pcc_caps(ef, phdr, phdr + hdr->e_phnum));
+
+	return (ef_create_pcc_caps(ef, phdr, phdr + phnum));
 }
 #endif
 
@@ -685,6 +698,8 @@ link_elf_init(void* arg)
 	ef->address = cheri_address_set(kernel_root_cap, 0);
 	ef->mapbase = cheri_bounds_set(ef->address + KERNBASE,
 	    (ptraddr_t)_end - KERNBASE);
+	if (!preload_init_pcc_caps(ef, preload_kmdp))
+		panic("%s: Can't create PCC caps for kernel", __func__);
 #else
 	ef->address = 0;
 #endif
@@ -734,7 +749,7 @@ link_elf_init(void* arg)
 		}
 	}
 
-	/* Set bounds on the load address */
+	/* Set the bounds on load address */
 	linker_kernel_file->address = cheri_kern_bounds_set(
 	    linker_kernel_file->address, linker_kernel_file->size);
 #ifdef __CHERI__
@@ -1209,7 +1224,7 @@ link_elf_link_preload(linker_class_t cls, const char *filename,
 	ef->address = cheri_perms_and(ef->address, CHERI_PERMS_KERNEL_CODE |
 	    CHERI_PERMS_KERNEL_DATA);
 	ef->mapbase = ef->address;
-	if (!preload_init_pcc_caps(ef)) {
+	if (!preload_init_pcc_caps(ef, modptr)) {
 		error = ENOEXEC;
 		goto out;
 	}
@@ -2475,31 +2490,6 @@ elf_lookup_ifunc(linker_file_t lf, Elf_Size symidx, int deps __unused,
 	return (ENOENT);
 }
 
-#ifdef __CHERI__
-/*
- * Set LINKER_FILE_PCC_BOUNDS but don't allocate pcc_caps[].
- */
-static void
-preload_check_for_pcc_caps(elf_file_t ef)
-{
-	const Elf_Ehdr *hdr;
-	const Elf_Phdr *phdr, *phlimit;
-
-	if (!have_phdrs(ef))
-		return;
-
-	hdr = (const Elf_Ehdr *)ef->mapbase;
-	phdr = (const Elf_Phdr *)((const char *)hdr + hdr->e_phoff);
-	phlimit = phdr + hdr->e_phnum;
-	for (; phdr < phlimit; phdr++) {
-		if (phdr->p_type == PT_CHERI_PCC) {
-			ef->lf.flags |= LINKER_FILE_PCC_BOUNDS;
-			return;
-		}
-	}
-}
-#endif
-
 void
 link_elf_ireloc(void)
 {
@@ -2524,7 +2514,6 @@ link_elf_ireloc(void)
 	ef->address = cheri_address_set(kernel_root_cap, 0);
 	ef->mapbase = cheri_bounds_set(ef->address + KERNBASE,
 	    (ptraddr_t)_end - KERNBASE);
-	preload_check_for_pcc_caps(ef);
 #else
 	ef->address = 0;
 #endif
