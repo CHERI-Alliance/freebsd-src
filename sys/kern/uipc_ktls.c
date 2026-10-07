@@ -73,10 +73,10 @@
 #include <opencrypto/cryptodev.h>
 #include <opencrypto/ktls.h>
 #include <vm/vm.h>
-#include <vm/vm_param.h>
 #include <vm/vm_pageout.h>
 #include <vm/vm_page.h>
 #include <vm/vm_pagequeue.h>
+#include <vm/vm_param.h>
 
 typedef enum {
 	KTLS_MBUF_CRYPTO_ST_MIXED = 0,
