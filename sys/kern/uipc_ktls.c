@@ -323,7 +323,7 @@ ktls_copyin_tls_enable(struct sockopt *sopt, struct tls_enable *tls)
 	uint8_t *cipher_key = NULL, *iv = NULL, *auth_key = NULL;
 
 	if (sopt->sopt_valsize == sizeof(tls_v0)) {
-		error = sooptcopyin(sopt, &tls_v0, sizeof(tls_v0), sizeof(tls_v0));
+		error = sooptcopyinptr(sopt, &tls_v0, sizeof(tls_v0), sizeof(tls_v0));
 		if (error != 0)
 			goto done;
 		memset(tls, 0, sizeof(*tls));
@@ -339,7 +339,7 @@ ktls_copyin_tls_enable(struct sockopt *sopt, struct tls_enable *tls)
 		tls->tls_vmajor = tls_v0.tls_vmajor;
 		tls->tls_vminor = tls_v0.tls_vminor;
 	} else
-		error = sooptcopyin(sopt, tls, sizeof(*tls), sizeof(*tls));
+		error = sooptcopyinptr(sopt, tls, sizeof(*tls), sizeof(*tls));
 
 	if (error != 0)
 		return (error);
