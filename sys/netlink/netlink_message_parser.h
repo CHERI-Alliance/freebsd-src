@@ -47,11 +47,17 @@ static inline void *
 lb_alloc(struct linear_buffer *lb, int len)
 {
 	len = roundup2(len, _Alignof(__max_align_t));
-	if (lb->offset + len > lb->size)
+	len = CHERI_REPRESENTABLE_LENGTH(len);
+	char *data = CHERI_REPRESENTABLE_ALIGN_UP(lb->base + lb->offset, len);
+	data = __align_up(data, _Alignof(__max_align_t));
+	if (data + len > lb->base + lb->size)
 		return (NULL);
-	void *data = (void *)(lb->base + lb->offset);
-	lb->offset += len;
+	lb->offset = (data + len) - lb->base;
+#ifdef __CHERI_PURE_CAPABILITY__
+	return (cheri_bounds_set_exact(data, len));
+#else
 	return (data);
+#endif
 }
 
 static inline void
