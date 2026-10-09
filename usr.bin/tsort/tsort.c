@@ -35,7 +35,6 @@
 #include <sys/types.h>
 
 #include <ctype.h>
-#include <db.h>
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -43,6 +42,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <uthash.h>
 
 /*
  *  Topological sort.  Input is a list of pairs of strings separated by
@@ -77,15 +77,17 @@ struct node_str {
 	int n_arcsize;			/* size of n_arcs[] array */
 	int n_refcnt;			/* # of arcs pointing to this node */
 	int n_flags;			/* NF_* */
-	char n_name[1];			/* name of this node */
+	UT_hash_handle hh;		/* Make this hashable */
+	char n_name[];			/* name of this node */
 };
+
+static NODE *nodes = NULL;			/* Hash table */
 
 typedef struct _buf {
 	char *b_buf;
 	int b_bsize;
 } BUF;
 
-static DB *db;
 static NODE *graph, **cycle_buf, **longest_cycle;
 static int debug, longest, quiet;
 
@@ -226,28 +228,13 @@ add_arc(char *s1, char *s2)
 static NODE *
 get_node(char *name)
 {
-	DBT data, key;
 	NODE *n;
 
-	if (db == NULL &&
-	    (db = dbopen(NULL, O_RDWR, 0, DB_HASH, NULL)) == NULL)
-		err(1, "db: %s", name);
-
-	key.data = name;
-	key.size = strlen(name) + 1;
-
-	switch ((*db->get)(db, &key, &data, 0)) {
-	case 0:
-		memcpy(&n, data.data, sizeof(n));
+	HASH_FIND_STR(nodes, name, n);
+	if (n != NULL)
 		return (n);
-	case 1:
-		break;
-	default:
-	case -1:
-		err(1, "db: %s", name);
-	}
 
-	if ((n = malloc(sizeof(NODE) + key.size)) == NULL)
+	if ((n = malloc(sizeof(NODE) + strlen(name) + 1)) == NULL)
 		err(1, NULL);
 
 	n->n_narcs = 0;
@@ -255,7 +242,7 @@ get_node(char *name)
 	n->n_arcs = NULL;
 	n->n_refcnt = 0;
 	n->n_flags = 0;
-	memcpy(n->n_name, name, key.size);
+	memcpy(n->n_name, name, strlen(name) + 1);
 
 	/* Add to linked list. */
 	if ((n->n_next = graph) != NULL)
@@ -264,10 +251,8 @@ get_node(char *name)
 	graph = n;
 
 	/* Add to hash table. */
-	data.data = &n;
-	data.size = sizeof(n);
-	if ((*db->put)(db, &key, &data, 0))
-		err(1, "db: %s", name);
+	HASH_ADD_KEYPTR(hh, nodes, n->n_name, strlen(n->n_name), n);
+
 	return (n);
 }
 
