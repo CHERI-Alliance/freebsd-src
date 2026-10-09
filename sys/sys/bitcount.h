@@ -95,7 +95,7 @@ __bitcount32(__uint32_t _x)
 	return (_x);
 }
 
-#ifdef __LP64__
+#if __SIZEOF_LONG__ == 8
 static __inline __uint64_t
 __bitcount64(__uint64_t _x)
 {
