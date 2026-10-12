@@ -7379,12 +7379,12 @@ pmap_zero_page(vm_page_t m)
 void
 pmap_zero_page_area(vm_page_t m, int off, int size)
 {
-	void *va = VM_PAGE_TO_DMAP(m);
+	void *va = PHYS_TO_DMAP_SUBPAGE(VM_PAGE_TO_PHYS(m) + off, size);
 
 	if (off == 0 && size == PAGE_SIZE)
 		pagezero(va);
 	else
-		bzero((char *)va + off, size);
+		bzero(va, size);
 }
 
 /*
