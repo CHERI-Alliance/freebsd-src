@@ -223,6 +223,7 @@ freebsd64_set_mcontext(struct thread *td, mcontext64_t *mcp)
 	    mcp->mc_gpregs.gp_elr);
 	mc.mc_gpregs.gp_spsr = mcp->mc_gpregs.gp_spsr;
 	mc.mc_gpregs.gp_ddc = td->td_frame->tf_ddc;
+	mc.mc_flags = mcp->mc_flags;
 
 	if (mcp->mc_flags & _MC_FP_VALID)
 		mc.mc_fpregs = mcp->mc_fpregs;

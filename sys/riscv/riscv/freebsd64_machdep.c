@@ -197,6 +197,7 @@ freebsd64_set_mcontext(struct thread *td, mcontext64_t *mcp)
 	    cheri_offset_set(td->td_frame->tf_sepc, mcp->mc_gpregs.gp_sepc);
 	mc.mc_gpregs.gp_ddc = td->td_frame->tf_ddc;
 	mc.mc_gpregs.gp_sstatus = mcp->mc_gpregs.gp_sstatus;
+	mc.mc_flags = mcp->mc_flags;
 
 	if (mcp->mc_flags & _MC_FP_VALID)
 		mc.mc_fpregs = mcp->mc_fpregs;
