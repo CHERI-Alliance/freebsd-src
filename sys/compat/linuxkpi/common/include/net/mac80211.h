@@ -234,7 +234,7 @@ struct ieee80211_chanctx_conf {
 	bool					radar_enabled;
 
 	/* Must stay last. */
-	uint8_t					drv_priv[0] __aligned(CACHE_LINE_SIZE);
+	uint8_t					drv_priv[0] __aligned(CACHE_LINE_SIZE) __subobject_use_container_bounds;
 };
 
 struct ieee80211_rate_status {
@@ -701,7 +701,7 @@ struct ieee80211_txq {
 	uint8_t				tid;
 
 	/* Must stay last. */
-	uint8_t				drv_priv[0] __aligned(CACHE_LINE_SIZE);
+	uint8_t				drv_priv[0] __aligned(CACHE_LINE_SIZE) __subobject_use_container_bounds;
 };
 
 struct ieee80211_sta_rates {
@@ -762,7 +762,7 @@ struct ieee80211_sta {
 	struct ieee80211_link_sta		*link[IEEE80211_MLD_MAX_NUM_LINKS];	/* rcu? */
 
 	/* Must stay last. */
-	uint8_t					drv_priv[0] __aligned(CACHE_LINE_SIZE);
+	uint8_t					drv_priv[0] __aligned(CACHE_LINE_SIZE) __subobject_use_container_bounds;
 };
 
 struct ieee80211_tdls_ch_sw_params {
@@ -865,7 +865,7 @@ struct ieee80211_vif {
 /* #endif */
 
 	/* Must stay last. */
-	uint8_t				drv_priv[0] __aligned(CACHE_LINE_SIZE);
+	uint8_t				drv_priv[0] __aligned(CACHE_LINE_SIZE) __subobject_use_container_bounds;
 };
 
 struct ieee80211_vif_chanctx_switch {

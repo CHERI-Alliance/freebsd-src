@@ -117,7 +117,7 @@ struct device {
 	dev_t		devt;
 	struct class	*class;
 	void		(*release)(struct device *dev);
-	struct kobject	kobj;
+	struct kobject	kobj __subobject_use_container_bounds;
 	void		*dma_priv;
 	void		*driver_data;
 	unsigned int	irq;

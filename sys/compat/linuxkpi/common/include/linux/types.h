@@ -84,7 +84,7 @@ typedef int clockid_t;
 struct list_head {
 	struct list_head *next;
 	struct list_head *prev;
-};
+} __subobject_use_container_bounds;
 #endif
 
 struct rcu_head {

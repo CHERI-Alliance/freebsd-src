@@ -92,7 +92,7 @@ struct delayed_work {
 		struct mtx mtx;
 		unsigned long expires;
 	} timer;
-};
+} __subobject_use_container_bounds;
 
 #define	DECLARE_DELAYED_WORK(name, fn)					\
 	struct delayed_work name;					\

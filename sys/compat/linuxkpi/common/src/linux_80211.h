@@ -126,7 +126,7 @@ struct lkpi_80211_tag_rxni {
 #endif
 
 struct lkpi_radiotap_tx_hdr {
-	struct ieee80211_radiotap_header wt_ihdr;
+	struct ieee80211_radiotap_header wt_ihdr __subobject_use_container_bounds;
 	uint8_t		wt_flags;
 	uint8_t		wt_rate;
 	uint16_t	wt_chan_freq;
@@ -138,7 +138,7 @@ struct lkpi_radiotap_tx_hdr {
 	 (1 << IEEE80211_RADIOTAP_CHANNEL))
 
 struct lkpi_radiotap_rx_hdr {
-	struct ieee80211_radiotap_header wr_ihdr;
+	struct ieee80211_radiotap_header wr_ihdr __subobject_use_container_bounds;
 	uint64_t	wr_tsft;
 	uint8_t		wr_flags;
 	uint8_t		wr_rate;
@@ -178,7 +178,7 @@ struct lkpi_txq {
 	uint64_t		frms_tx;
 
 	/* Must be last! */
-	struct ieee80211_txq	txq __aligned(CACHE_LINE_SIZE);
+	struct ieee80211_txq	txq __aligned(CACHE_LINE_SIZE) __subobject_use_container_bounds;
 };
 #define	TXQ_TO_LTXQ(_txq)	container_of(_txq, struct lkpi_txq, txq)
 
@@ -205,7 +205,7 @@ struct lkpi_sta {
 	uint64_t		frms_tx;			/* (*tx) */
 
 	/* Must be last! */
-	struct ieee80211_sta	sta __aligned(CACHE_LINE_SIZE);
+	struct ieee80211_sta	sta __aligned(CACHE_LINE_SIZE) __subobject_use_container_bounds;
 };
 #define	STA_TO_LSTA(_sta)	container_of(_sta, struct lkpi_sta, sta)
 #define	LSTA_TO_STA(_lsta)	(&(_lsta)->sta)
@@ -213,7 +213,7 @@ struct lkpi_sta {
 /* Either protected by wiphy lock or rcu for the list. */
 struct lkpi_vif {
         TAILQ_ENTRY(lkpi_vif)	lvif_entry;
-	struct ieee80211vap	iv_vap;
+	struct ieee80211vap	iv_vap __subobject_use_container_bounds;
 	eventhandler_tag	lvif_ifllevent;
 
 	struct sysctl_ctx_list	sysctl_ctx;
@@ -247,7 +247,7 @@ struct lkpi_vif {
 	bool			hw_queue_stopped[IEEE80211_NUM_ACS];
 
 	/* Must be last! */
-	struct ieee80211_vif	vif __aligned(CACHE_LINE_SIZE);
+	struct ieee80211_vif	vif __aligned(CACHE_LINE_SIZE) __subobject_use_container_bounds;
 };
 #define	VAP_TO_LVIF(_vap)	container_of(_vap, struct lkpi_vif, iv_vap)
 #define	LVIF_TO_VAP(_lvif)	(&(_lvif)->iv_vap)
@@ -341,7 +341,7 @@ struct lkpi_hw {	/* name it mac80211_sc? */
 	bool				emulate_chanctx;
 
 	/* Must be last! */
-	struct ieee80211_hw		hw __aligned(CACHE_LINE_SIZE);
+	struct ieee80211_hw		hw __aligned(CACHE_LINE_SIZE) __subobject_use_container_bounds;
 };
 #define	LHW_TO_HW(_lhw)		(&(_lhw)->hw)
 #define	HW_TO_LHW(_hw)		container_of(_hw, struct lkpi_hw, hw)
@@ -355,7 +355,7 @@ struct lkpi_chanctx {
 	bool				added_to_drv;	/* Managed by MO */
 	struct lkpi_vif			*lvif;		/* Backpointer. */
 
-	struct ieee80211_chanctx_conf	chanctx_conf __aligned(CACHE_LINE_SIZE);
+	struct ieee80211_chanctx_conf	chanctx_conf __aligned(CACHE_LINE_SIZE) __subobject_use_container_bounds;
 };
 #define	LCHANCTX_TO_CHANCTX_CONF(_lchanctx)		\
     (&(_lchanctx)->chanctx_conf)
@@ -370,7 +370,7 @@ struct lkpi_wiphy {
 	struct mtx			wwk_mtx;
 
 	/* Must be last! */
-	struct wiphy			wiphy __aligned(CACHE_LINE_SIZE);
+	struct wiphy			wiphy __aligned(CACHE_LINE_SIZE) __subobject_use_container_bounds;
 };
 #define	WIPHY_TO_LWIPHY(_wiphy)	container_of(_wiphy, struct lkpi_wiphy, wiphy)
 #define	LWIPHY_TO_WIPHY(_lwiphy)	(&(_lwiphy)->wiphy)

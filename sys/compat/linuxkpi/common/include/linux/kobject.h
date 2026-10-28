@@ -57,7 +57,7 @@ extern const struct kobj_type linux_kfree_type;
 struct kobject {
 	struct kobject		*parent;
 	char			*name;
-	struct kref		kref;
+	struct kref		kref __subobject_use_container_bounds;
 	const struct kobj_type	*ktype;
 	struct list_head	entry;
 	union {

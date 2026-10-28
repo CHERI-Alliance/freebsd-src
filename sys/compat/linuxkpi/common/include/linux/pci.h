@@ -333,7 +333,7 @@ struct pci_mmio_region {
 };
 
 struct pci_dev {
-	struct device		dev;
+	struct device		dev __subobject_member_used_for_c_inheritance;
 	struct list_head	links;
 	struct pci_driver	*pdrv;
 	struct pci_bus		*bus;
