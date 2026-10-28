@@ -75,7 +75,7 @@ struct scmi_msg {
 	uint32_t	rx_len;
 #define SCMI_MSG_HDR_SIZE	(sizeof(uint32_t))
 	uint32_t	hdr;
-	uint8_t		payld[];
+	uint8_t		payld[] __subobject_use_container_bounds;
 };
 #define hdr_to_msg(h)	__containerof((h), struct scmi_msg, hdr)
 

@@ -124,14 +124,14 @@ struct scmi_req {
 	bool		done;
 	bool		is_raw;
 	device_t	dev;
-	struct task	tsk;
+	struct task	tsk __subobject_use_container_bounds;
 	struct mtx	mtx;
 	LIST_ENTRY(scmi_req)	next;
 	int		protocol_id;
 	int		message_id;
 	int		token;
 	uint32_t	header;
-	struct scmi_msg msg;
+	struct scmi_msg msg __subobject_use_container_bounds;
 };
 
 #define tsk_to_req(t)	__containerof((t), struct scmi_req, tsk)
