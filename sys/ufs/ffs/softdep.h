@@ -215,7 +215,7 @@ struct worklist {
 	const char		*wk_func;	/* func where added / removed */
 	int			wk_line;	/* line where added / removed */
 #endif
-};
+} __no_subobject_bounds;
 #define	WK_DATA(wk) ((void *)(wk))
 #define	WK_PAGEDEP(wk) ((struct pagedep *)(wk))
 #define	WK_INODEDEP(wk) ((struct inodedep *)(wk))
@@ -462,6 +462,7 @@ struct newblk {
  * and inodedep->id_pendinghd lists.
  */
 struct allocdirect {
+	__subobject_use_container_bounds
 	struct	newblk ad_block;	/* Common block logic */
 #	define	ad_list ad_block.nb_list /* block pointer worklist */
 #	define	ad_state ad_list.wk_state /* block pointer state */
@@ -522,6 +523,7 @@ struct indirdep {
  * can then be freed as it is no longer applicable.
  */
 struct allocindir {
+	__subobject_use_container_bounds
 	struct	newblk ai_block;	/* Common block area */
 #	define	ai_state ai_block.nb_list.wk_state /* indirect pointer state */
 	LIST_ENTRY(allocindir) ai_next;	/* indirdep's list of allocindir's */
@@ -813,6 +815,7 @@ struct inoref {
  * ultimately released when the file is freed or the link is dropped again.
  */
 struct jaddref {
+	__subobject_use_container_bounds
 	struct	inoref	ja_ref;		/* see inoref above. */
 #	define	ja_list	ja_ref.if_list	/* Jrnl pending, id_inowait, dm_jwork.*/
 #	define	ja_state ja_ref.if_list.wk_state
@@ -836,6 +839,7 @@ struct jaddref {
  * may proceed as normal. 
  */
 struct jremref {
+	__subobject_use_container_bounds
 	struct	inoref	jr_ref;		/* see inoref above. */
 #	define	jr_list	jr_ref.if_list	/* Linked to softdep_journal_pending. */
 #	define	jr_state jr_ref.if_list.wk_state
