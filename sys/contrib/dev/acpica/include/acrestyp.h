@@ -951,7 +951,7 @@ typedef struct acpi_pci_routing_table
     UINT32                          SourceIndex;
     union {
                                     char Pad[4];    /* pad to 64 bits so sizeof() works in all cases */
-                                    ACPI_FLEX_ARRAY(char, Source);
+                                    ACPI_FLEX_ARRAY(char, Source) __subobject_use_remaining_size;
     };
 } ACPI_PCI_ROUTING_TABLE;
 
