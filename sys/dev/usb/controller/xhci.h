@@ -495,7 +495,7 @@ enum xhci_quirks {
 struct xhci_softc {
 	struct xhci_hw_softc	sc_hw;
 	/* base device */
-	struct usb_bus		sc_bus;
+	struct usb_bus		sc_bus __subobject_use_container_bounds;
 	/* configure message */
 	struct usb_bus_msg	sc_config_msg[2];
 

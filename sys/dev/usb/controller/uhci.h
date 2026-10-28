@@ -202,7 +202,7 @@ struct uhci_hw_softc {
 
 typedef struct uhci_softc {
 	struct uhci_hw_softc sc_hw;
-	struct usb_bus sc_bus;		/* base device */
+	struct usb_bus sc_bus __subobject_use_container_bounds; /* base device */
 	union uhci_hub_desc sc_hub_desc;
 	struct usb_callout sc_root_intr;
 

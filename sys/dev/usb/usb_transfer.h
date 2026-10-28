@@ -44,7 +44,7 @@
  * the "done_p" USB process.
  */
 struct usb_done_msg {
-	struct usb_proc_msg hdr;
+	struct usb_proc_msg hdr __subobject_member_used_for_c_inheritance;
 	struct usb_xfer_root *xroot;
 };
 
@@ -57,7 +57,7 @@ struct usb_done_msg {
  * have been freed.
  */
 struct usb_xfer_root {
-	struct usb_dma_parent_tag dma_parent_tag;
+	struct usb_dma_parent_tag dma_parent_tag __subobject_member_used_for_c_inheritance;
 #if USB_HAVE_BUSDMA
 	struct usb_xfer_queue dma_q;
 #endif
