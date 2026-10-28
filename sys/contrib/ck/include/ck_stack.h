@@ -34,7 +34,7 @@
 
 struct ck_stack_entry {
 	struct ck_stack_entry *next;
-};
+} __subobject_use_container_bounds;
 typedef struct ck_stack_entry ck_stack_entry_t;
 
 struct ck_stack {
