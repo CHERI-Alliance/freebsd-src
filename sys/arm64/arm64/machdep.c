@@ -645,7 +645,7 @@ try_load_dtb(void)
 	 * to use the statically embedded one.
 	 */
 	if (dtbp == 0)
-		dtbp = (vm_offset_t)&fdt_static_dtb;
+		dtbp = (vm_offset_t)__unbounded_addressof(fdt_static_dtb);
 #endif
 
 	if (dtbp == (vm_offset_t)NULL) {
