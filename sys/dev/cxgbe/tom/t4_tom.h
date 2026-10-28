@@ -333,7 +333,7 @@ struct tcb_histent {
 };
 
 struct tom_data {
-	struct toedev tod;
+	struct toedev tod __subobject_member_used_for_c_inheritance;
 
 	/* toepcb's associated with this TOE device */
 	struct mtx toep_list_lock;
