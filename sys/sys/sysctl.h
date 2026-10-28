@@ -191,7 +191,7 @@ RB_HEAD(sysctl_oid_list, sysctl_oid);
  * be hidden behind it, expanded by the handler.
  */
 struct sysctl_oid {
-	struct sysctl_oid_list	oid_children;
+	struct sysctl_oid_list	oid_children __subobject_use_container_bounds;
 	struct sysctl_oid_list*	oid_parent;
 	RB_ENTRY(sysctl_oid) oid_link;
 	/* Sort key for all siblings, and lookup key for userland */

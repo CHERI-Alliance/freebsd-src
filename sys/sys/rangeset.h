@@ -41,6 +41,7 @@ typedef bool (*rs_pred_t)(void *ctx, void *r);
  * This structure must be embedded at the start of the rangeset element.
  */
 struct rs_el {
+	__subobject_use_container_bounds
 	uint64_t	re_start;	/* pctrie key */
 	uint64_t	re_end;
 };

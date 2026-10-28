@@ -2418,7 +2418,7 @@ fdinit(void)
 	struct filedesc *newfdp;
 
 	newfdp0 = uma_zalloc(filedesc0_zone, M_WAITOK | M_ZERO);
-	newfdp = &newfdp0->fd_fd;
+	newfdp = __unbounded_addressof(newfdp0->fd_fd);
 
 	/* Create the file descriptor table. */
 	FILEDESC_LOCK_INIT(newfdp);

@@ -37,12 +37,12 @@ struct secasvar;
 struct inpcb;
 
 struct ipsec_accel_out_tag {
-	struct m_tag tag;
+	struct m_tag tag __subobject_use_container_bounds;
 	uint16_t drv_spi;
 };
 
 struct ipsec_accel_in_tag {
-	struct m_tag tag;
+	struct m_tag tag __subobject_use_container_bounds;
 	struct xform_history xh; /* Must be first to mimic IPSEC_IN_DONE */
 	uint16_t drv_spi;
 };

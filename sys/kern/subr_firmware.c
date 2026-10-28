@@ -108,7 +108,7 @@ struct priv_fw {
 	 * Use PRIV_FW(fw) to get a pointer to the cointainer of fw.
 	 * Beware, PRIV_FW does not work for a NULL pointer.
 	 */
-	struct firmware	fw;	/* externally visible information */
+	struct firmware	fw __subobject_use_container_bounds;
 };
 
 /*

@@ -716,7 +716,8 @@ umtx_abs_timeout_init(struct umtx_abs_timeout *timo, int clockid,
 	timo->clockid = clockid;
 	if (!absolute) {
 		timo->is_abs_real = false;
-		kern_clock_gettime(curthread, timo->clockid, &timo->cur);
+		kern_clock_gettime(curthread, timo->clockid,
+		    __unbounded_addressof(timo->cur));
 		timespecadd(&timo->cur, timeout, &timo->end);
 	} else {
 		timo->end = *timeout;
@@ -820,7 +821,8 @@ umtx_abs_timeout_getsbt(struct umtx_abs_timeout *timo, sbintime_t *sbt,
 	case CLOCK_PROCESS_CPUTIME_ID:
 	case CLOCK_TAI: /* Boot time is not necessarily stable in TAI */
 	default:
-		kern_clock_gettime(curthread, timo->clockid, &timo->cur);
+		kern_clock_gettime(curthread, timo->clockid,
+		    __unbounded_addressof(timo->cur));
 		if (timespeccmp(&timo->end, &timo->cur, <=))
 			return (ETIMEDOUT);
 		timespecsub(&timo->end, &timo->cur, &tts);
@@ -3783,7 +3785,7 @@ again:
 				error = EINTR;
 			if (error == EINTR) {
 				kern_clock_gettime(curthread, timo.clockid,
-				    &timo.cur);
+				    __unbounded_addressof(timo.cur));
 				timespecsub(&timo.end, &timo.cur,
 				    &timeout->_timeout);
 			}

@@ -2190,7 +2190,7 @@ in6_if2idlen(struct ifnet *ifp)
 }
 
 struct in6_llentry {
-	struct llentry		base;
+	struct llentry		base __subobject_use_container_bounds;
 };
 
 #define	IN6_LLTBL_DEFAULT_HSIZE	32

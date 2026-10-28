@@ -108,7 +108,7 @@ typedef void	udp_tun_icmp_t(udp_tun_icmp_param_t);
  * UDP control block; one per udp.
  */
 struct udpcb {
-	struct inpcb	u_inpcb;
+	struct inpcb	u_inpcb __subobject_member_used_for_c_inheritance;
 #define	u_start_zero	u_tun_func
 #define	u_zero_size	(sizeof(struct udpcb) - \
 			    offsetof(struct udpcb, u_start_zero))

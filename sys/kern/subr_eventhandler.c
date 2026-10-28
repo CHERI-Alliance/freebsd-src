@@ -45,7 +45,7 @@ static struct mtx			eventhandler_mutex;
 
 struct eventhandler_entry_generic 
 {
-    struct eventhandler_entry	ee;
+    struct eventhandler_entry	ee __subobject_use_container_bounds;
     void			(* func)(void);
 };
 

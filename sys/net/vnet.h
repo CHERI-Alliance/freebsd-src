@@ -155,7 +155,7 @@ SYSCTL_PROC(parent, nbr, name,						\
 /*
  * Location of the kernel's 'set_vnet' linker set.
  */
-extern uintptr_t	*__start_set_vnet;
+extern uintptr_t	*__start_set_vnet __no_subobject_bounds;
 __GLOBL(__start_set_vnet);
 extern uintptr_t	*__stop_set_vnet;
 __GLOBL(__stop_set_vnet);

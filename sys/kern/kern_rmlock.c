@@ -1112,7 +1112,7 @@ rms_runlock(struct rmslock *rms)
 
 struct rmslock_ipi {
 	struct rmslock *rms;
-	struct smp_rendezvous_cpus_retry_arg srcra;
+	struct smp_rendezvous_cpus_retry_arg srcra __subobject_use_container_bounds;
 };
 
 static void

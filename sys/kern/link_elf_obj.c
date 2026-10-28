@@ -90,7 +90,7 @@ typedef struct {
 } Elf_relaent;
 
 typedef struct elf_file {
-	struct linker_file lf;		/* Common fields */
+	struct linker_file lf __subobject_member_used_for_c_inheritance;
 
 	int		preloaded;
 	caddr_t		address;	/* Relocation address */

@@ -182,6 +182,7 @@ struct vnode {
 	 */
 	TAILQ_ENTRY(vnode) v_vnodelist;		/* l vnode lists */
 	TAILQ_ENTRY(vnode) v_lazylist;		/* l vnode lazy list */
+	__subobject_use_container_bounds
 	struct bufobj	v_bufobj;		/* * Buffer cache object */
 
 	/*

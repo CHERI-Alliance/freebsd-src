@@ -75,6 +75,11 @@ typedef	__sigset_t	sigset_t;
 #endif
 
 typedef	struct fd_set {
+	/*
+	 * Note: some code allocates less than the full fd_set (such as
+	 * sshd) if it knows it won't need that many fds.
+	 */
+	__subobject_variable_length_maxsize(_howmany(FD_SETSIZE, _NFDBITS) * sizeof(__fd_mask))
 	__fd_mask	__fds_bits[_howmany(FD_SETSIZE, _NFDBITS)];
 } fd_set;
 #if __BSD_VISIBLE

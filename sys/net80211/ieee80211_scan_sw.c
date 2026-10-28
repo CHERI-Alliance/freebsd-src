@@ -50,7 +50,7 @@
 #include <net/bpf.h>
 
 struct scan_state {
-	struct ieee80211_scan_state base;	/* public state */
+	struct ieee80211_scan_state base __subobject_member_used_for_c_inheritance;	/* public state */
 
 	u_int			ss_iflags;	/* flags used internally */
 #define	ISCAN_MINDWELL 		0x0001		/* min dwell time reached */

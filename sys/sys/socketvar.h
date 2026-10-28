@@ -159,7 +159,9 @@ struct socket {
 		/* Regular (data flow) socket. */
 		struct {
 			/* (cr, cs) Receive and send buffers. */
-			struct sockbuf		so_rcv, so_snd;
+			__subobject_use_container_bounds
+			struct sockbuf		so_rcv;
+			struct sockbuf		so_snd;
 
 			/* (e) Our place on accept queue. */
 			TAILQ_ENTRY(socket)	so_list;

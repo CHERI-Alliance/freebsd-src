@@ -90,7 +90,9 @@ struct name {								\
 
 #define SPLAY_ENTRY(type)						\
 struct {								\
+	__no_subobject_bounds						\
 	struct type *spe_left; /* left element */			\
+	__no_subobject_bounds						\
 	struct type *spe_right; /* right element */			\
 }
 
@@ -323,8 +325,8 @@ struct name {								\
 } while (/*CONSTCOND*/ 0)
 
 #define RB_ENTRY(type)							\
-struct {								\
-	struct type *rbe_link[3];					\
+struct __no_subobject_bounds {						\
+	struct type *rbe_link[3] __no_subobject_bounds;			\
 }
 
 /*

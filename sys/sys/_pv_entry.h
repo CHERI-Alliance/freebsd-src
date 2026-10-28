@@ -106,7 +106,7 @@ struct pv_chunk_header {
 
 struct pv_chunk {
 	PV_CHUNK_HEADER
-	struct pv_entry		pc_pventry[_NPCPV];
+	struct pv_entry		pc_pventry[_NPCPV] __subobject_use_container_bounds;
 	unsigned long		pc_pad[_NPAD];
 };
 

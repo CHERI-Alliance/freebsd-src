@@ -77,6 +77,7 @@ fde_copy(struct filedescent *from, struct filedescent *to)
 
 struct fdescenttbl {
 	int	fdt_nfiles;		/* number of open files allocated */
+	__subobject_variable_length
 	struct	filedescent fdt_ofiles[0];	/* open files */
 };
 #define	fd_seqc(fdt, fd)	(&(fdt)->fdt_ofiles[(fd)].fde_seqc)

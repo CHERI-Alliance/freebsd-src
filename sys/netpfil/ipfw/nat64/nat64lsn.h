@@ -243,7 +243,7 @@ struct nat64lsn_cfg {
 };
 
 struct nat64lsn_instance {
-	struct named_object	no;
+	struct named_object	no __subobject_use_container_bounds;
 	struct nat64lsn_cfg	*cfg;
 	char			name[64];	/* Nat instance name */
 };

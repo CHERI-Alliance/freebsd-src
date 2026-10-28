@@ -42,7 +42,9 @@
  * implementation must be modified appropriately.
  */
 struct rwlock {
+	__subobject_member_used_for_c_inheritance
 	struct lock_object	lock_object;
+	__subobject_use_container_bounds
 	volatile __uintptr_t	rw_lock;
 };
 
@@ -56,7 +58,9 @@ struct rwlock {
  * the rwlock.
  */
 struct rwlock_padalign {
+	__subobject_member_used_for_c_inheritance
 	struct lock_object	lock_object;
+	__subobject_use_container_bounds
 	volatile __uintptr_t	rw_lock;
 } __aligned(CACHE_LINE_SIZE);
 

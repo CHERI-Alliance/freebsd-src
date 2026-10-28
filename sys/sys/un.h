@@ -54,6 +54,7 @@ typedef	__sa_family_t	sa_family_t;
 struct sockaddr_un {
 	unsigned char	sun_len;	/* sockaddr len including null */
 	sa_family_t	sun_family;	/* AF_UNIX */
+	__subobject_variable_length_maxsize(SUNPATHLEN)
 	char	sun_path[SUNPATHLEN];	/* path name (gag) */
 };
 

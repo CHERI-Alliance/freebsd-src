@@ -123,7 +123,7 @@ struct mb_args {
 /*
  * Packet tag structure (see below for details).
  */
-struct m_tag {
+struct __no_subobject_bounds m_tag {
 	SLIST_ENTRY(m_tag)	m_tag_link;	/* List of packet tags */
 	u_int16_t		m_tag_id;	/* Tag ID */
 	u_int16_t		m_tag_len;	/* Length of data */
@@ -279,8 +279,8 @@ struct m_ext {
 		 * and its arguments.  They aren't copied into shadows in
 		 * mb_dupcl() to avoid dereferencing next cachelines.
 		 */
-		volatile u_int	 ext_count;
-		volatile u_int	*ext_cnt;
+		volatile u_int	 ext_count __no_subobject_bounds;
+		volatile u_int	*ext_cnt __no_subobject_bounds;
 	};
 	uint32_t	 ext_size;	/* size of buffer, for ext_free */
 	uint32_t	 ext_type:8,	/* type of external storage */
@@ -347,7 +347,7 @@ struct mbuf {
 		STAILQ_ENTRY(mbuf)	m_stailq;
 	};
 	union {	/* next chain in queue/record */
-		struct mbuf		*m_nextpkt;
+		struct mbuf		*m_nextpkt __subobject_use_container_bounds;
 		SLIST_ENTRY(mbuf)	m_slistpkt;
 		STAILQ_ENTRY(mbuf)	m_stailqpkt;
 	};
@@ -413,7 +413,7 @@ struct mbuf {
 				char		m_pktdat[0];
 			};
 		};
-		char	m_dat[0];			/* !M_PKTHDR, !M_EXT */
+		char	m_dat[0] __no_subobject_bounds;	/* !M_PKTHDR, !M_EXT */
 	};
 };
 

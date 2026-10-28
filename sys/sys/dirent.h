@@ -70,8 +70,10 @@ struct dirent {
 	__uint16_t d_pad1;
 #if __BSD_VISIBLE
 #define	MAXNAMLEN	255
+	__subobject_variable_length_maxsize(MAXNAMLEN + 1)
 	char	d_name[MAXNAMLEN + 1];	/* name must be no longer than this */
 #else
+	__subobject_variable_length_maxsize(255 + 1)
 	char	d_name[255 + 1];	/* name must be no longer than this */
 #endif
 };
@@ -82,6 +84,7 @@ struct freebsd11_dirent {
 	__uint16_t d_reclen;		/* length of this record */
 	__uint8_t  d_type;		/* file type, see below */
 	__uint8_t  d_namlen;		/* length of string in d_name */
+	__subobject_variable_length_maxsize(255 + 1)
 	char	d_name[255 + 1];	/* name must be no longer than this */
 };
 #endif /* _WANT_FREEBSD11_DIRENT || _KERNEL */

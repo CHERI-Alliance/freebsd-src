@@ -80,7 +80,7 @@
 #define MAXSEGS 4
 
 typedef struct elf_file {
-	struct linker_file lf;		/* Common fields */
+	struct linker_file lf __subobject_member_used_for_c_inheritance;
 	int		preloaded;	/* Was file pre-loaded */
 	caddr_t		address;	/* Relocation address */
 #ifdef __CHERI__

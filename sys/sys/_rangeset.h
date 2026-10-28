@@ -37,7 +37,7 @@ typedef void *(*rs_dup_data_t)(void *ctx, void *data);
 typedef void (*rs_free_data_t)(void *ctx, void *data);
 
 struct rangeset {
-	struct pctrie	rs_trie;
+	struct pctrie	rs_trie __subobject_use_container_bounds;
 	rs_dup_data_t	rs_dup_data;
 	rs_free_data_t	rs_free_data;
 	void		*rs_data_ctx;

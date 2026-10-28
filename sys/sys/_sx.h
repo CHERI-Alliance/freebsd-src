@@ -31,6 +31,7 @@
 #ifndef	_SYS__SX_H_
 #define	_SYS__SX_H_
 
+#include <sys/cdefs.h>
 #include <sys/_types.h>
 #include <sys/_lock.h>
 
@@ -38,6 +39,7 @@
  * Shared/exclusive lock main structure definition.
  */
 struct sx {
+	__subobject_member_used_for_c_inheritance
 	struct lock_object	lock_object;
 	volatile __uintptr_t	sx_lock;
 };

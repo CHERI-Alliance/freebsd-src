@@ -405,7 +405,7 @@ struct thread0_storage {
 #else
 	uint64_t t0st_sched[10];
 #endif
-};
+} __no_subobject_bounds;
 
 struct mtx *thread_lock_block(struct thread *);
 void thread_lock_block_wait(struct thread *);

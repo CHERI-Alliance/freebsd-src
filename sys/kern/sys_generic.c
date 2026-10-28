@@ -2396,7 +2396,7 @@ exterr_copyout(struct thread *td)
 		ktrexterr(td);
 		sz = sizeof(ue) - __offsetof(struct uexterror, error);
 	}
-	error = copyout(&ue.error, uloc, sz);
+	error = copyout(__unbounded_addressof(ue.error), uloc, sz);
 	if (error != 0) {
 		td->td_pflags2 &= ~TDP2_UEXTERR;
 		ksiginfo_init_trap(&ksi);

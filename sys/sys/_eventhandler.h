@@ -62,7 +62,7 @@ extern struct eventhandler_list *_eventhandler_list_ ## name		\
 #define EVENTHANDLER_DECLARE(name, type)				\
 struct eventhandler_entry_ ## name 					\
 {									\
-	struct eventhandler_entry	ee;				\
+	struct eventhandler_entry	ee __subobject_use_container_bounds; \
 	type				eh_func;			\
 };									\
 struct __hack

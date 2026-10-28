@@ -322,7 +322,7 @@ VNET_DEFINE_STATIC(TAILQ_HEAD(fib_error_head, fib_error), fib_error_list);
 struct fib_dp_header {
 	struct epoch_context	fdh_epoch_ctx;
 	uint32_t		fdh_num_tables;
-	struct fib_dp		fdh_idx[0];
+	struct fib_dp		fdh_idx[0] __subobject_use_container_bounds;
 };
 
 /*

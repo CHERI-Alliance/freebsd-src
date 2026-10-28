@@ -65,7 +65,7 @@
 
 TAILQ_HEAD (epoch_tdlist, epoch_tracker);
 typedef struct epoch_record {
-	ck_epoch_record_t er_record;
+	ck_epoch_record_t er_record __subobject_use_container_bounds;
 	struct epoch_context er_drain_ctx;
 	struct epoch *er_parent;
 	volatile struct epoch_tdlist er_tdlist;

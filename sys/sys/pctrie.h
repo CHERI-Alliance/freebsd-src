@@ -124,8 +124,7 @@ name##_PCTRIE_VAL2PTR(uint64_t *val)					\
 static __inline uint64_t *						\
 name##_PCTRIE_PTR2VAL(struct type *ptr)					\
 {									\
-									\
-	return &ptr->field;						\
+	return (__unbounded_addressof(ptr->field));			\
 }									\
 									\
 static __inline __unused int						\

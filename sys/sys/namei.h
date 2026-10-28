@@ -107,7 +107,7 @@ struct nameidata {
 	 * information from the nameidata structure that is passed
 	 * through the VOP interface.
 	 */
-	struct componentname ni_cnd;
+	struct componentname ni_cnd __subobject_use_container_bounds;
 
 	/* Serving RBENEATH. */
 	struct nameicap_tracker_head ni_cap_tracker;

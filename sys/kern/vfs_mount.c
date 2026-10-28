@@ -2010,7 +2010,7 @@ vfs_op_exit(struct mount *mp)
 
 struct vfs_op_barrier_ipi {
 	struct mount *mp;
-	struct smp_rendezvous_cpus_retry_arg srcra;
+	struct smp_rendezvous_cpus_retry_arg srcra __subobject_use_container_bounds;
 };
 
 static void

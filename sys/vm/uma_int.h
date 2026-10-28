@@ -397,6 +397,7 @@ typedef struct uma_slab * uma_slab_t;
 struct uma_hash_slab {
 	LIST_ENTRY(uma_hash_slab) uhs_hlink;	/* Link for hash table */
 	uint8_t			*uhs_data;	/* First item */
+	__subobject_use_container_bounds
 	struct uma_slab		uhs_slab;	/* Must be last. */
 };
 
