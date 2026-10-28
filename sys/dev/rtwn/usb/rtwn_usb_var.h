@@ -56,7 +56,7 @@ enum {
 #define	RTWN_BULK_TX_FIRST	RTWN_BULK_TX_BE
 
 struct rtwn_usb_softc {
-	struct rtwn_softc	uc_sc;		/* must be the first */
+	struct rtwn_softc	uc_sc __subobject_member_used_for_c_inheritance;		/* must be the first */
 	struct usb_device	*uc_udev;
 	struct usb_xfer		*uc_xfer[RTWN_BULK_EP_COUNT];
 
