@@ -42,8 +42,8 @@
 #include "gpiobus_if.h"
 
 struct acpi_gpiobus_softc {
-	struct gpiobus_softc	super_sc;
-	ACPI_CONNECTION_INFO	handler_info;
+	struct gpiobus_softc	super_sc __subobject_member_used_for_c_inheritance;
+	ACPI_CONNECTION_INFO	handler_info __subobject_use_container_bounds;
 };
 
 struct acpi_gpiobus_ctx {

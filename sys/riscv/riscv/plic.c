@@ -82,7 +82,7 @@ static pic_pre_ithread_t	plic_pre_ithread;
 static pic_bind_intr_t		plic_bind_intr;
 
 struct plic_irqsrc {
-	struct intr_irqsrc	isrc;
+	struct intr_irqsrc	isrc __subobject_use_container_bounds;
 	u_int			irq;
 	u_int			trigtype;
 };

@@ -62,7 +62,7 @@
 #define	INTC_NIRQS	16
 
 struct intc_irqsrc {
-	struct intr_irqsrc	isrc;
+	struct intr_irqsrc	isrc __subobject_use_container_bounds;
 	u_int			irq;
 };
 
