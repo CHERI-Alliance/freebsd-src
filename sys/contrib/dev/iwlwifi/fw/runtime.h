@@ -167,7 +167,7 @@ struct iwl_fw_runtime {
 
 	/* debug */
 	struct {
-		struct iwl_fwrt_wk_data wks[IWL_FW_RUNTIME_DUMP_WK_NUM];
+		struct iwl_fwrt_wk_data wks[IWL_FW_RUNTIME_DUMP_WK_NUM] __subobject_use_container_bounds;
 		unsigned long active_wks;
 
 		u8 conf;

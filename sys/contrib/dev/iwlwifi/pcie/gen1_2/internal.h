@@ -160,7 +160,7 @@ struct iwl_rxq {
 	void *rb_stts;
 	dma_addr_t rb_stts_dma;
 	spinlock_t lock;
-	struct napi_struct napi;
+	struct napi_struct napi __subobject_use_container_bounds;
 	struct iwl_rx_mem_buffer *queue[RX_QUEUE_SIZE];
 };
 
@@ -183,7 +183,7 @@ struct iwl_rb_allocator {
 	struct list_head rbd_empty;
 	spinlock_t lock;
 	struct workqueue_struct *alloc_wq;
-	struct work_struct rx_alloc;
+	struct work_struct rx_alloc __subobject_use_container_bounds;
 };
 
 /**
@@ -410,7 +410,7 @@ struct iwl_trans_pcie {
 	struct iwl_rxq *rxq;
 	struct iwl_rx_mem_buffer *rx_pool;
 	struct iwl_rx_mem_buffer **global_table;
-	struct iwl_rb_allocator rba;
+	struct iwl_rb_allocator rba __subobject_use_container_bounds;
 	union {
 		struct iwl_context_info *ctxt_info;
 		struct iwl_context_info_v2 *ctxt_info_v2;
@@ -481,7 +481,7 @@ struct iwl_trans_pcie {
 	struct cont_rec fw_mon_data;
 #endif
 
-	struct msix_entry msix_entries[IWL_MAX_RX_HW_QUEUES];
+	struct msix_entry msix_entries[IWL_MAX_RX_HW_QUEUES] __subobject_use_container_bounds;
 	bool msix_enabled;
 	u8 shared_vec_mask;
 	u32 alloc_vecs;

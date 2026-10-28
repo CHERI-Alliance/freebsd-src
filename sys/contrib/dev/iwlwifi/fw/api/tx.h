@@ -605,7 +605,7 @@ struct iwl_tx_resp {
 	__le16 frame_ctrl;
 	__le16 tx_queue;
 	__le16 reserved2;
-	struct agg_tx_status status;
+	struct agg_tx_status status __subobject_use_container_bounds;
 } __packed; /* TX_RSP_API_S_VER_6,
 	     * TX_RSP_API_S_VER_7,
 	     * TX_RSP_API_S_VER_8,
