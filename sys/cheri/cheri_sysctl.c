@@ -36,6 +36,11 @@
 
 #include <cheri/cheri.h>
 
+#ifdef __CHERI_SUBOBJECT_BOUNDS__
+FEATURE(cheri_subobject_bounds_kernel,
+    "CHERI pure-capability kernel with sub-object bounds");
+#endif
+
 SYSCTL_NODE(_security, OID_AUTO, cheri, CTLFLAG_RD, 0,
     "CHERI settings and statistics");
 
