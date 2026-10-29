@@ -380,6 +380,10 @@ CFLAGS+= -enable-trivial-auto-var-init-zero-knowing-it-will-be-removed-from-clan
 .endif
 .endif
 
+.if defined(CHERI_SUBOBJECT_BOUNDS) && ${CHERI_SUBOBJECT_BOUNDS} != "none"
+CFLAGS+=	-Xclang -cheri-bounds=${CHERI_SUBOBJECT_BOUNDS}
+.endif
+
 #
 # Some newer toolchains default to DWARF 5, which isn't supported by some build
 # tools yet.

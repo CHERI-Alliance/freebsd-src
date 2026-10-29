@@ -80,6 +80,7 @@ KERN_OPTS+= IPSEC_SUPPORT
 .if ${MK_SCTP_SUPPORT} != "no"
 KERN_OPTS+= SCTP_SUPPORT
 .endif
+CHERI_SUBOBJECT_BOUNDS?=	none
 .elif !defined(KERN_OPTS)
 # Add all the options that are mentioned in any opt_*.h file when we
 # have a kernel build directory to pull them from.
