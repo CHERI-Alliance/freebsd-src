@@ -133,13 +133,12 @@
  * executable capabilities ($pcc); CHERI_PERM_STORE, CHERI_PERM_STORE_CAP,
  * and CHERI_PERM_STORE_LOCAL_CAP will be added for data permissions ($dcc).
  *
- * All user software permissions are included along with
- * CHERI_PERM_SYSCALL.  CHERI_PERM_SW_VMEM will be added for
- * permissions returned from mmap().
+ * All user software permissions are included. CHERI_PERM_SW_VMEM will
+ * be added for permissions returned from mmap().
  */
 #define	_CHERI_PERMS_USERSPACE_COMMON					\
 	(CHERI_PERM_GLOBAL | CHERI_PERM_LOAD  |				\
-	(CHERI_PERMS_SWALL & ~(CHERI_PERM_SW_VMEM | CHERI_PERM_SYSCALL)))
+	(CHERI_PERMS_SWALL & ~CHERI_PERM_SW_VMEM))
 #define	CHERI_PERMS_USERSPACE						\
 	(CHERI_PERM_CAP | CHERI_PERM_LOAD_MUTABLE |			\
 	CHERI_PERM_ELEVATE_LEVEL | _CHERI_PERMS_USERSPACE_COMMON)
@@ -155,8 +154,7 @@
 	CHERI_PERM_STORE_LOCAL_CAP)
 
 #define	CHERI_PERMS_USERSPACE_CODE					\
-	(CHERI_PERMS_USERSPACE_RODATA | CHERI_PERM_EXECUTE |		\
-	CHERI_PERM_SYSCALL)
+	(CHERI_PERMS_USERSPACE_RODATA | CHERI_PERM_EXECUTE)
 
 /*
  * Corresponding permission masks for kernel code and data; these are
@@ -187,7 +185,7 @@
 #define	CHERI_PERMS_RWX_MASK						\
 	(CHERI_PERM_LOAD | CHERI_PERM_STORE | CHERI_PERM_CAP |		\
 	CHERI_PERM_STORE_LOCAL_CAP | CHERI_PERM_LOAD_MUTABLE |		\
-	CHERI_PERM_EXECUTE | CHERI_PERM_SYSCALL)
+	CHERI_PERM_EXECUTE)
 
 #define	CHERI_FLAGS_CAP_MODE	0x0
 #define	CHERI_FLAGS_CAP_MODE_MASK	0x1
