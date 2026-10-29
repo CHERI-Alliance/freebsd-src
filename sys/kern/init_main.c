@@ -405,6 +405,13 @@ C_SYSINIT(ilp32warn2, SI_SUB_LAST, SI_ORDER_FIFTH,
     print_caddr_t, ilp32_warn);
 #endif
 
+#ifdef __CHERI_SUBOBJECT_BOUNDS__
+static const char subobject_bounds_note[] =
+    "CHERI kernel with subobject bounds.\n";
+C_SYSINIT(subobjectboundsnote, SI_SUB_COPYRIGHT, SI_ORDER_SIXTH,
+    print_caddr_t, subobject_bounds_note);
+#endif
+
 static int
 null_fetch_syscall_args(struct thread *td __unused)
 {
