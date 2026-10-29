@@ -1,0 +1,9 @@
+#
+# GENERIC-MORELLO-SUBOBJECT -- Generic kernel configuration file for Arm Morello platform with sub-object bounds enabled
+#
+
+include "GENERIC-MORELLO"
+
+makeoptions	CHERI_SUBOBJECT_BOUNDS=subobject-safe
+
+ident	GENERIC-MORELLO-SUBOBJECT
