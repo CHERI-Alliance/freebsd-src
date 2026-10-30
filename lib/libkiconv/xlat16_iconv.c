@@ -113,7 +113,7 @@ kiconv_add_xlat16_cspair(const char *tocode, const char *fromcode, int flag)
 
 	if ((data = malloc(idxsize + xt.size)) != NULL) {
 		p = data;
-		memcpy(p, xt.idx, idxsize);
+		memcpy(__builtin_assume_aligned(p, sizeof(void *)), xt.idx, idxsize);
 		p += idxsize;
 		memcpy(p, xt.data, xt.size);
 		error = kiconv_add_xlat16_table(tocode, fromcode, data,
