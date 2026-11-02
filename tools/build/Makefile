@@ -103,6 +103,10 @@ SYSINCS+=	stat.h
 SRCS+=		futimens.c utimensat.c
 .endif
 
+_WITH_NO_SUBOBJECT_BOUNDS!= grep -c __no_subobject_bounds ${HOST_INCLUDE_ROOT}/sys/cdefs.h || true
+.if ${_WITH_NO_SUBOBJECT_BOUNDS} == 0
+SYSINCS+=	cdefs.h
+.endif
 # Define ptraddr_t for bootstrapping
 INCS+=		stddef.h
 
